@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euro Youth Basketball Cup - Scheduler</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--o:#FF6B00;--ol:#FF8C35;--n:#1a1a2e;--n2:#16213e;--n3:#0f3460;--g:#8892a4;--b:rgba(255,255,255,0.1);--c:rgba(255,255,255,0.04)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--n);color:#fff;font-family:'Open Sans',sans-serif;min-height:100vh}
+
+header{background:var(--n2);border-bottom:3px solid var(--o);padding:10px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+header img{width:54px;height:54px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(255,107,0,0.55));transition:filter .3s}
+header img:hover{filter:drop-shadow(0 0 14px rgba(255,107,0,0.9))}
+.htxt h1{font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(14px,3vw,21px);text-transform:uppercase;letter-spacing:1px;line-height:1.1}
+.htxt h1 span{color:var(--o)}
+.htxt p{font-size:10px;color:var(--g);text-transform:uppercase;letter-spacing:2px;margin-top:2px;font-family:'Montserrat',sans-serif;font-weight:600}
+.hbadge{margin-left:auto;background:var(--o);color:#fff;font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;flex-shrink:0}
+.tabs{background:var(--n3);display:flex;border-bottom:2px solid var(--b);overflow-x:auto}
+.tab{padding:13px 22px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s}
+.tab.active{color:var(--o);border-bottom-color:var(--o);background:rgba(255,107,0,.08)}
+.main{max-width:760px;margin:0 auto;padding:22px 16px}
+.page{display:none}.page.active{display:block}
+.stitle{font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--o);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.stitle::after{content:'';flex:1;height:1px;background:var(--b)}
+.card{background:var(--c);border:1px solid var(--b);border-radius:8px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--o),transparent)}
+label{display:block;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin:14px 0 6px}
+label:first-child{margin-top:0}
+input[type=text],input[type=number],input[type=time],input[type=date],select,textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);border-radius:6px;padding:10px 12px;color:#fff;font-family:'Open Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--o);background:rgba(255,107,0,.07)}
+select option{background:var(--n2)}
+textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
+.row{display:flex;gap:12px}.row>*{flex:1}
+.paste-hint{font-size:11px;color:var(--g);margin-top:8px;line-height:1.7}
+.paste-hint code{background:rgba(255,107,0,.15);color:var(--ol);padding:1px 6px;border-radius:3px;font-size:11px}
+.parse-btn{margin-top:10px;width:100%;background:var(--o);color:#fff;border:none;border-radius:6px;padding:12px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:all .2s}
+.parse-btn:hover{background:var(--ol)}
+.div-list{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.div-card{background:rgba(255,255,255,.04);border:1px solid var(--b);border-radius:8px;overflow:hidden}
+.div-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,107,0,.08);border-bottom:1px solid var(--b)}
+.div-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.div-name{font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;flex:1}
+.div-count{font-size:11px;color:var(--g);font-family:'Montserrat',sans-serif;font-weight:600}
+.div-rm{background:rgba(255,60,60,.12);border:1px solid rgba(255,60,60,.25);color:#ff8080;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:13px;flex-shrink:0}
+.div-teams{padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px}
+.team-tag{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:4px 10px;font-size:12px;font-family:'Montserrat',sans-serif;font-weight:600;display:flex;align-items:center;gap:6px}
+.team-tag .trm{color:var(--g);cursor:pointer;font-size:13px;opacity:.6}
+.team-tag .trm:hover{opacity:1;color:#ff8080}
+.site-item{background:rgba(255,255,255,.04);border:1px solid var(--b);border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.site-icon{color:var(--o);font-size:15px;flex-shrink:0}
+.site-item .sname{flex:3;background:transparent;border:none;border-bottom:1px solid var(--b);border-radius:0;padding:5px 7px;font-size:13px}
+.site-item .sname:focus{border-color:var(--o);background:none}
+.site-item .snum{flex:none;width:70px;text-align:center;background:rgba(255,107,0,.1);border:1px solid rgba(255,107,0,.3);border-radius:6px;padding:6px 8px;font-size:14px;font-weight:700;color:var(--o)}
+.site-item .snum:focus{border-color:var(--o);background:rgba(255,107,0,.15)}
+.rm-btn{background:rgba(255,60,60,.12);border:1px solid rgba(255,60,60,.25);color:#ff8080;border-radius:4px;padding:5px 9px;cursor:pointer;font-size:14px;flex-shrink:0}
+.rm-btn:disabled{opacity:.3;cursor:default}
+.add-btn{width:100%;margin-top:4px;background:rgba(255,107,0,.12);border:1px solid rgba(255,107,0,.35);color:var(--ol);border-radius:6px;padding:9px 16px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:all .2s}
+.add-btn:hover{background:rgba(255,107,0,.22)}
+.total-badge{margin-top:10px;text-align:center;font-family:'Montserrat',sans-serif;font-size:12px;color:var(--g);font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.total-badge strong{color:var(--o);font-size:18px;margin-left:6px}
+.btn-go{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px;background:var(--o);color:#fff;border:none;border-radius:6px;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-top:8px;transition:all .2s}
+.btn-go:hover{background:var(--ol);transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,107,0,.4)}
+.stats-row{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.stat{flex:1;min-width:70px;background:var(--c);border:1px solid var(--b);border-radius:8px;padding:14px 10px;text-align:center;position:relative;overflow:hidden}
+.stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--o)}
+.stn{font-family:'Montserrat',sans-serif;font-weight:900;font-size:30px;color:var(--o);line-height:1}
+.stl{font-family:'Montserrat',sans-serif;font-size:9px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:1.5px;margin-top:4px}
+.day-hdr{font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:3px;color:#fff;background:linear-gradient(135deg,var(--o),#cc5500);padding:9px 14px;border-radius:6px;margin:20px 0 10px}
+.div-hdr{font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#fff;padding:8px 14px;border-radius:6px;margin:12px 0 8px;display:flex;align-items:center;gap:10px}
+.gc{background:var(--c);border:1px solid var(--b);border-left:4px solid var(--o);border-radius:8px;padding:11px 14px;margin-bottom:6px;display:flex;align-items:center;gap:14px;transition:background .2s}
+.gc:hover{background:rgba(255,107,0,.06)}
+.gt{font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--o);min-width:60px;line-height:1}
+.ga{font-size:10px;font-weight:600;color:var(--g);letter-spacing:1px}
+.gi{flex:1}
+.gteams{font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;margin-bottom:3px}
+.vs{color:var(--o);font-size:10px;font-weight:900;letter-spacing:2px;margin:0 5px}
+.gm{font-size:11px;color:var(--g);display:flex;gap:12px;flex-wrap:wrap}
+.lunch{background:rgba(255,184,0,.06);border:1px dashed rgba(255,184,0,.35);border-radius:8px;padding:10px 16px;margin:10px 0;display:flex;align-items:center;gap:10px;color:#FFB800;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.bs{background:rgba(255,255,255,.03);border:1px dashed rgba(255,107,0,.3);border-radius:8px;padding:11px 14px;margin-bottom:7px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rb{font-family:'Montserrat',sans-serif;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:3px 9px;border-radius:4px;background:rgba(255,107,0,.18);color:var(--ol);border:1px solid rgba(255,107,0,.35);white-space:nowrap}
+.be{flex:1;min-width:90px;background:rgba(255,255,255,.06);border:1px solid var(--b);border-radius:6px;padding:7px 10px;color:#fff;font-family:'Open Sans',sans-serif;font-size:13px;outline:none;text-align:center;transition:border-color .2s}
+.be:focus{border-color:var(--o)}
+.be::placeholder{color:var(--g);font-style:italic}
+/* Style the datalist dropdown arrow hint */
+.be::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.4;cursor:pointer}
+.bvs{color:var(--o);font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px}
+.help{font-size:12px;color:var(--g);margin-top:6px;line-height:1.6}
+.empty{text-align:center;padding:60px 20px;color:var(--g)}
+.empty .ico{font-size:46px;margin-bottom:12px}
+.empty p{font-family:'Montserrat',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:1px}
+footer{background:var(--n2);border-top:2px solid var(--o);text-align:center;padding:14px;font-size:11px;color:var(--g);font-family:'Montserrat',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-top:40px}
+footer span{color:var(--o)}
+@media(max-width:500px){.row{flex-direction:column}.hbadge{display:none}.htxt p{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="https://www.eurobasketballcup.com" target="_blank" style="flex-shrink:0;display:flex">
+    <img src="data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCABSAHsDASIAAhEBAxEB/8QAHAABAAMBAQEBAQAAAAAAAAAAAAUGBwgEAgMJ/8QANhAAAQMEAQIEBAUDAwUAAAAAAQIDBAAFBhESByETMUFRImFxgRQVMkKRcqGxCCMzNVJigsH/xAAcAQADAQADAQEAAAAAAAAAAAAABgcFAQIEAwj/xAA0EQABAgQEAwYFBAMBAAAAAAABAgMABBEhBTFBUQYScRMiYYGhsSMyQpHBUmKy0QcUcvD/2gAMAwEAAhEDEQA/APVSlKg8foqFKUoghXw860w0t55xDbaAVKWo6CQPUmovLMhtuNWhy5XJ3ihPZtsfrdV6JSPf/FZKzFzDqtML8l1Vqx9KjwSP09vLQ7eIry7nQ89a8q3cLwRU42Zh5YbZTmo+wGpjExPGUyiwwyguOnJI9ydBFxyPqzjFrU4zDU7dH0g6DHZsn+s9tfMA1VV9ZbvMBRa8da8Tfkord0n3PHjUnLt3TPAEJTNaTcrjr4UO6ecJ+h0hH3196rF06uXyQDGsFsYtzCU8WwhAcWk78+44616a+9OeGYNIvCsrJlaf1uK5QegANR5QoYji860qkzNhCv0Np5iOpJFD5xIx+sORsIUq4Y2wsJPdTYcaA+u+VWTHusOPT08bnGk2xe9FRHitj2+IDY/isVvN+yW4BSbpcri6lZJKHXFBJ/8AXy1UW2dAIU4tKFkeIEjfb6etMa+DMMmW++0EK3QT+bekYSOLMSl19xwqH7gPxf1jsCFLizoyJMOS1IYX+lxpYUk/Qiv3rlbDcmvthnsixuvHkduRSStt5X9HvoAdu/bz9K6HwXLIGVWtMlgBiUkDx4ylgqbPv8wddjU44h4TmMI+Kk87e+o6j85dIfsB4oYxT4SxyObaHofxn1ixUpSlOGmFKUoghSlKIIV8PutsMreeWltttJUtSjoJA8ya+6ofW66PRcTRaoSz+Nuz6YraUnSlJ/d9j2Sf6q92GySp6ablxbmP2Gp8hePFiM4JKVW+fpH3Og8zFRtkV/qnmz11neIjHbargy2dgOeuvqdAq9QND2NejNuoEmVOaw/AGC46tSYyHYqORUfIIZA/jkPt715upF3awrEYWEWVxKJTrPKa6jewD+o791nf0A16irN/pcxVqDdrNkMtsGXLnM+ByH/G14gGx7FXf7a9zVILcsGUz8wn4STyst6H9x3rn08onyVTCnVSTCviqBU6vUftG1MuvnH42Dobc4K25F/tN0uM59zfxxHQw3sj4lkgFaiSABvuT69zWlWLFvy3drtllcZdaHJxlqMQ4PdSgBv1H81tWXonQsoXdCL+m3ouUd6Q67cErhhpJRvg0DsDYB+uzXpXH/IMzyDM7o4yxZFQlKRKDgUHOQRoJSO5JI0BruSNb3WVi0vM4k+G1uKI5gCKWANbgbClPzWPthk9L4cx2iW0glJIvU1FLE7mtTr4ARjU7GpkmAXJ1kkPRCnkVPRFKbKffZGtfOs+yPohFyZmTLxu1TI8poEr/CMqcaJ1sBSQDo/0/wAGuvra6HLVYZjMuah5q0B4WraUiUC2BxWD+5JI8vXVU6DabujBrJCwNS4iI63Px7LT/BwPqVsrcKjsjez39x29vjKyT2EuByXeXWleVIBrlpWhzuKE0FY7vYq3iiC2+yilacyiQBn4V0sagVNI/nTdIVws1wcgzmH4shlzuhxCkKBB1vR0at2P3aUCMutPa727/qrHI6lsk/8AKR/AVrffSvPddF/6vsZg5PJVKjBiTe7bAQH3mBoOvJB5p7efbWh7gD3rlLEbsix5BDm8luMk+HMaKRpbSjpaNb0oFPfvrv8ATdURqcaxmVcKACtskEb7joofY9IUVyzmGPtlZISsAg7ePVJ+46x1JZLlFvFpjXOEvkxIbC0e436H5jyNe2s66SuflN2vuHrfLjcJ78RC2SdsL79vkNpP1Ua0Woli8kJKbU0m6bFJ3SRUenrFiwqcM5KpcV82R6ix9YUpSs2NGFKUoghWcZ14E3q5iNtfJKWUuSSn0BGyk/y3/atHrNM/tsqV1UxwWxh+Tc58Z6FGZb0OSihwDuSNHbg+26ZOFW+1nigZlC6deUwu8TudlJBZyC0V6cwjF8muTmR5dKnrWo/i5Om+X7Ub0kfYaFdhYVj1hnYgIL3G2ItCVImuJdUQ9ECSeeyTxVoEHXlokeYFcwW7pX1DGVuWZnGJLtxgxU3J1kOI1+H2NOBXLioH5E+vsa6IxmXmbWPon27GZLbV5LLILvhuJdaWviS3pYJ2FK0SNU5ceyL78vLsyX05UOXyj2rSxhB4dfSRMOuOcqzS51rWoPvTcRZ5FyssbH4V8smPG7N3V5xuGhTym2WG2zx24pWyCdb1on28u89Gx60OTF3ctPueLA/ERmXnVKTEVrv4Y8hvz35nZ9O1QmFzL2u07g29mTb1NNywmagISlLhWlCwFka5Fteh8t6795mE5lL8qBdkRkr/ADFvjEAUjg4gIKyAN9gEpJO9a171KVYdiaFENNrGd6qJIrYHS2VQBW9a1hodQhSiVPpVTLvilsqC9D4kmPcw3Dbx8TXIyXlh7gdrI2NeXavqWxb27tBhNweAlpSpa0vrB132nz7jtURdbheJn5lENqkITZkB2YzHjkBoKSVBX/lsAkcd/wB6iZd8yV7ILYxExm5SLkqOh2G34KUJW2QSkkqWPQE99H5V3Xg+Jud4oUCSrUgX+UaDOOoeauS6K940CiaWtltnE4jG4P428qfEV5lpl1TDSJBK2yPLkAd/zXCuaw2LXl9zgstANR5K0IGz5cjr+2q60s87qNebzcGrParfDkTW3BILhL6koJ+IhIKUp+pUawDL+lnUK4ZrODFikzHJLzi2nC40C8lL4YKuxAH+4pKfv7d6on+M5WZk5h8vrBSpKdaio8ctTkaxgcWLK2kBZJIIpWxpS9jfOl6XiS6dTwrqHYXnCQ5OsKWld981Ngp2T9Gt1tNYxhOH5XjfU+zQ8qtTludi295ccFSVBbe1oOlJJB0pagRvtWz1l8ctIan0JSfoH8lU9KQ18GOl2RWo/qP8U19awpSlJkN0KUpRBCoHIp0HHMhxnO57Ep+PjtyTIfRHSFLLSvhVoEgE74eZHrU9X4zYzMyG9EkIDjLzam3EnyKSNEVoYVOmRnG5jRJv0yPpGfikkJ6Tclz9Qt1zHrFVidfcJtGQqusSzXWaTEtUNJ8JuIC3GccU8rwm3ClvYUni0klJ0d63Vg6a9X8Q/IWIrFpvt5/JJCVxS5CiNuwYiHlrQlK/F5ufBxSU+W9/LfMuW4xOsmVv2h/j+oradVpKFtdyF+w7b2PTRFatluH4jgmDWrM8Sy6LLvMoNkx1Swpl5CRxkBpPEKUOeuy9aAP7tVZ8VmZPs2UtElTx7hoSmtK3IyFL3ypXSInJ88tMKQ/YJsoWr5V/8RbWNztfVnGrhAEO4tSLZJlwYiVKetjSm1ON+J+hKlBsgpWnRSdjXlU1iF4aUmwtMQpcgW5ma2/4bSFlXjA8SlKlDkByBIP/ANrnbAswsl7totSwzHWlPARHyCFI9EjfZWvLXnoCr9g8h3GMhiyrbIWiCXAl6E6SpsIPYlsnug6JOv0+XYVN8Y/3ZVahy8q05A5G4VmNyPHrFIl0tPShWxRYN7WvylPsdxTQRsr2X261zn/xtnuKUynUJd5oS2Q0mP4ewkK1skqPHyA+dQ8XLbEzfrLf1i5mVb4rUZyOGkcFBKFIKgvlvfxb1r01Wf5ZlrtwyKaqVapUVCHlNtrQnxkrSk8Qdo2RsDeiBok1VsrzWy4/GUuZKSt/W0RmztxX2/aPmf715JR/FZsoR2YKiagAVvWumx8esehqVw9qXLryuXu0VelqUpfwtbyi6ZFnGI4VGu78mZd1Qrtb3oCXERWzIbdc/clsucVhIAPdQ/xvP8H62dP8VtFlhtR8lmLtCDDbK4jKA8wZ7coun/dPFYCCnh3BOviFeDDsKh9XbNMyjJcnj2dEJ4lqI3MZIRG1o8wTtlRWB8a/P/t1qsQjWOfKyQWGK2h6WXyyA26laNg9zzSSkj12DrVUrhdqSYbelFr+I0ar0CdaA601NTQmJ7j86rEJpK2gSk2TudK03P4jonEcpl5/kdyyd6JHh22Gt6FaWGWA1xaceU8srGztZKk7IOtk1b6i8UszGP4/DtEc8kR29FWtc1HupX3JJqUqU49iCcQn3HkfLkOgsPvn5xV8Cw84fIoYV82Z6m5+2UKUpWPGvClKUQQpSlEEVvP8RgZbaDGkaalNAmNIA7tqP+UnQ2K50yjH77aLw3bLwgpc7NsOrXppSR2BSo6AT9da9dV1fXju9rt93hKh3OI1KYV5ocTvXzHsfmKb+HOLX8IHYuDma21HT+vaFTiDhZnFD2zZ5XN9D1/v3jIepfSrGsZ6b27JrXlkWdPmhtYiiW0U8Qkh4tKGi7pzQ7AaG+xqg4rf80bnR4WPXO6LkgksMMqLh2kE/Cnv5AE+Vafk/RuPKTysl2ejhG/CjSiVto2dkJV5pH2NRmGYXnmC5PGyC12yz3WRGVttDqwpI79yOXHR16+Y32p2w/G5FyQWl6YS853iA4Aj/lJragyJ1vE/mMBxWVd7rSgN0VPteKbk+SZ74wF9ut3YdlNh4od2yXEkkBWhrYOvP1q39K+lljy7B7jk14ytq1uQQ6pTDjzYC08QG1qUVcmk+IeJJSd+lSHU6wZ/1Jyp293Kx2q1K2UNhLyeZbH6QtSSeZA7b7fxoD4xroy8ylZvN8WhLo4OsQtgLTsHSlK8xsA616CuZnGpJGGoDb6Jd00Kg2Aum6RS2Vq6Rw1geKzTtFNKUNOao94yyzQL3Knv2Wz+M+7JHhPNxnNodSlQPxEHRSFJB2e3YGugOmGCRsShl98okXV5Onnh+lA8+Cd+nz9asOPWCz4/FMa0QWoqD+opG1L+qj3P3NSlJ/EfGLuJpMvLjkbOe6uvh4esPfD/AAm3hyg++eZzTYdNz4wpSlJMOMKUpRBClKUQQpSlEEKUpRBClKUQQpSlEEKUpRBClKUQQpSlEEf/2Q==" alt="Euro Youth Basketball Cup" title="Euro Youth Basketball Cup">
+  </a>
+  <div class="htxt">
+    <h1>Euro Youth <span>Basketball Cup</span></h1>
+    <p>Tournament Scheduler &middot; Barcelona, Spain</p>
+  </div>
+  <div class="hbadge">June 19-21, 2026</div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" id="tab-setup">Setup</button>
+  <button class="tab" id="tab-schedule">Schedule</button>
+  <button class="tab" id="tab-bracket">Bracket</button>
+</div>
+
+<div class="main">
+  <div class="page active" id="page-setup">
+
+    <div class="card">
+      <div class="stitle">Tournament Info</div>
+      <label>Tournament Name</label>
+      <input type="text" id="tName" value="Euro Youth Basketball Cup 2026">
+      <div class="row">
+        <div><label>Start Date</label><input type="date" id="sDate" value="2026-06-19"></div>
+        <div><label>Daily Start Time</label><input type="time" id="sTime" value="09:00"></div>
+      </div>
+      <div class="row">
+        <div><label>Game Duration (min)</label><input type="number" id="gDur" value="20" min="5" max="120"></div>
+        <div><label>Break Between Games (min)</label><input type="number" id="bDur" value="5" min="0" max="60"></div>
+      </div>
+      <label>Lunch Break</label>
+      <div class="row">
+        <div><input type="time" id="lS" value="13:00"></div>
+        <div><input type="time" id="lE" value="15:00"></div>
+      </div>
+      <p class="help">No games will be scheduled during the lunch break</p>
+    </div>
+
+    <div class="card">
+      <div class="stitle">Teams and Divisions</div>
+      <label>Paste your full team list</label>
+      <textarea id="pasteBox">Boys U12: Grey Wolves, Red Foxes, Coyotes, Jackals, Wildcats
+Boys U18: Silverbacks, Kodiaks, Bengals, Stallions, Apex Lions
+Girls U12: Blue Falcons, Ospreys, Kestrels, Swift Harriers, Golden Eagles
+Girls U18: Valkyries, Sirens, Phoenix Elite, Midnight Ravens, Storm Harpy
+Boys U10: Cubs, Pups, Colts, Kittens, Hatchlings
+Girls U10: Sprites, Pixies, Sparks, Wisps, Glows
+Boys U14: Rhinos, Bulls, Rams, Boars, Grizzhies
+Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
+      <p class="paste-hint">Format: <code>Division Name: Team1, Team2, Team3</code> &mdash; one division per line</p>
+      <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
+      <div id="divSummary"></div>
+      <div class="div-list" id="divList"></div>
+    </div>
+
+    <div class="card">
+      <div class="stitle">Venues and Courts</div>
+      <p class="help" style="margin-bottom:12px">Venue name and number of courts at that venue.</p>
+      <div id="siteList"></div>
+      <button class="add-btn" id="addSiteBtn">+ Add Venue</button>
+      <div class="total-badge" id="totalBadge">Total courts: <strong>10</strong></div>
+    </div>
+
+    <div class="card">
+      <div class="stitle">Tournament Days</div>
+      <label>Total Number of Days</label>
+      <select id="nDays">
+        <option value="1">1 Day</option>
+        <option value="2">2 Days</option>
+        <option value="3" selected>3 Days</option>
+        <option value="4">4 Days</option>
+        <option value="5">5 Days</option>
+      </select>
+      <p class="help" style="margin-top:8px">
+        All round robin games fit within the first <strong style="color:var(--o)">(n-1)</strong> days.
+        The <strong style="color:var(--o)">last day</strong> is always semifinals and finals.
+        Each team plays max <strong style="color:var(--o)">1 game per day</strong>.
+      </p>
+    </div>
+
+    <button class="btn-go" id="genBtn">Generate Tournament Schedule</button>
+  </div>
+
+  <div class="page" id="page-schedule">
+    <div id="schedOut"><div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div></div>
+  </div>
+
+  <div class="page" id="page-bracket">
+    <div id="brackOut"><div class="empty"><div class="ico">&#127942;</div><p>Generate your schedule first</p></div></div>
+  </div>
+</div>
+
+<footer><span>Euro Youth Basketball Cup</span> &middot; Tournament Scheduler &middot; Barcelona, Spain</footer>
+
+<script>
+(function () {
+
+  var divisions = [];
+  var sites = [
+    { name: 'Blanes',       numCourts: 6 },
+    { name: 'Santa Suzana', numCourts: 2 },
+    { name: 'Palafolls',    numCourts: 2 }
+  ];
+  var sched = {};
+  var DIV_COLORS = [
+    '#FF6B00','#3B82F6','#10B981','#8B5CF6',
+    '#F59E0B','#EF4444','#06B6D4','#EC4899',
+    '#84CC16','#F97316','#6366F1','#14B8A6'
+  ];
+
+  // ── Tabs ──────────────────────────────────────────────
+  function switchTab(id) {
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+    document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+    document.getElementById('tab-' + id).classList.add('active');
+    document.getElementById('page-' + id).classList.add('active');
+  }
+  document.getElementById('tab-setup').addEventListener('click', function () { switchTab('setup'); });
+  document.getElementById('tab-schedule').addEventListener('click', function () { switchTab('schedule'); });
+  document.getElementById('tab-bracket').addEventListener('click', function () { switchTab('bracket'); });
+
+  // ── Parse teams ────────────────────────────────────────
+  function parseTeams() {
+    var raw = document.getElementById('pasteBox').value.trim();
+    if (!raw) { alert('Please paste your team list first!'); return false; }
+    var parsed = [];
+    raw.split('\n').forEach(function (line, li) {
+      line = line.trim();
+      if (!line) return;
+      var ci = line.indexOf(':');
+      if (ci === -1) return;
+      var divName = line.substring(0, ci).trim();
+      var teams = line.substring(ci + 1).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+      if (divName && teams.length) parsed.push({ name: divName, color: DIV_COLORS[li % DIV_COLORS.length], teams: teams });
+    });
+    if (!parsed.length) { alert('Could not parse divisions. Format: "Boys U12: Team1, Team2"'); return false; }
+    divisions = parsed;
+    renderDivisions();
+    return true;
+  }
+  document.getElementById('parseBtn').addEventListener('click', parseTeams);
+
+  function renderDivisions() {
+    var list = document.getElementById('divList');
+    var summary = document.getElementById('divSummary');
+    if (!divisions.length) { list.innerHTML = ''; summary.innerHTML = ''; return; }
+    var tot = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
+    summary.innerHTML = '<div style="margin:12px 0 4px;font-family:Montserrat,sans-serif;font-size:12px;color:var(--g);font-weight:700;text-transform:uppercase;letter-spacing:1px">'
+      + '<span style="color:var(--o)">' + divisions.length + '</span> divisions &middot; '
+      + '<span style="color:var(--o)">' + tot + '</span> teams parsed</div>';
+    list.innerHTML = divisions.map(function (d, di) {
+      return '<div class="div-card">'
+        + '<div class="div-header"><div class="div-dot" style="background:' + d.color + '"></div>'
+        + '<div class="div-name">' + d.name + '</div><div class="div-count">' + d.teams.length + ' teams</div>'
+        + '<button class="div-rm" data-di="' + di + '">x</button></div>'
+        + '<div class="div-teams">'
+        + d.teams.map(function (t, ti) {
+            return '<div class="team-tag">' + t
+              + '<span class="trm" data-rdi="' + di + '" data-rti="' + ti + '">x</span></div>';
+          }).join('')
+        + '</div></div>';
+    }).join('');
+  }
+
+  document.getElementById('divList').addEventListener('click', function (e) {
+    var el = e.target;
+    if (el.classList.contains('div-rm') && el.dataset.di !== undefined) {
+      divisions.splice(parseInt(el.dataset.di), 1); renderDivisions(); return;
+    }
+    if (el.classList.contains('trm')) {
+      var di = parseInt(el.dataset.rdi), ti = parseInt(el.dataset.rti);
+      divisions[di].teams.splice(ti, 1);
+      if (!divisions[di].teams.length) divisions.splice(di, 1);
+      renderDivisions();
+    }
+  });
+
+  // ── Sites ──────────────────────────────────────────────
+  function renderSites() {
+    var el = document.getElementById('siteList');
+    el.innerHTML = '';
+    sites.forEach(function (s, i) {
+      var d = document.createElement('div');
+      d.className = 'site-item';
+      d.innerHTML = '<span class="site-icon">&#128205;</span>'
+        + '<input type="text" class="sname" placeholder="Venue name" value="' + (s.name || '') + '" data-si="' + i + '">'
+        + '<input type="number" class="snum" min="1" max="30" value="' + (s.numCourts || 1) + '" data-si="' + i + '" title="Courts at this venue">'
+        + '<button class="rm-btn" data-rmi="' + i + '"' + (sites.length === 1 ? ' disabled' : '') + '>x</button>';
+      el.appendChild(d);
+    });
+    updateTotal();
+  }
+  document.getElementById('siteList').addEventListener('input', function (e) {
+    var si = parseInt(e.target.dataset.si);
+    if (isNaN(si)) return;
+    if (e.target.classList.contains('sname')) sites[si].name = e.target.value;
+    if (e.target.classList.contains('snum')) { sites[si].numCourts = parseInt(e.target.value) || 1; updateTotal(); }
+  });
+  document.getElementById('siteList').addEventListener('click', function (e) {
+    if (e.target.dataset.rmi === undefined) return;
+    if (sites.length > 1) { sites.splice(parseInt(e.target.dataset.rmi), 1); renderSites(); }
+  });
+  document.getElementById('addSiteBtn').addEventListener('click', function () {
+    sites.push({ name: '', numCourts: 1 }); renderSites();
+  });
+  function updateTotal() {
+    var t = sites.reduce(function (s, x) { return s + (parseInt(x.numCourts) || 1); }, 0);
+    document.getElementById('totalBadge').innerHTML = 'Total courts: <strong>' + t + '</strong>';
+  }
+  function getCourts() {
+    var all = [];
+    sites.forEach(function (s) {
+      var n = parseInt(s.numCourts) || 1, name = s.name || 'Unnamed Venue';
+      for (var i = 0; i < n; i++)
+        all.push({ court: n > 1 ? name + ' Court ' + (i + 1) : name, loc: name });
+    });
+    return all;
+  }
+
+  // ── Scheduling helpers ─────────────────────────────────
+  function shuffle(a) {
+    var b = a.slice();
+    for (var i = b.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1)), t = b[i]; b[i] = b[j]; b[j] = t;
+    }
+    return b;
+  }
+  function toM(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
+  function toT(m) { return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  function fmt(t) {
+    var p = t.split(':'), h = parseInt(p[0]), m = parseInt(p[1]);
+    return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + ' ' + (h >= 12 ? 'PM' : 'AM');
+  }
+
+  function buildRounds(pairs) {
+    var rounds = [], remaining = shuffle(pairs.slice());
+    while (remaining.length > 0) {
+      var round = [], used = {}, leftover = [];
+      remaining.forEach(function (p) {
+        if (!used[p[0]] && !used[p[1]]) { round.push(p); used[p[0]] = used[p[1]] = true; }
+        else leftover.push(p);
+      });
+      if (!round.length) break;
+      rounds.push(round);
+      remaining = leftover;
+    }
+    return rounds;
+  }
+
+  function placeGames(matchups, gDur, slot, lSm, lEm, ct, crts) {
+    var gs = [];
+    matchups.forEach(function (m) {
+      var ci = 0;
+      for (var k = 1; k < ct.length; k++) if (ct[k] < ct[ci]) ci = k;
+      var gt = ct[ci];
+      if (gt < lEm && gt + gDur > lSm) gt = lEm;
+      gs.push({ time: toT(gt), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[ci].court });
+      ct[ci] = gt + slot;
+    });
+    return gs;
+  }
+
+  // ── Generate ───────────────────────────────────────────
+  document.getElementById('genBtn').addEventListener('click', function () {
+    if (!divisions.length) { alert('Please parse your team list first!'); return; }
+    var crts = getCourts();
+    if (!crts.length) { alert('Please add at least 1 venue!'); return; }
+
+    var gDur  = parseInt(document.getElementById('gDur').value)  || 20;
+    var bDur  = parseInt(document.getElementById('bDur').value)  || 5;
+    var slot  = gDur + bDur;
+    var lSm   = toM(document.getElementById('lS').value   || '13:00');
+    var lEm   = toM(document.getElementById('lE').value   || '15:00');
+    var st    = toM(document.getElementById('sTime').value || '09:00');
+    var nDays = parseInt(document.getElementById('nDays').value);
+    var rrDays = Math.max(1, nDays - 1);
+
+    var divRounds = divisions.map(function (d) {
+      var pairs = [];
+      for (var i = 0; i < d.teams.length; i++)
+        for (var j = i + 1; j < d.teams.length; j++)
+          pairs.push([d.teams[i], d.teams[j]]);
+      return { name: d.name, color: d.color, rounds: buildRounds(pairs) };
+    });
+
+    var totalRRRounds = divRounds.reduce(function (m, d) { return Math.max(m, d.rounds.length); }, 0);
+
+    var roundsPerDay = [];
+    for (var d = 0; d < rrDays; d++)
+      roundsPerDay.push(Math.floor(totalRRRounds / rrDays) + (d < totalRRRounds % rrDays ? 1 : 0));
+
+    var gameDays = [];
+    var roundCursor = 0;
+    for (var dayIdx = 0; dayIdx < rrDays; dayIdx++) {
+      var ct = crts.map(function () { return st; });
+      var roundsToday = roundsPerDay[dayIdx];
+      var todayMatchups = [];
+      for (var r = 0; r < roundsToday; r++) {
+        var rndNum = roundCursor + r;
+        divRounds.forEach(function (d) {
+          if (rndNum >= d.rounds.length) return;
+          d.rounds[rndNum].forEach(function (pair) {
+            todayMatchups.push({ t1: pair[0], t2: pair[1], lbl: null, name: d.name, color: d.color });
+          });
+        });
+      }
+      roundCursor += roundsToday;
+      todayMatchups = shuffle(todayMatchups);
+      var placed = placeGames(todayMatchups, gDur, slot, lSm, lEm, ct, crts);
+      var byDiv = {};
+      placed.forEach(function (g, idx) {
+        var m = todayMatchups[idx];
+        if (!byDiv[m.name]) byDiv[m.name] = { name: m.name, color: m.color, games: [] };
+        byDiv[m.name].games.push(g);
+      });
+      var dayDivs = Object.keys(byDiv).map(function (k) { return byDiv[k]; });
+      if (dayDivs.length) gameDays.push({ label: 'Day ' + (dayIdx + 1) + ' \u2014 Round Robin', divs: dayDivs });
+    }
+
+    // Finals day
+    var ct2 = crts.map(function () { return st; });
+    var bDivs = divisions.map(function (div) {
+      var n = Math.max(2, Math.ceil(div.teams.length / 2));
+      var lbls = [];
+      for (var x = 0; x < n - 1; x++) lbls.push('SF ' + (x + 1));
+      lbls.push('FINAL');
+      var matchups = lbls.map(function (l) { return { t1: '', t2: '', lbl: l }; });
+      var games = placeGames(matchups, gDur, slot, lSm, lEm, ct2, crts);
+      return { name: div.name, color: div.color, teams: div.teams, games: games };
+    });
+    var bracketDays = [{ label: 'Day ' + nDays + ' \u2014 Semifinals & Finals', divs: bDivs }];
+
+    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
+    renderSched();
+    renderBrack();
+    switchTab('schedule');
+  });
+
+  // ── Render schedule ────────────────────────────────────
+  function lunchBar(lS, lE) {
+    return '<div class="lunch">Lunch Break <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">'
+      + fmt(lS) + ' - ' + fmt(lE) + '</span></div>';
+  }
+
+  function renderDayBlock(divs, lS, lE) {
+    var all = [];
+    divs.forEach(function (d) {
+      d.games.forEach(function (g) { all.push({ g: g, name: d.name, color: d.color }); });
+    });
+    all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
+    var h = '', lunchShown = false, lastDiv = '';
+    all.forEach(function (item) {
+      var g = item.g;
+      if (!lunchShown && toM(g.time) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
+      if (item.name !== lastDiv) {
+        h += '<div class="div-hdr" style="background:linear-gradient(135deg,' + item.color + '22,' + item.color + '0a);border-left:4px solid ' + item.color + '">'
+          + '<div style="width:10px;height:10px;border-radius:50%;background:' + item.color + ';flex-shrink:0"></div>'
+          + item.name + '</div>';
+        lastDiv = item.name;
+      }
+      var p = fmt(g.time).split(' ');
+      h += '<div class="gc" style="border-left-color:' + item.color + '">'
+        + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
+        + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
+        + '<div class="gm"><span>' + g.court + '</span></div></div></div>';
+    });
+    return h;
+  }
+
+  function renderSched() {
+    var lS = document.getElementById('lS').value || '13:00';
+    var lE = document.getElementById('lE').value || '15:00';
+    var totTeams = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
+    var totGames = sched.gameDays.reduce(function (s, day) {
+      return s + day.divs.reduce(function (s2, d) { return s2 + d.games.length; }, 0);
+    }, 0);
+    var h = '<div class="stats-row">'
+      + '<div class="stat"><div class="stn">' + divisions.length + '</div><div class="stl">Divisions</div></div>'
+      + '<div class="stat"><div class="stn">' + totTeams + '</div><div class="stl">Teams</div></div>'
+      + '<div class="stat"><div class="stn">' + totGames + '</div><div class="stl">Games</div></div>'
+      + '<div class="stat"><div class="stn">' + sched.totalCourts + '</div><div class="stl">Courts</div></div>'
+      + '</div>';
+    sched.gameDays.forEach(function (day) {
+      h += '<div class="day-hdr">' + day.label + '</div>';
+      h += renderDayBlock(day.divs, lS, lE);
+    });
+    document.getElementById('schedOut').innerHTML = h;
+  }
+
+  // ── Render bracket (with datalist dropdowns per division) ──
+  function renderBrack() {
+    if (!sched.bracketDays || !sched.bracketDays.length) {
+      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">&#127942;</div><p>No bracket days</p></div>';
+      return;
+    }
+    var lS = document.getElementById('lS').value || '13:00';
+    var lE = document.getElementById('lE').value || '15:00';
+
+    var h = '<p class="help" style="margin-bottom:18px">Click any team slot to pick from the division\'s teams, or type freely. Each division has its own dropdown list.</p>';
+
+    sched.bracketDays.forEach(function (day, dIdx) {
+      h += '<div class="day-hdr">' + day.label + '</div>';
+
+      // Build one <datalist> per division — id keyed to division name
+      day.divs.forEach(function (d) {
+        var dlId = 'dl-' + d.name.replace(/[^a-zA-Z0-9]/g, '_');
+        h += '<datalist id="' + dlId + '">';
+        d.teams.forEach(function (t) { h += '<option value="' + t + '">'; });
+        h += '</datalist>';
+      });
+
+      // Collect all games, sort by time
+      var all = [];
+      day.divs.forEach(function (d) {
+        d.games.forEach(function (g, gi) {
+          all.push({ g: g, name: d.name, color: d.color, dIdx: dIdx, gi: gi });
+        });
+      });
+      all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
+
+      var lunchShown = false, lastDiv = '';
+      all.forEach(function (item) {
+        var g = item.g;
+        if (!lunchShown && toM(g.time) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
+
+        if (item.name !== lastDiv) {
+          h += '<div class="div-hdr" style="background:linear-gradient(135deg,' + item.color + '22,' + item.color + '0a);border-left:4px solid ' + item.color + ';margin-top:12px">'
+            + '<div style="width:10px;height:10px;border-radius:50%;background:' + item.color + ';flex-shrink:0"></div>'
+            + item.name + '</div>';
+          lastDiv = item.name;
+        }
+
+        var dlId = 'dl-' + item.name.replace(/[^a-zA-Z0-9]/g, '_');
+        var p = fmt(g.time).split(' ');
+
+        h += '<div class="bs">'
+          + '<div style="min-width:55px">'
+          + '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:15px;color:' + item.color + '">' + p[0] + '</div>'
+          + '<div style="font-size:10px;color:var(--g)">' + p[1] + '</div>'
+          + '</div>'
+          + '<span class="rb" style="border-color:' + item.color + '66;color:' + item.color + '">' + (g.lbl || '') + '</span>'
+          + '<input class="be" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t1 || '') + '" autocomplete="off">'
+          + '<span class="bvs">VS</span>'
+          + '<input class="be" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t2 || '') + '" autocomplete="off">'
+          + '<span style="font-size:11px;color:var(--g);white-space:nowrap">' + g.court + '</span>'
+          + '</div>';
+      });
+    });
+
+    document.getElementById('brackOut').innerHTML = h;
+  }
+
+  // ── Init ──────────────────────────────────────────────
+  renderSites();
+  parseTeams();
+
+}());
+</script>
+</body>
+</html>
