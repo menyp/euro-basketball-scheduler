@@ -368,7 +368,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       for (var k = 1; k < ct.length; k++) if (ct[k] < ct[ci]) ci = k;
       var gt = ct[ci];
       if (gt < lEm && gt + gDur > lSm) gt = lEm;
-      gs.push({ time: toT(gt), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[ci].court, score1: null, score2: null });
+      gs.push({ time: toT(gt), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[ci].court, score1: null, score2: null, locked: false });
       ct[ci] = gt + slot;
     });
     return gs;
@@ -476,12 +476,15 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       var p = fmt(g.time).split(' ');
       // score inputs or display
       var scoreHtml = '';
-      if (g.score1 !== null && g.score2 !== null) {
-        scoreHtml = '<span class="score-display">' + g.score1 + ' - ' + g.score2 + '</span>';
+      if (g.score1 !== null && g.score2 !== null && g.locked) {
+        scoreHtml = '<span class="score-display">' + g.score1 + ' - ' + g.score2 + '</span>'
+                  + '<button class="score-edit" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" style="margin-left:6px;font-size:11px;padding:2px 6px;background:var(--ol);color:#000;border:none;border-radius:4px;cursor:pointer">edit</button>';
       } else {
-        scoreHtml = '<input type="number" min="0" class="score-in score1" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0">'
+        var v1 = g.score1 !== null ? g.score1 : '';
+        var v2 = g.score2 !== null ? g.score2 : '';
+        scoreHtml = '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score1" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0" value="' + v1 + '">'
                   + '<span class="vs">-</span>'
-                  + '<input type="number" min="0" class="score-in score2" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0">';
+                  + '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score2" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0" value="' + v2 + '">';
       }
       h += '<div class="gc" style="border-left-color:' + item.color + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
@@ -654,7 +657,29 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     });
   }
 
-  // ── Score input listener ───────────────────────────────
+  // ── Score input/edit listeners ─────────────────────────
+  document.getElementById('schedOut').addEventListener('click', function (e) {
+    if (e.target.classList.contains('score-edit')) {
+      var day = parseInt(e.target.dataset.day);
+      var divName = e.target.dataset.div;
+      var gi = parseInt(e.target.dataset.gi);
+      if (!confirm('Are you sure you want to change this score?')) return;
+      var dayObj = sched.gameDays && sched.gameDays[day];
+      if (dayObj) {
+        var divObj = dayObj.divs.find(function(x){return x.name === divName;});
+        if (divObj) {
+          var game = divObj.games[gi];
+          if (game) {
+            game.locked = false;
+          }
+        }
+      }
+      renderSched();
+      renderStandings();
+      renderBrack();
+    }
+  });
+
   document.getElementById('schedOut').addEventListener('input', function (e) {
     if (!e.target.classList.contains('score-in')) return;
     var day = parseInt(e.target.dataset.day);
@@ -670,6 +695,9 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         if (game) {
           if (isFirst) game.score1 = isNaN(val) ? null : val;
           else game.score2 = isNaN(val) ? null : val;
+          if (game.score1 !== null && game.score2 !== null) {
+            game.locked = true;
+          }
           renderSched();
           renderStandings();
           renderBrack();
