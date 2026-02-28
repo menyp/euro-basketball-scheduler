@@ -90,6 +90,12 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .empty{text-align:center;padding:60px 20px;color:var(--g)}
 .empty .ico{font-size:46px;margin-bottom:12px}
 .empty p{font-family:'Montserrat',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:1px}
+.standings-table{width:100%;border-collapse:collapse;margin-bottom:20px}
+.standings-table th,.standings-table td{border:1px solid var(--b);padding:8px;text-align:center}
+.standings-table th{background:var(--n3);color:#fff}
+.standings-table td{background:var(--c)}
+.score-in{width:40px;text-align:center;background:rgba(255,255,255,.1);border:1px solid var(--b);border-radius:4px;padding:2px 4px;color:#fff}
+.score-display{font-weight:700}
 footer{background:var(--n2);border-top:2px solid var(--o);text-align:center;padding:14px;font-size:11px;color:var(--g);font-family:'Montserrat',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-top:40px}
 footer span{color:var(--o)}
 @media(max-width:500px){.row{flex-direction:column}.hbadge{display:none}.htxt p{display:none}}
@@ -111,6 +117,7 @@ footer span{color:var(--o)}
 <div class="tabs">
   <button class="tab active" id="tab-setup">Setup</button>
   <button class="tab" id="tab-schedule">Schedule</button>
+  <button class="tab" id="tab-standings">Standings</button>
   <button class="tab" id="tab-bracket">Bracket</button>
 </div>
 
@@ -186,6 +193,10 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     <div id="schedOut"><div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div></div>
   </div>
 
+  <div class="page" id="page-standings">
+    <div id="standingsOut"><div class="empty"><div class="ico">&#128200;</div><p>No scores yet</p></div></div>
+  </div>
+
   <div class="page" id="page-bracket">
     <div id="brackOut"><div class="empty"><div class="ico">&#127942;</div><p>Generate your schedule first</p></div></div>
   </div>
@@ -215,9 +226,11 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
     document.getElementById('tab-' + id).classList.add('active');
     document.getElementById('page-' + id).classList.add('active');
+    if (id === 'standings') renderStandings();
   }
   document.getElementById('tab-setup').addEventListener('click', function () { switchTab('setup'); });
   document.getElementById('tab-schedule').addEventListener('click', function () { switchTab('schedule'); });
+  document.getElementById('tab-standings').addEventListener('click', function () { switchTab('standings'); });
   document.getElementById('tab-bracket').addEventListener('click', function () { switchTab('bracket'); });
 
   // ── Parse teams ────────────────────────────────────────
@@ -355,7 +368,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       for (var k = 1; k < ct.length; k++) if (ct[k] < ct[ci]) ci = k;
       var gt = ct[ci];
       if (gt < lEm && gt + gDur > lSm) gt = lEm;
-      gs.push({ time: toT(gt), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[ci].court });
+      gs.push({ time: toT(gt), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[ci].court, score1: null, score2: null });
       ct[ci] = gt + slot;
     });
     return gs;
@@ -433,6 +446,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
 
     sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
     renderSched();
+    renderStandings();
     renderBrack();
     switchTab('schedule');
   });
@@ -443,10 +457,10 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       + fmt(lS) + ' - ' + fmt(lE) + '</span></div>';
   }
 
-  function renderDayBlock(divs, lS, lE) {
+  function renderDayBlock(divs, lS, lE, dayIdx) {
     var all = [];
     divs.forEach(function (d) {
-      d.games.forEach(function (g) { all.push({ g: g, name: d.name, color: d.color }); });
+      d.games.forEach(function (g, gi) { all.push({ g: g, name: d.name, color: d.color, gi: gi }); });
     });
     all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
     var h = '', lunchShown = false, lastDiv = '';
@@ -460,10 +474,21 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         lastDiv = item.name;
       }
       var p = fmt(g.time).split(' ');
+      // score inputs or display
+      var scoreHtml = '';
+      if (g.score1 !== null && g.score2 !== null) {
+        scoreHtml = '<span class="score-display">' + g.score1 + ' - ' + g.score2 + '</span>';
+      } else {
+        scoreHtml = '<input type="number" min="0" class="score-in score1" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0">'
+                  + '<span class="vs">-</span>'
+                  + '<input type="number" min="0" class="score-in score2" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0">';
+      }
       h += '<div class="gc" style="border-left-color:' + item.color + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
         + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
-        + '<div class="gm"><span>' + g.court + '</span></div></div></div>';
+        + '<div class="gm"><span>' + g.court + '</span></div></div>'
+        + '<div style="margin-left:8px;">' + scoreHtml + '</div>'
+        + '</div>';
     });
     return h;
   }
@@ -481,9 +506,9 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       + '<div class="stat"><div class="stn">' + totGames + '</div><div class="stl">Games</div></div>'
       + '<div class="stat"><div class="stn">' + sched.totalCourts + '</div><div class="stl">Courts</div></div>'
       + '</div>';
-    sched.gameDays.forEach(function (day) {
+    sched.gameDays.forEach(function (day, dIdx) {
       h += '<div class="day-hdr">' + day.label + '</div>';
-      h += renderDayBlock(day.divs, lS, lE);
+      h += renderDayBlock(day.divs, lS, lE, dIdx);
     });
     document.getElementById('schedOut').innerHTML = h;
   }
@@ -548,8 +573,110 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       });
     });
 
+    // before output we may seed bracket from standings
+    seedBracketFromStandings();
     document.getElementById('brackOut').innerHTML = h;
   }
+
+  // ── Standings / seeding helpers ─────────────────────────
+  function computeStandings() {
+    var standing = {};
+    divisions.forEach(function(div){
+      standing[div.name] = { teams: {}, order: [] };
+      div.teams.forEach(function(t){ standing[div.name].teams[t] = { W:0, L:0, PF:0, PA:0 }; });
+    });
+    if (!sched.gameDays) return standing;
+    sched.gameDays.forEach(function(day){
+      day.divs.forEach(function(d){
+        d.games.forEach(function(g){
+          if (g.lbl) return; // only round robin
+          if (g.score1 !== null && g.score2 !== null) {
+            var st = standing[d.name].teams;
+            st[g.t1].PF += g.score1;
+            st[g.t1].PA += g.score2;
+            st[g.t2].PF += g.score2;
+            st[g.t2].PA += g.score1;
+            if (g.score1 > g.score2) { st[g.t1].W++; st[g.t2].L++; }
+            else if (g.score2 > g.score1) { st[g.t2].W++; st[g.t1].L++; }
+          }
+        });
+      });
+    });
+    Object.keys(standing).forEach(function(divName){
+      standing[divName].order = Object.keys(standing[divName].teams).sort(function(a,b){
+        var A = standing[divName].teams[a], B = standing[divName].teams[b];
+        if (B.W !== A.W) return B.W - A.W;
+        var diffA = A.PF - A.PA, diffB = B.PF - B.PA;
+        if (diffB !== diffA) return diffB - diffA;
+        return B.PF - A.PF;
+      });
+    });
+    return standing;
+  }
+
+  function renderStandings() {
+    var st = computeStandings();
+    var h = '';
+    var divNames = Object.keys(st);
+    if (!divNames.length) {
+      h = '<div class="empty"><div class="ico">&#128200;</div><p>No standings</p></div>';
+    } else {
+      divNames.forEach(function(div){
+        h += '<div class="day-hdr">' + div + '</div>';
+        h += '<table class="standings-table"><thead><tr><th>Team</th><th>W</th><th>L</th><th>PF</th><th>PA</th></tr></thead><tbody>';
+        st[div].order.forEach(function(team){
+          var r = st[div].teams[team];
+          h += '<tr><td>' + team + '</td><td>' + r.W + '</td><td>' + r.L + '</td><td>' + r.PF + '</td><td>' + r.PA + '</td></tr>';
+        });
+        h += '</tbody></table>';
+      });
+    }
+    document.getElementById('standingsOut').innerHTML = h;
+  }
+
+  function seedBracketFromStandings() {
+    var st = computeStandings();
+    if (!sched.bracketDays) return;
+    sched.bracketDays.forEach(function(day){
+      day.divs.forEach(function(d){
+        var order = st[d.name] && st[d.name].order;
+        if (order && order.length >= 2) {
+          // fill final game
+          for (var i = d.games.length - 1; i >= 0; i--) {
+            if (d.games[i].lbl && d.games[i].lbl.toLowerCase().indexOf('final') !== -1) {
+              d.games[i].t1 = order[0];
+              d.games[i].t2 = order[1];
+              break;
+            }
+          }
+        }
+      });
+    });
+  }
+
+  // ── Score input listener ───────────────────────────────
+  document.getElementById('schedOut').addEventListener('input', function (e) {
+    if (!e.target.classList.contains('score-in')) return;
+    var day = parseInt(e.target.dataset.day);
+    var divName = e.target.dataset.div;
+    var gi = parseInt(e.target.dataset.gi);
+    var isFirst = e.target.classList.contains('score1');
+    var val = parseInt(e.target.value);
+    var dayObj = sched.gameDays && sched.gameDays[day];
+    if (dayObj) {
+      var divObj = dayObj.divs.find(function(x){return x.name === divName;});
+      if (divObj) {
+        var game = divObj.games[gi];
+        if (game) {
+          if (isFirst) game.score1 = isNaN(val) ? null : val;
+          else game.score2 = isNaN(val) ? null : val;
+          renderSched();
+          renderStandings();
+          renderBrack();
+        }
+      }
+    }
+  });
 
   // ── Init ──────────────────────────────────────────────
   renderSites();
