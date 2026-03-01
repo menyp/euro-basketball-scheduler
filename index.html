@@ -661,7 +661,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         Object.keys(d.groups).forEach(function(gk){
           var grp = d.groups[gk];
           grp.games.forEach(function(g, gi){
-            all.push({ g: g, name: d.name, color: d.color, gi: gi, group: grp.group });
+            all.push({ g: g, name: d.name, color: d.color, gi: gi, gk: gk, group: grp.group });
           });
         });
       }
@@ -687,13 +687,13 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       var scoreHtml = '';
       if (g.score1 !== null && g.score2 !== null && g.locked) {
         scoreHtml = '<span class="score-display">' + g.score1 + ' - ' + g.score2 + '</span>'
-                  + '<button class="score-edit" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" style="margin-left:6px;font-size:11px;padding:2px 6px;background:var(--ol);color:#000;border:none;border-radius:4px;cursor:pointer">edit</button>';
+                  + '<button class="score-edit" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" data-gk="' + (item.gk || '') + '" style="margin-left:6px;font-size:11px;padding:2px 6px;background:var(--ol);color:#000;border:none;border-radius:4px;cursor:pointer">edit</button>';
       } else {
         var v1 = g.score1 !== null ? g.score1 : '';
         var v2 = g.score2 !== null ? g.score2 : '';
-        scoreHtml = '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score1" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0" value="' + v1 + '">'
+        scoreHtml = '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score1" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" data-gk="' + (item.gk || '') + '" placeholder="0" value="' + v1 + '">'
                   + '<span class="vs">-</span>'
-                  + '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score2" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" placeholder="0" value="' + v2 + '">';
+                  + '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score2" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" data-gk="' + (item.gk || '') + '" placeholder="0" value="' + v2 + '">';
       }
       h += '<div class="gc" style="border-left-color:' + item.color + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
@@ -997,7 +997,13 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         if (!sched.gameDays) return warnings;
         sched.gameDays.forEach(function(day){
           day.divs.forEach(function(d){
-            d.games.forEach(function(g){
+            var games = [];
+            if (d.games) {
+              games = d.games;
+            } else if (d.groups) {
+              Object.keys(d.groups).forEach(function(gk){ games = games.concat(d.groups[gk].games); });
+            }
+            games.forEach(function(g){
               if (!g.lbl) {
                 if (!teamGames[g.t1]) teamGames[g.t1] = [];
                 if (!teamGames[g.t2]) teamGames[g.t2] = [];
@@ -1024,7 +1030,13 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     var allScored = true;
     sched.gameDays.forEach(function(day){
       day.divs.forEach(function(d){
-        d.games.forEach(function(g){
+        var games = [];
+        if (d.games) {
+          games = d.games;
+        } else if (d.groups) {
+          Object.keys(d.groups).forEach(function(gk){ games = games.concat(d.groups[gk].games); });
+        }
+        games.forEach(function(g){
           if (!g.lbl && (g.score1 === null || g.score2 === null)) {
             allScored = false;
           }
@@ -1041,13 +1053,19 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     var day = parseInt(e.target.dataset.day);
     var divName = e.target.dataset.div;
     var gi = parseInt(e.target.dataset.gi);
+    var gk = e.target.dataset.gk;
     var isFirst = e.target.classList.contains('score1');
     var val = parseInt(e.target.value);
     var dayObj = sched.gameDays && sched.gameDays[day];
     if (dayObj) {
       var divObj = dayObj.divs.find(function(x){return x.name === divName;});
       if (divObj) {
-        var game = divObj.games[gi];
+        var game = null;
+        if (divObj.games && divObj.games[gi]) {
+          game = divObj.games[gi];
+        } else if (divObj.groups && gk && divObj.groups[gk] && divObj.groups[gk].games[gi]) {
+          game = divObj.groups[gk].games[gi];
+        }
         if (game) {
           if (isFirst) game.score1 = isNaN(val) ? null : val;
           else game.score2 = isNaN(val) ? null : val;
@@ -1063,12 +1081,18 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       var day = parseInt(e.target.dataset.day);
       var divName = e.target.dataset.div;
       var gi = parseInt(e.target.dataset.gi);
+      var gk = e.target.dataset.gk;
       var isFirst = e.target.classList.contains('score1');
       var dayObj = sched.gameDays && sched.gameDays[day];
       if (dayObj) {
         var divObj = dayObj.divs.find(function(x){return x.name === divName;});
         if (divObj) {
-          var game = divObj.games[gi];
+          var game = null;
+          if (divObj.games && divObj.games[gi]) {
+            game = divObj.games[gi];
+          } else if (divObj.groups && gk && divObj.groups[gk] && divObj.groups[gk].games[gi]) {
+            game = divObj.groups[gk].games[gi];
+          }
           if (game && game.score1 !== null && game.score2 !== null && !game.locked) {
             game.locked = true;
             renderSched();
