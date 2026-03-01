@@ -522,6 +522,11 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">&#127942;</div><p>No bracket days</p></div>';
       return;
     }
+    var rrComplete = isRoundRobinComplete();
+    if (!rrComplete) {
+      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">⏳</div><p>Waiting for round robin to complete...</p></div>';
+      return;
+    }
     var lS = document.getElementById('lS').value || '13:00';
     var lE = document.getElementById('lE').value || '15:00';
 
@@ -577,6 +582,11 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     });
 
     // before output we may seed bracket from standings
+    var rrComplete = isRoundRobinComplete();
+    if (!rrComplete) {
+      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">\u23f3</div><p>Waiting for round robin to complete...</p></div>';
+      return;
+    }
     seedBracketFromStandings();
     document.getElementById('brackOut').innerHTML = h;
   }
@@ -680,6 +690,21 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     }
   });
 
+  function isRoundRobinComplete() {
+    if (!sched.gameDays) return false;
+    var allScored = true;
+    sched.gameDays.forEach(function(day){
+      day.divs.forEach(function(d){
+        d.games.forEach(function(g){
+          if (!g.lbl && (g.score1 === null || g.score2 === null)) {
+            allScored = false;
+          }
+        });
+      });
+    });
+    return allScored;
+  }
+
   document.getElementById('schedOut').addEventListener('input', function (e) {
     if (!e.target.classList.contains('score-in')) return;
     var day = parseInt(e.target.dataset.day);
@@ -695,16 +720,20 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         if (game) {
           if (isFirst) game.score1 = isNaN(val) ? null : val;
           else game.score2 = isNaN(val) ? null : val;
-          if (game.score1 !== null && game.score2 !== null) {
+          var wasJustLocked = false;
+          if (game.score1 !== null && game.score2 !== null && !game.locked) {
             game.locked = true;
+            wasJustLocked = true;
           }
-          renderSched();
+          if (wasJustLocked) {
+            renderSched();
+          }
           renderStandings();
           renderBrack();
         }
       }
     }
-  });
+  })
 
   // ── Init ──────────────────────────────────────────────
   renderSites();
