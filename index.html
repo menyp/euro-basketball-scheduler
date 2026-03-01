@@ -1155,6 +1155,26 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     }
   });
 
+  // Add-team button handler: prompt for a team name, add to division, regenerate
+  document.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('add-team-btn')) return;
+    var divName = e.target.dataset.div;
+    var gk = e.target.dataset.gk;
+    var divDef = divisions.find(function(d){ return d.name === divName; });
+    if (!divDef) { alert('Division not found'); return; }
+    var promptLabel = 'Add team to ' + divName + (gk ? ' - ' + gk : '');
+    var team = prompt(promptLabel + '\n\nEnter full team name (e.g. "New Team (ESP)"):');
+    if (!team) return;
+    team = team.trim();
+    if (!team) return;
+    if (divDef.teams.indexOf(team) !== -1) { alert('Team already exists in this division.'); return; }
+    divDef.teams.push(team);
+    alert('Team added. Regenerating schedule...');
+    // trigger generation to rebuild groups and schedule
+    var genBtn = document.getElementById('genBtn');
+    if (genBtn) genBtn.click();
+  });
+
   // ── Init ──────────────────────────────────────────────
   renderSites();
   parseTeams();
