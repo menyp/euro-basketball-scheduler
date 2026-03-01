@@ -194,8 +194,10 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       <p class="help" style="margin-top:8px">
         All round robin games fit within the first <strong style="color:var(--o)">(n-1)</strong> days.
         The <strong style="color:var(--o)">last day</strong> is always semifinals and finals.
-        We try to spread games evenly – teams will never have more than <strong style="color:var(--o)">2 games per day</strong>.
+        We try to spread games evenly – teams will never have more than <strong style="color:var(--o)">max games per day</strong>.
       </p>
+      <label>Max games per team per day</label>
+      <input type="number" id="maxGPD" value="2" min="1" max="10">
     </div>
 
     <button class="btn-go" id="genBtn">Generate Tournament Schedule</button>
@@ -519,6 +521,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         }
       }
     });
+    var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
 
     var teamAvail = {}; // map team -> absolute minute when free
     var gamesPlaced = [];
@@ -547,6 +550,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
 
     var minGap = 120;
     var overflowGuard = 0;
+    var teamDayCount = {};
     while (unplaced.length && overflowGuard < 10000) {
       overflowGuard++;
       var assigned = false;
@@ -557,15 +561,23 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
           var p = unplaced[ui];
           var ta = teamAvail[p.t1] || 0;
           var tb = teamAvail[p.t2] || 0;
+          // check per-day caps
+          var t1count = (teamDayCount[p.t1] && teamDayCount[p.t1][slotObj.day]) || 0;
+          var t2count = (teamDayCount[p.t2] && teamDayCount[p.t2][slotObj.day]) || 0;
+          if (t1count >= maxGPD || t2count >= maxGPD) continue;
           if (absTime - ta >= minGap && absTime - tb >= minGap) {
             gamesPlaced.push({ day: slotObj.day, time: slotObj.time, court: slotObj.court,
                                t1: p.t1, t2: p.t2, name: p.name, color: p.color });
             teamAvail[p.t1] = absTime + gDur;
             teamAvail[p.t2] = absTime + gDur;
+            teamDayCount[p.t1] = teamDayCount[p.t1] || {};
+            teamDayCount[p.t1][slotObj.day] = t1count + 1;
+            teamDayCount[p.t2] = teamDayCount[p.t2] || {};
+            teamDayCount[p.t2][slotObj.day] = t2count + 1;
             unplaced.splice(ui, 1);
             daySlotList.splice(si, 1);
             assigned = true;
-            si--; // because we removed current slot
+            si--; // adjust index after removal
             break;
           }
         }
@@ -690,17 +702,11 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
   function renderSched() {
     var lS = document.getElementById('lS').value || '13:00';
     var lE = document.getElementById('lE').value || '15:00';
-    var warnings = collectSchedulingWarnings();
+    // hide scheduling warnings to keep UI clean
+    var warnings = [];
     var totTeams = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
         var h = '';
-        if (warnings.length) {
-          h += '<div style="background:rgba(255,100,0,.15);border:2px solid #FF6B00;border-radius:8px;padding:14px;margin-bottom:16px">';
-          h += '<div style="color:#FF6B00;font-family:Montserrat,sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;margin-bottom:8px">⚠️ Scheduling Conflicts Detected</div>';
-          warnings.forEach(function(w){
-            h += '<div style="font-size:11px;color:#FFB800;margin:4px 0">' + w + '</div>';
-          });
-          h += '</div>';
-        }
+        // no warning banner
     var totGames = sched.gameDays.reduce(function (s, day) {
       return s + day.divs.reduce(function (s2, d) { return s2 + d.games.length; }, 0);
     }, 0);
