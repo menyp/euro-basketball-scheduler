@@ -48,6 +48,15 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .team-tag{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:4px 10px;font-size:12px;font-family:'Montserrat',sans-serif;font-weight:600;display:flex;align-items:center;gap:6px}
 .team-tag .trm{color:var(--g);cursor:pointer;font-size:13px;opacity:.6}
 .team-tag .trm:hover{opacity:1;color:#ff8080}
+
+/* groups editor styles */
+.group-box{background:var(--c);border:1px solid var(--b);border-radius:6px;padding:12px;min-width:150px;flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:rgba(255,255,255,.05);border:1px solid var(--b);border-radius:4px;padding:4px 6px;display:flex;align-items:center;gap:4px;font-size:12px}
+.chip button{background:transparent;border:none;color:var(--g);cursor:pointer;padding:2px 4px;font-size:12px}
+.chip button:hover{color:var(--o)}
+.group-add{background:var(--o);color:#000;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:11px}
+.group-add:hover{background:var(--ol)}
 .site-item{background:rgba(255,255,255,.04);border:1px solid var(--b);border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .site-icon{color:var(--o);font-size:15px;flex-shrink:0}
 .site-item .sname{flex:3;background:transparent;border:none;border-bottom:1px solid var(--b);border-radius:0;padding:5px 7px;font-size:13px}
@@ -125,8 +134,9 @@ footer span{color:var(--o)}
   <div class="hbadge">June 19-21, 2026</div>
 </header>
 
-<div class="tabs">
+  <div class="tabs">
   <button class="tab active" id="tab-setup">Setup</button>
+  <button class="tab" id="tab-groups">Groups</button>
   <button class="tab" id="tab-schedule">Schedule</button>
   <button class="tab" id="tab-standings">Standings</button>
   <button class="tab" id="tab-bracket">Bracket</button>
@@ -203,6 +213,14 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     <button class="btn-go" id="genBtn">Generate Tournament Schedule</button>
   </div>
 
+  <div class="page" id="page-groups">
+    <div class="card">
+      <div class="stitle">Groups Editor</div>
+      <p class="help">Edit groups before generating the schedule. You can add, remove or move teams between groups. Changes persist for this session.</p>
+      <div id="groupsOut"></div>
+    </div>
+  </div>
+
   <div class="page" id="page-schedule">
     <div id="schedOut"><div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div></div>
   </div>
@@ -255,6 +273,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     if (id === 'standings') renderStandings();
   }
   document.getElementById('tab-setup').addEventListener('click', function () { switchTab('setup'); });
+  document.getElementById('tab-groups').addEventListener('click', function () { switchTab('groups'); renderGroups(); });
   document.getElementById('tab-schedule').addEventListener('click', function () { switchTab('schedule'); });
   document.getElementById('tab-standings').addEventListener('click', function () { switchTab('standings'); });
   document.getElementById('tab-bracket').addEventListener('click', function () { switchTab('bracket'); });
@@ -392,6 +411,103 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     return rounds;
   }
 
+  // ── Groups editor ───────────────────────────────────
+  function ensureManualGroups() {
+    divisions.forEach(function(d){
+      if (!d.manualGroups || !Array.isArray(d.manualGroups)) {
+        d.manualGroups = chunk(d.teams, 4);
+      }
+    });
+  }
+
+  function renderGroups() {
+    ensureManualGroups();
+    var out = document.getElementById('groupsOut');
+    out.innerHTML = '';
+    divisions.forEach(function(d, di){
+      var card = document.createElement('div');
+      card.className = 'card';
+      var html = '<div style="display:flex;justify-content:space-between;align-items:center">'
+        + '<div class="stitle">' + d.name + ' <span style="font-weight:600;color:#999;font-size:12px;margin-left:8px">(' + d.teams.length + ' teams)</span></div>'
+        + '<div>'
+        + '<button class="btn small" data-di="' + di + '" data-action="auto" style="margin-right:6px">Auto</button>'
+        + '<button class="btn small" data-di="' + di + '" data-action="apply" style="background:var(--o);color:#fff">Apply</button>'
+        + '</div></div>';
+      html += '<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
+      d.manualGroups.forEach(function(g, gi){
+        html += '<div class="group-box" data-di="' + di + '" data-gi="' + gi + '">'
+          + '<div style="font-weight:700;margin-bottom:6px">Group ' + String.fromCharCode(65 + gi) + '</div>'
+          + '<div class="chips" style="min-height:40px">';
+        g.forEach(function(t, ti){
+          html += '<span class="chip" data-di="' + di + '" data-gi="' + gi + '" data-ti="' + ti + '">' + t
+                + ' <button class="chip-rm" data-di="' + di + '" data-gi="' + gi + '" data-ti="' + ti + '">×</button>'
+                + ' <button class="chip-left" title="Move left" data-di="' + di + '" data-gi="' + gi + '" data-ti="' + ti + '">&larr;</button>'
+                + ' <button class="chip-right" title="Move right" data-di="' + di + '" data-gi="' + gi + '" data-ti="' + ti + '">&rarr;</button>'
+                + '</span>';
+        });
+        if (g.length < 4) html += '<div><button class="group-add" data-di="' + di + '" data-gi="' + gi + '">+ add</button></div>';
+        html += '</div></div>';
+      });
+      html += '</div>';
+      card.innerHTML = html;
+      out.appendChild(card);
+    });
+  }
+
+  // Group actions: delegate clicks
+  document.addEventListener('click', function(e){
+    if (!e.target) return;
+    // auto / apply buttons
+    if (e.target.dataset && e.target.dataset.action) {
+      var di = parseInt(e.target.dataset.di);
+      if (e.target.dataset.action === 'auto') {
+        divisions[di].manualGroups = chunk(divisions[di].teams, 4);
+        renderGroups();
+      } else if (e.target.dataset.action === 'apply') {
+        // apply manualGroups back to division teams preserving order
+        var mg = divisions[di].manualGroups || [];
+        divisions[di].teams = [].concat.apply([], mg);
+        alert('Groups applied to division teams.');
+        renderDivisions();
+      }
+      return;
+    }
+    // add to group
+    if (e.target.classList && e.target.classList.contains('group-add')) {
+      var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi);
+      var name = prompt('Add team to ' + divisions[di].name + ' Group ' + String.fromCharCode(65+gi));
+      if (!name) return;
+      name = name.trim(); if (!name) return;
+      // prevent duplicates
+      if (divisions[di].teams.indexOf(name) !== -1) { alert('Team already exists'); return; }
+      divisions[di].manualGroups[gi].push(name);
+      renderGroups();
+    }
+    // remove chip
+    if (e.target.classList && e.target.classList.contains('chip-rm')) {
+      var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi), ti = parseInt(e.target.dataset.ti);
+      divisions[di].manualGroups[gi].splice(ti,1);
+      renderGroups();
+    }
+    // move left
+    if (e.target.classList && e.target.classList.contains('chip-left')) {
+      var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi), ti = parseInt(e.target.dataset.ti);
+      if (gi === 0) return;
+      var item = divisions[di].manualGroups[gi].splice(ti,1)[0];
+      divisions[di].manualGroups[gi-1].push(item);
+      renderGroups();
+    }
+    // move right
+    if (e.target.classList && e.target.classList.contains('chip-right')) {
+      var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi), ti = parseInt(e.target.dataset.ti);
+      var mg = divisions[di].manualGroups;
+      if (gi >= mg.length-1) return;
+      var item = mg[gi].splice(ti,1)[0];
+      mg[gi+1].push(item);
+      renderGroups();
+    }
+  });
+
   // placeGames now returns an object containing placed games plus any matchups that couldn't
   // fit in the given day. When `spill` is true leftover matchups are carried forward instead of
   // being force–scheduled past the day end. teamSchedule is shared across multiple calls so we
@@ -520,7 +636,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     // build all pairings for round robin
     var unplaced = [];
     divisions.forEach(function(d){
-      var groups = chunk(d.teams, 4);
+      var groups = d.manualGroups && Array.isArray(d.manualGroups) ? d.manualGroups : chunk(d.teams, 4);
       groups.forEach(function(g, gi){
         var grpLabel = d.name + ' Group ' + String.fromCharCode(65 + gi); // A, B, C...
         for (var i = 0; i < g.length; i++) {
