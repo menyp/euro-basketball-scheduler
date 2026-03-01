@@ -679,7 +679,23 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         lastGroup = '';
       }
       if (item.group && item.group !== lastGroup) {
-        h += '<div style="font-size:11px;font-weight:700;color:' + item.color + ';margin-left:12px;">' + item.group + '</div>';
+        // compute group size from original division teams (chunked into groups of 4)
+        var grpSize = 0;
+        try {
+          var divDef = divisions.find(function(dd){ return dd.name === item.name; });
+          if (divDef) {
+            var groups = chunk(divDef.teams, 4);
+            for (var gi = 0; gi < groups.length; gi++) {
+              var lbl = divDef.name + ' Group ' + String.fromCharCode(65 + gi);
+              if (lbl === (item.gk || item.group)) { grpSize = groups[gi].length; break; }
+            }
+          }
+        } catch (e) { grpSize = 0; }
+        var addBtn = '';
+        if (grpSize > 0 && grpSize < 4) {
+          addBtn = ' <button class="add-team-btn" data-div="' + item.name + '" data-gk="' + (item.gk || '') + '" data-day="' + dayIdx + '" style="margin-left:8px;background:transparent;border:1px solid ' + item.color + ';color:' + item.color + ';border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px">+ add</button>';
+        }
+        h += '<div style="font-size:11px;font-weight:700;color:' + item.color + ';margin-left:12px;">' + item.group + addBtn + '</div>';
         lastGroup = item.group;
       }
       var p = fmt(g.time).split(' ');
@@ -736,6 +752,30 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     });
     document.getElementById('schedOut').innerHTML = h;
   }
+
+  // Allow admin to add a team into a group to fill to 4 teams.
+  function addTeamToGroup(divName, gk) {
+    var name = window.prompt('Enter team name to add to ' + divName + ' (will be added to division)');
+    if (!name) return;
+    name = name.trim();
+    if (!name) return;
+    var div = divisions.find(function(d){ return d.name === divName; });
+    if (!div) { alert('Division not found: ' + divName); return; }
+    if (div.teams.indexOf(name) !== -1) { alert('Team already exists in division'); return; }
+    div.teams.push(name);
+    // regenerate schedule to apply change
+    alert('Team added. Regenerating schedule to include the new team.');
+    document.getElementById('genBtn').click();
+  }
+
+  // delegated click handler for add buttons
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains('add-team-btn')) {
+      var divName = e.target.dataset.div;
+      var gk = e.target.dataset.gk;
+      addTeamToGroup(divName, gk);
+    }
+  });
 
   // ── Render bracket (with datalist dropdowns per division) ──
   function renderBrack() {
