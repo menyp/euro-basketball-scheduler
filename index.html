@@ -96,6 +96,17 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .standings-table td{background:var(--c)}
 .score-in{width:40px;text-align:center;background:rgba(255,255,255,.1);border:1px solid var(--b);border-radius:4px;padding:2px 4px;color:#fff}
 .score-display{font-weight:700}
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal-card{background:var(--n2);border:1px solid var(--b);border-radius:12px;padding:28px;max-width:400px;box-shadow:0 12px 40px rgba(0,0,0,0.8)}
+.modal-card h3{font-family:'Montserrat',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:#fff}
+.modal-card p{font-size:13px;color:var(--g);margin-bottom:20px;line-height:1.6}
+.modal-buttons{display:flex;gap:10px;justify-content:flex-end}
+.modal-btn{padding:10px 18px;border-radius:6px;border:none;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:all .2s}
+.modal-btn.cancel{background:rgba(255,255,255,.1);color:var(--g);border:1px solid var(--b)}
+.modal-btn.cancel:hover{background:rgba(255,255,255,.2)}
+.modal-btn.confirm{background:var(--o);color:#fff}
+.modal-btn.confirm:hover{background:var(--ol);transform:translateY(-1px);box-shadow:0 4px 12px rgba(255,107,0,.3)}
 footer{background:var(--n2);border-top:2px solid var(--o);text-align:center;padding:14px;font-size:11px;color:var(--g);font-family:'Montserrat',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-top:40px}
 footer span{color:var(--o)}
 @media(max-width:500px){.row{flex-direction:column}.hbadge{display:none}.htxt p{display:none}}
@@ -131,6 +142,7 @@ footer span{color:var(--o)}
       <div class="row">
         <div><label>Start Date</label><input type="date" id="sDate" value="2026-06-19"></div>
         <div><label>Daily Start Time</label><input type="time" id="sTime" value="09:00"></div>
+        <div><label>Daily End Time</label><input type="time" id="eTime" value="18:00"></div>
       </div>
       <div class="row">
         <div><label>Game Duration (min)</label><input type="number" id="gDur" value="20" min="5" max="120"></div>
@@ -182,7 +194,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       <p class="help" style="margin-top:8px">
         All round robin games fit within the first <strong style="color:var(--o)">(n-1)</strong> days.
         The <strong style="color:var(--o)">last day</strong> is always semifinals and finals.
-        Each team plays max <strong style="color:var(--o)">1 game per day</strong>.
+        We try to spread games evenly – teams will never have more than <strong style="color:var(--o)">2 games per day</strong>.
       </p>
     </div>
 
@@ -202,6 +214,17 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
   </div>
 </div>
 
+<div id="scoreModal" class="modal-overlay">
+  <div class="modal-card">
+    <h3>⚠️ Change Score</h3>
+    <p>Are you sure you want to change this score? This action cannot be undone.</p>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="modalCancel">Cancel</button>
+      <button class="modal-btn confirm" id="modalConfirm">Change Score</button>
+    </div>
+  </div>
+</div>
+
 <footer><span>Euro Youth Basketball Cup</span> &middot; Tournament Scheduler &middot; Barcelona, Spain</footer>
 
 <script>
@@ -214,6 +237,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     { name: 'Palafolls',    numCourts: 2 }
   ];
   var sched = {};
+  var scheduleWarnings = [];
   var DIV_COLORS = [
     '#FF6B00','#3B82F6','#10B981','#8B5CF6',
     '#F59E0B','#EF4444','#06B6D4','#EC4899',
@@ -361,17 +385,112 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     return rounds;
   }
 
-  function placeGames(matchups, gDur, slot, lSm, lEm, ct, crts) {
+  // placeGames now returns an object containing placed games plus any matchups that couldn't
+  // fit in the given day. When `spill` is true leftover matchups are carried forward instead of
+  // being force–scheduled past the day end. teamSchedule is shared across multiple calls so we
+  // continue tracking teams' occupied times.
+  function placeGames(matchups, gDur, slot, lSm, lEm, dayEnd, ct, crts, teamSchedule, spill, dayCounts) {
+    console.log('placeGames: incoming ct sample=', (ct||[]).slice(0,6), 'gDur=', gDur, 'slot=', slot, 'lSm=', lSm, 'lEm=', lEm, 'dayEnd=', dayEnd, 'spill=', spill);
     var gs = [];
+    var leftover = [];
+    teamSchedule = teamSchedule || {};
+    dayCounts = dayCounts || {};
     matchups.forEach(function (m) {
-      var ci = 0;
-      for (var k = 1; k < ct.length; k++) if (ct[k] < ct[ci]) ci = k;
-      var gt = ct[ci];
-      if (gt < lEm && gt + gDur > lSm) gt = lEm;
-      gs.push({ time: toT(gt), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[ci].court, score1: null, score2: null, locked: false });
-      ct[ci] = gt + slot;
+      var bestSlot = null;
+      var bestCourt = 0;
+      
+      for (var courtIdx = 0; courtIdx < crts.length; courtIdx++) {
+        var candidateTime = ct[courtIdx];
+        // skip courts that can't host a full game before day end
+        if (candidateTime + gDur > dayEnd) continue;
+        if (candidateTime < lEm && candidateTime + gDur > lSm) {
+          candidateTime = lEm;
+        }
+
+        // enforce at most two games per team per day
+        var t1count = dayCounts[m.t1] || 0;
+        var t2count = dayCounts[m.t2] || 0;
+        if (t1count >= 2 || t2count >= 2) continue;
+        
+        var t1Busy = teamSchedule[m.t1] || [];
+        var t2Busy = teamSchedule[m.t2] || [];
+        var minGapMins = 120;
+        var conflict = false;
+        
+        for (var i = 0; i < t1Busy.length; i++) {
+          var existingEnd = t1Busy[i].endTime;
+          if (Math.abs(candidateTime - existingEnd) < minGapMins) {
+            conflict = true;
+            break;
+          }
+        }
+        for (var i = 0; i < t2Busy.length; i++) {
+          var existingEnd = t2Busy[i].endTime;
+          if (Math.abs(candidateTime - existingEnd) < minGapMins) {
+            conflict = true;
+            break;
+          }
+        }
+        
+        if (!conflict && (!bestSlot || candidateTime < bestSlot)) {
+          bestSlot = candidateTime;
+          bestCourt = courtIdx;
+        }
+      }
+      
+      if (bestSlot === null) {
+        if (spill) {
+          // leave this matchup for the next day
+          leftover.push(m);
+          return;
+        } else {
+          bestSlot = Math.max(dayEnd - gDur, 0);
+          scheduleWarnings.push('Could not place ' + (m.t1 || '') + ' vs ' + (m.t2 || '') + ' before day end; forced to ' + toT(bestSlot));
+        }
+      }
+      
+      var endTime = bestSlot + gDur;
+      gs.push({ time: toT(bestSlot), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[bestCourt].court, score1: null, score2: null, locked: false });
+      
+      if (!teamSchedule[m.t1]) teamSchedule[m.t1] = [];
+      if (!teamSchedule[m.t2]) teamSchedule[m.t2] = [];
+      teamSchedule[m.t1].push({ time: toT(bestSlot), endTime: endTime, opponent: m.t2 });
+      teamSchedule[m.t2].push({ time: toT(bestSlot), endTime: endTime, opponent: m.t1 });
+      
+      // increment today's count for each team
+      dayCounts[m.t1] = (dayCounts[m.t1] || 0) + 1;
+      dayCounts[m.t2] = (dayCounts[m.t2] || 0) + 1;
+      
+      ct[bestCourt] = endTime + slot;
+      if (ct[bestCourt] + gDur > dayEnd) ct[bestCourt] = 1e9;
     });
-    return gs;
+    return { games: gs, leftover: leftover };
+  }
+
+  function collectSchedulingWarnings() {
+    var warns = scheduleWarnings.slice();
+    if (!sched.gameDays) return warns;
+    var teamGames = {};
+    sched.gameDays.forEach(function(day){
+      day.divs.forEach(function(d){
+        d.games.forEach(function(g){
+          if (!g.lbl) {
+            var t = toM(g.time);
+            if (!teamGames[g.t1]) teamGames[g.t1] = [];
+            if (!teamGames[g.t2]) teamGames[g.t2] = [];
+            for (var i = 0; i < teamGames[g.t1].length; i++) {
+              if (Math.abs(t - teamGames[g.t1][i]) < 30) warns.push('⚠️ ' + g.t1 + ' has concurrent games around ' + g.time);
+            }
+            for (var i = 0; i < teamGames[g.t2].length; i++) {
+              if (Math.abs(t - teamGames[g.t2][i]) < 30) warns.push('⚠️ ' + g.t2 + ' has concurrent games around ' + g.time);
+            }
+            teamGames[g.t1].push(t);
+            teamGames[g.t2].push(t);
+          }
+        });
+      });
+    });
+    return warns;
   }
 
   // ── Generate ───────────────────────────────────────────
@@ -386,50 +505,118 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     var lSm   = toM(document.getElementById('lS').value   || '13:00');
     var lEm   = toM(document.getElementById('lE').value   || '15:00');
     var st    = toM(document.getElementById('sTime').value || '09:00');
+    var et    = toM(document.getElementById('eTime').value || '18:00');
+    scheduleWarnings = [];
     var nDays = parseInt(document.getElementById('nDays').value);
     var rrDays = Math.max(1, nDays - 1);
 
-    var divRounds = divisions.map(function (d) {
-      var pairs = [];
-      for (var i = 0; i < d.teams.length; i++)
-        for (var j = i + 1; j < d.teams.length; j++)
-          pairs.push([d.teams[i], d.teams[j]]);
-      return { name: d.name, color: d.color, rounds: buildRounds(pairs) };
+    // build all pairings for round robin
+    var unplaced = [];
+    divisions.forEach(function(d){
+      for (var i = 0; i < d.teams.length; i++) {
+        for (var j = i + 1; j < d.teams.length; j++) {
+          unplaced.push({ t1: d.teams[i], t2: d.teams[j], name: d.name, color: d.color });
+        }
+      }
     });
 
-    var totalRRRounds = divRounds.reduce(function (m, d) { return Math.max(m, d.rounds.length); }, 0);
+    var teamAvail = {}; // map team -> absolute minute when free
+    var gamesPlaced = [];
+    var daySlotList = [];
+    var currentDay = 0;
+    var MAX_EXTRA_DAYS = 10;
 
-    var roundsPerDay = [];
-    for (var d = 0; d < rrDays; d++)
-      roundsPerDay.push(Math.floor(totalRRRounds / rrDays) + (d < totalRRRounds % rrDays ? 1 : 0));
-
-    var gameDays = [];
-    var roundCursor = 0;
-    for (var dayIdx = 0; dayIdx < rrDays; dayIdx++) {
-      var ct = crts.map(function () { return st; });
-      var roundsToday = roundsPerDay[dayIdx];
-      var todayMatchups = [];
-      for (var r = 0; r < roundsToday; r++) {
-        var rndNum = roundCursor + r;
-        divRounds.forEach(function (d) {
-          if (rndNum >= d.rounds.length) return;
-          d.rounds[rndNum].forEach(function (pair) {
-            todayMatchups.push({ t1: pair[0], t2: pair[1], lbl: null, name: d.name, color: d.color });
-          });
-        });
+    function generateSlotsForDay(dayIndex) {
+      var ct = crts.map(function(){ return st; });
+      while (true) {
+        var nextCourt = -1, nextTime = Infinity;
+        for (var ci = 0; ci < crts.length; ci++) {
+          if (ct[ci] < nextTime) { nextTime = ct[ci]; nextCourt = ci; }
+        }
+        if (nextCourt === -1) break;
+        var t = nextTime;
+        if (t < lEm && t + gDur > lSm) t = lEm;
+        if (t + gDur > et) break; // no more slots on this court today
+        daySlotList.push({ day: dayIndex, time: t, court: crts[nextCourt].court });
+        ct[nextCourt] = t + slot;
       }
-      roundCursor += roundsToday;
-      todayMatchups = shuffle(todayMatchups);
-      var placed = placeGames(todayMatchups, gDur, slot, lSm, lEm, ct, crts);
-      var byDiv = {};
-      placed.forEach(function (g, idx) {
-        var m = todayMatchups[idx];
-        if (!byDiv[m.name]) byDiv[m.name] = { name: m.name, color: m.color, games: [] };
-        byDiv[m.name].games.push(g);
-      });
-      var dayDivs = Object.keys(byDiv).map(function (k) { return byDiv[k]; });
-      if (dayDivs.length) gameDays.push({ label: 'Day ' + (dayIdx + 1) + ' \u2014 Round Robin', divs: dayDivs });
     }
+
+    // generate initial rrDays worth of slots
+    for (currentDay = 0; currentDay < rrDays; currentDay++) generateSlotsForDay(currentDay);
+
+    var minGap = 120;
+    var overflowGuard = 0;
+    while (unplaced.length && overflowGuard < 10000) {
+      overflowGuard++;
+      var assigned = false;
+      for (var si = 0; si < daySlotList.length && unplaced.length; si++) {
+        var slotObj = daySlotList[si];
+        var absTime = slotObj.day * 1440 + slotObj.time;
+        for (var ui = 0; ui < unplaced.length; ui++) {
+          var p = unplaced[ui];
+          var ta = teamAvail[p.t1] || 0;
+          var tb = teamAvail[p.t2] || 0;
+          if (absTime - ta >= minGap && absTime - tb >= minGap) {
+            gamesPlaced.push({ day: slotObj.day, time: slotObj.time, court: slotObj.court,
+                               t1: p.t1, t2: p.t2, name: p.name, color: p.color });
+            teamAvail[p.t1] = absTime + gDur;
+            teamAvail[p.t2] = absTime + gDur;
+            unplaced.splice(ui, 1);
+            daySlotList.splice(si, 1);
+            assigned = true;
+            si--; // because we removed current slot
+            break;
+          }
+        }
+      }
+      if (!assigned) {
+        // need more slots, add one extra day
+        generateSlotsForDay(currentDay);
+        currentDay++;
+        if (currentDay > rrDays + MAX_EXTRA_DAYS) {
+          scheduleWarnings.push('Unable to schedule ' + unplaced.length + ' round robin games');
+          break;
+        }
+      }
+    }
+
+    // now convert gamesPlaced into gameDays grouped by day and division
+    var gameDays = [];
+    for (var d = 0; d <= currentDay; d++) {
+      var dayGames = gamesPlaced.filter(function(g){ return g.day === d; });
+      if (!dayGames.length) continue;
+      var byDiv = {};
+      dayGames.forEach(function(g){
+        if (!byDiv[g.name]) byDiv[g.name] = { name: g.name, color: g.color, games: [] };
+        byDiv[g.name].games.push({ time: toT(g.time), t1: g.t1, t2: g.t2, court: g.court, score1:null, score2:null, locked:false });
+      });
+      var divs = Object.keys(byDiv).map(function(k){ return byDiv[k]; });
+      gameDays.push({ label: 'Day ' + (d+1) + ' \u2014 Round Robin', divs: divs });
+    }
+
+    // finals day generation remains unchanged below
+    var ct2 = crts.map(function () { return st; });
+    var bDivs = divisions.map(function (div) {
+      var n = Math.max(2, Math.ceil(div.teams.length / 2));
+      var lbls = [];
+      for (var x = 0; x < n - 1; x++) lbls.push('SF ' + (x + 1));
+      lbls.push('FINAL');
+      var matchups = lbls.map(function (l) { return { t1: '', t2: '', lbl: l }; });
+      var res = placeGames(matchups, gDur, slot, lSm, lEm, et, ct2, crts, null, false, {});
+      var games = res.games;
+      if (res.leftover && res.leftover.length) {
+        scheduleWarnings.push(res.leftover.length + ' bracket games overflowed day ' + nDays);
+      }
+      return { name: div.name, color: div.color, teams: div.teams, games: games };
+    });
+    var bracketDays = [{ label: 'Day ' + nDays + ' \u2014 Semifinals & Finals', divs: bDivs }];
+
+    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
+    renderSched();
+    renderStandings();
+    renderBrack();
+    switchTab('schedule');
 
     // Finals day
     var ct2 = crts.map(function () { return st; });
@@ -439,7 +626,11 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       for (var x = 0; x < n - 1; x++) lbls.push('SF ' + (x + 1));
       lbls.push('FINAL');
       var matchups = lbls.map(function (l) { return { t1: '', t2: '', lbl: l }; });
-      var games = placeGames(matchups, gDur, slot, lSm, lEm, ct2, crts);
+      var res = placeGames(matchups, gDur, slot, lSm, lEm, et, ct2, crts, null, false, {});
+      var games = res.games;
+      if (res.leftover && res.leftover.length) {
+        scheduleWarnings.push(res.leftover.length + ' bracket games overflowed day ' + nDays);
+      }
       return { name: div.name, color: div.color, teams: div.teams, games: games };
     });
     var bracketDays = [{ label: 'Day ' + nDays + ' \u2014 Semifinals & Finals', divs: bDivs }];
@@ -499,11 +690,21 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
   function renderSched() {
     var lS = document.getElementById('lS').value || '13:00';
     var lE = document.getElementById('lE').value || '15:00';
+    var warnings = collectSchedulingWarnings();
     var totTeams = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
+        var h = '';
+        if (warnings.length) {
+          h += '<div style="background:rgba(255,100,0,.15);border:2px solid #FF6B00;border-radius:8px;padding:14px;margin-bottom:16px">';
+          h += '<div style="color:#FF6B00;font-family:Montserrat,sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;margin-bottom:8px">⚠️ Scheduling Conflicts Detected</div>';
+          warnings.forEach(function(w){
+            h += '<div style="font-size:11px;color:#FFB800;margin:4px 0">' + w + '</div>';
+          });
+          h += '</div>';
+        }
     var totGames = sched.gameDays.reduce(function (s, day) {
       return s + day.divs.reduce(function (s2, d) { return s2 + d.games.length; }, 0);
     }, 0);
-    var h = '<div class="stats-row">'
+    h += '<div class="stats-row">'
       + '<div class="stat"><div class="stn">' + divisions.length + '</div><div class="stl">Divisions</div></div>'
       + '<div class="stat"><div class="stn">' + totTeams + '</div><div class="stl">Teams</div></div>'
       + '<div class="stat"><div class="stn">' + totGames + '</div><div class="stl">Games</div></div>'
@@ -627,12 +828,54 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     return standing;
   }
 
+  function validateRoundRobin() {
+    var issues = {};
+    divisions.forEach(function(div){
+      var teamCount = div.teams.length;
+      var expectedGames = teamCount - 1;
+      var gamesByTeam = {};
+      div.teams.forEach(function(t){ gamesByTeam[t] = 0; });
+      if (sched.gameDays) {
+        sched.gameDays.forEach(function(day){
+          var divGames = day.divs.find(function(d){return d.name === div.name;});
+          if (divGames) {
+            divGames.games.forEach(function(g){
+              if (!g.lbl) {
+                gamesByTeam[g.t1] = (gamesByTeam[g.t1] || 0) + 1;
+                gamesByTeam[g.t2] = (gamesByTeam[g.t2] || 0) + 1;
+              }
+            });
+          }
+        });
+      }
+      var incomplete = [];
+      div.teams.forEach(function(t){
+        if (gamesByTeam[t] < expectedGames) incomplete.push(t);
+      });
+      if (incomplete.length) {
+        issues[div.name] = { expected: expectedGames, incomplete: incomplete };
+      }
+    });
+    return issues;
+  }
+
   function renderStandings() {
     var st = computeStandings();
+    var validation = validateRoundRobin();
     var h = '';
+    if (Object.keys(validation).length > 0) {
+      h += '<div style="background:rgba(255,60,60,.12);border:1px solid rgba(255,60,60,.25);border-radius:8px;padding:14px;margin-bottom:16px">';
+      h += '<div style="color:#ff8080;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">⚠️ Round Robin Incomplete</div>';
+      Object.keys(validation).forEach(function(div){
+        var v = validation[div];
+        h += '<div style="color:#ffb3b3;font-size:12px;margin-top:6px"><strong>' + div + ':</strong> '
+          + v.incomplete.join(', ') + ' missing game(s) (need ' + v.expected + ' each)</div>';
+      });
+      h += '</div>';
+    }
     var divNames = Object.keys(st);
     if (!divNames.length) {
-      h = '<div class="empty"><div class="ico">&#128200;</div><p>No standings</p></div>';
+      h += '<div class="empty"><div class="ico">&#128200;</div><p>No standings</p></div>';
     } else {
       divNames.forEach(function(div){
         h += '<div class="day-hdr">' + div + '</div>';
@@ -668,29 +911,83 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
   }
 
   // ── Score input/edit listeners ─────────────────────────
+  var pendingScoreEdit = null;
+
+  document.getElementById('scoreModal').addEventListener('click', function (e) {
+    if (e.target === this) {
+      this.classList.remove('active');
+      pendingScoreEdit = null;
+    }
+  });
+
+  document.getElementById('modalCancel').addEventListener('click', function () {
+    document.getElementById('scoreModal').classList.remove('active');
+    pendingScoreEdit = null;
+  });
+
+  document.getElementById('modalConfirm').addEventListener('click', function () {
+    if (!pendingScoreEdit) return;
+    var day = pendingScoreEdit.day;
+    var divName = pendingScoreEdit.divName;
+    var gi = pendingScoreEdit.gi;
+    var dayObj = sched.gameDays && sched.gameDays[day];
+    if (dayObj) {
+      var divObj = dayObj.divs.find(function(x){return x.name === divName;});
+      if (divObj) {
+        var game = divObj.games[gi];
+        if (game) {
+          game.locked = false;
+        }
+      }
+    }
+    document.getElementById('scoreModal').classList.remove('active');
+    pendingScoreEdit = null;
+    renderSched();
+    renderStandings();
+    renderBrack();
+  });
+
   document.getElementById('schedOut').addEventListener('click', function (e) {
     if (e.target.classList.contains('score-edit')) {
       var day = parseInt(e.target.dataset.day);
       var divName = e.target.dataset.div;
       var gi = parseInt(e.target.dataset.gi);
-      if (!confirm('Are you sure you want to change this score?')) return;
-      var dayObj = sched.gameDays && sched.gameDays[day];
-      if (dayObj) {
-        var divObj = dayObj.divs.find(function(x){return x.name === divName;});
-        if (divObj) {
-          var game = divObj.games[gi];
-          if (game) {
-            game.locked = false;
-          }
-        }
-      }
-      renderSched();
-      renderStandings();
-      renderBrack();
+      pendingScoreEdit = { day: day, divName: divName, gi: gi };
+      document.getElementById('scoreModal').classList.add('active');
     }
   });
 
   function isRoundRobinComplete() {
+  
+      function validateRoundRobin() {
+        var warnings = [];
+        var teamGames = {};
+        if (!sched.gameDays) return warnings;
+        sched.gameDays.forEach(function(day){
+          day.divs.forEach(function(d){
+            d.games.forEach(function(g){
+              if (!g.lbl) {
+                if (!teamGames[g.t1]) teamGames[g.t1] = [];
+                if (!teamGames[g.t2]) teamGames[g.t2] = [];
+                var gameTime = toM(g.time);
+                for (var i = 0; i < teamGames[g.t1].length; i++) {
+                  if (Math.abs(gameTime - teamGames[g.t1][i]) < 30) {
+                    warnings.push('⚠️ ' + g.t1 + ' has concurrent games around ' + g.time);
+                  }
+                }
+                for (var i = 0; i < teamGames[g.t2].length; i++) {
+                  if (Math.abs(gameTime - teamGames[g.t2][i]) < 30) {
+                    warnings.push('⚠️ ' + g.t2 + ' has concurrent games around ' + g.time);
+                  }
+                }
+                teamGames[g.t1].push(gameTime);
+                teamGames[g.t2].push(gameTime);
+              }
+            });
+          });
+        });
+        return warnings;
+      }
     if (!sched.gameDays) return false;
     var allScored = true;
     sched.gameDays.forEach(function(day){
@@ -702,7 +999,9 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         });
       });
     });
-    return allScored;
+    if (!allScored) return false;
+    var validation = validateRoundRobin();
+    return Object.keys(validation).length === 0;
   }
 
   document.getElementById('schedOut').addEventListener('input', function (e) {
@@ -720,20 +1019,45 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         if (game) {
           if (isFirst) game.score1 = isNaN(val) ? null : val;
           else game.score2 = isNaN(val) ? null : val;
-          var wasJustLocked = false;
-          if (game.score1 !== null && game.score2 !== null && !game.locked) {
-            game.locked = true;
-            wasJustLocked = true;
-          }
-          if (wasJustLocked) {
-            renderSched();
-          }
-          renderStandings();
-          renderBrack();
         }
       }
     }
-  })
+  });
+
+  document.getElementById('schedOut').addEventListener('keydown', function (e) {
+    if (!e.target.classList.contains('score-in')) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var day = parseInt(e.target.dataset.day);
+      var divName = e.target.dataset.div;
+      var gi = parseInt(e.target.dataset.gi);
+      var isFirst = e.target.classList.contains('score1');
+      var dayObj = sched.gameDays && sched.gameDays[day];
+      if (dayObj) {
+        var divObj = dayObj.divs.find(function(x){return x.name === divName;});
+        if (divObj) {
+          var game = divObj.games[gi];
+          if (game && game.score1 !== null && game.score2 !== null && !game.locked) {
+            game.locked = true;
+            renderSched();
+            renderStandings();
+            renderBrack();
+            setTimeout(function() {
+              var nextInput = document.querySelector('.score-in[data-day="' + day + '"][data-gi="' + (gi + 1) + '"]');
+              if (!nextInput) {
+                var nextDiv = document.querySelectorAll('.score-in[data-day="' + (day + 1) + '"]');
+                nextInput = nextDiv.length ? nextDiv[0] : null;
+              }
+              if (nextInput) nextInput.focus();
+            }, 0);
+          } else if (isFirst) {
+            var score2Input = document.querySelector('.score-in.score2[data-day="' + day + '"][data-div="' + divName + '"][data-gi="' + gi + '"]');
+            if (score2Input) score2Input.focus();
+          }
+        }
+      }
+    }
+  });
 
   // ── Init ──────────────────────────────────────────────
   renderSites();
