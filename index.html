@@ -365,6 +365,11 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     }
     return b;
   }
+  function chunk(arr, size) {
+    var res = [];
+    for (var i = 0; i < arr.length; i += size) res.push(arr.slice(i, i + size));
+    return res;
+  }
   function toM(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
   function toT(m) { return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
   function fmt(t) {
@@ -515,11 +520,14 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     // build all pairings for round robin
     var unplaced = [];
     divisions.forEach(function(d){
-      for (var i = 0; i < d.teams.length; i++) {
-        for (var j = i + 1; j < d.teams.length; j++) {
-          unplaced.push({ t1: d.teams[i], t2: d.teams[j], name: d.name, color: d.color });
+      var groups = chunk(d.teams, 4);
+      groups.forEach(function(g){
+        for (var i = 0; i < g.length; i++) {
+          for (var j = i + 1; j < g.length; j++) {
+            unplaced.push({ t1: g[i], t2: g[j], name: d.name, color: d.color });
+          }
         }
-      }
+      });
     });
     var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
 
@@ -630,28 +638,6 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     renderBrack();
     switchTab('schedule');
 
-    // Finals day
-    var ct2 = crts.map(function () { return st; });
-    var bDivs = divisions.map(function (div) {
-      var n = Math.max(2, Math.ceil(div.teams.length / 2));
-      var lbls = [];
-      for (var x = 0; x < n - 1; x++) lbls.push('SF ' + (x + 1));
-      lbls.push('FINAL');
-      var matchups = lbls.map(function (l) { return { t1: '', t2: '', lbl: l }; });
-      var res = placeGames(matchups, gDur, slot, lSm, lEm, et, ct2, crts, null, false, {});
-      var games = res.games;
-      if (res.leftover && res.leftover.length) {
-        scheduleWarnings.push(res.leftover.length + ' bracket games overflowed day ' + nDays);
-      }
-      return { name: div.name, color: div.color, teams: div.teams, games: games };
-    });
-    var bracketDays = [{ label: 'Day ' + nDays + ' \u2014 Semifinals & Finals', divs: bDivs }];
-
-    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
-    renderSched();
-    renderStandings();
-    renderBrack();
-    switchTab('schedule');
   });
 
   // ── Render schedule ────────────────────────────────────
