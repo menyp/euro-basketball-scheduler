@@ -610,99 +610,116 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var nDays = parseInt(document.getElementById('nDays').value);
     var rrDays = Math.max(1, nDays - 1);
 
-    // build all pairings for round robin
-    var unplaced = [];
-    divisions.forEach(function(d){
-      var groups = d.manualGroups && Array.isArray(d.manualGroups) ? d.manualGroups : chunk(d.teams, 4);
-      groups.forEach(function(g, gi){
-        var grpLabel = d.name + ' Group ' + String.fromCharCode(65 + gi); // A, B, C...
-        for (var i = 0; i < g.length; i++) {
-          for (var j = i + 1; j < g.length; j++) {
-            unplaced.push({ t1: g[i], t2: g[j], name: d.name, color: d.color, group: grpLabel });
-          }
-        }
-      });
-    });
     var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
 
-    var teamAvail = {}; // map team -> absolute minute when free
-    var gamesPlaced = [];
-    var daySlotList = [];
-    var currentDay = 0;
+    // ── PHASE 1: Build rounds per group ────────────────────────────────────
+    // A "round" is a set of games where no team appears more than once.
+    // buildRounds() guarantees this. We run it per group so that round
+    // membership stays within a group's matchups.
+    var groupRounds = []; // [{name, color, group, day, games:[{t1,t2}]}]
+    divisions.forEach(function(d) {
+      var groups = d.manualGroups && Array.isArray(d.manualGroups) ? d.manualGroups : chunk(d.teams, 4);
+      groups.forEach(function(g, gi) {
+        var grpLabel = d.name + ' Group ' + String.fromCharCode(65 + gi);
+        var pairs = [];
+        for (var i = 0; i < g.length; i++)
+          for (var j = i + 1; j < g.length; j++)
+            pairs.push([g[i], g[j]]);
+        buildRounds(pairs).forEach(function(roundPairs) {
+          groupRounds.push({
+            name: d.name, color: d.color, group: grpLabel, day: -1,
+            games: roundPairs.map(function(p) { return { t1: p[0], t2: p[1] }; })
+          });
+        });
+      });
+    });
 
-    function generateSlotsForDay(dayIndex) {
-      var ct = crts.map(function(){ return st; });
-      while (true) {
-        var nextCourt = -1, nextTime = Infinity;
-        for (var ci = 0; ci < crts.length; ci++) {
-          if (ct[ci] < nextTime) { nextTime = ct[ci]; nextCourt = ci; }
-        }
-        if (nextCourt === -1) break;
-        var t = nextTime;
-        if (t < lEm && t + gDur > lSm) t = lEm;
-        if (t + gDur > et) break; // no more slots on this court today
-        daySlotList.push({ day: dayIndex, time: t, court: crts[nextCourt].court });
-        ct[nextCourt] = t + slot;
-      }
-    }
-
-    // generate initial rrDays worth of slots
-    for (currentDay = 0; currentDay < rrDays; currentDay++) generateSlotsForDay(currentDay);
-    console.log('Generated', daySlotList.length, 'slots for', rrDays, 'days');
-
-    var minGap = 120;
-    var overflowGuard = 0;
+    // ── PHASE 2: Assign rounds to days ──────────────────────────────────────
+    // For each round, find the earliest day where every team in that round
+    // is still under the maxGPD cap. This is O(rounds × days) and always
+    // produces a valid assignment if enough days exist.
     var teamDayCount = {};
-    console.log('Starting main loop with', unplaced.length, 'unplaced matchups');
-    while (unplaced.length && overflowGuard < 10000) {
-      overflowGuard++;
-      var assigned = false;
-      for (var si = 0; si < daySlotList.length && unplaced.length; si++) {
-        var slotObj = daySlotList[si];
-        var absTime = slotObj.day * 1440 + slotObj.time;
-        for (var ui = 0; ui < unplaced.length; ui++) {
-          var p = unplaced[ui];
-          var ta = teamAvail[p.t1] || 0;
-          var tb = teamAvail[p.t2] || 0;
-          // check per-day caps
-          var t1count = (teamDayCount[p.t1] && teamDayCount[p.t1][slotObj.day]) || 0;
-          var t2count = (teamDayCount[p.t2] && teamDayCount[p.t2][slotObj.day]) || 0;
-          if (t1count >= maxGPD || t2count >= maxGPD) continue;
-          if (absTime - ta >= minGap && absTime - tb >= minGap) {
-            gamesPlaced.push({ day: slotObj.day, time: slotObj.time, court: slotObj.court,
-                               t1: p.t1, t2: p.t2, name: p.name, color: p.color, group: p.group });
-            teamAvail[p.t1] = absTime + gDur;
-            teamAvail[p.t2] = absTime + gDur;
-            teamDayCount[p.t1] = teamDayCount[p.t1] || {};
-            teamDayCount[p.t1][slotObj.day] = t1count + 1;
-            teamDayCount[p.t2] = teamDayCount[p.t2] || {};
-            teamDayCount[p.t2][slotObj.day] = t2count + 1;
-            unplaced.splice(ui, 1);
-            daySlotList.splice(si, 1);
-            assigned = true;
-            si--; // adjust index after removal
-            break;
-          }
+    groupRounds.forEach(function(round) {
+      for (var d = 0; d < rrDays; d++) {
+        var ok = true;
+        for (var gi = 0; gi < round.games.length && ok; gi++) {
+          var g = round.games[gi];
+          if (((teamDayCount[g.t1] || {})[d] || 0) >= maxGPD) ok = false;
+          if (((teamDayCount[g.t2] || {})[d] || 0) >= maxGPD) ok = false;
         }
-      }
-      if (!assigned) {
-        if (currentDay >= rrDays) {
-          // All configured round-robin days are exhausted — stop here.
-          // Do NOT spill into the finals day.
-          if (unplaced.length) {
-            scheduleWarnings.push('UNSCHEDULED: ' + unplaced.length + ' game(s) could not fit in ' + rrDays + ' round-robin day(s). Add more courts, extend daily hours, or increase the number of tournament days.');
-          }
+        if (ok) {
+          round.day = d;
+          round.games.forEach(function(g) {
+            teamDayCount[g.t1] = teamDayCount[g.t1] || {};
+            teamDayCount[g.t1][d] = (teamDayCount[g.t1][d] || 0) + 1;
+            teamDayCount[g.t2] = teamDayCount[g.t2] || {};
+            teamDayCount[g.t2][d] = (teamDayCount[g.t2][d] || 0) + 1;
+          });
           break;
         }
-        generateSlotsForDay(currentDay);
-        currentDay++;
       }
+      if (round.day === -1) {
+        round.games.forEach(function(g) {
+          scheduleWarnings.push('UNSCHEDULED: ' + g.t1 + ' vs ' + g.t2
+            + ' \u2014 no available day within ' + rrDays + ' round-robin day(s).'
+            + ' Add more tournament days or increase max games per day.');
+        });
+      }
+    });
+
+    // ── PHASE 3: Pack games onto courts within each day ─────────────────────
+    // For each day, shuffle all assigned games for variety, then place them
+    // on courts using an earliest-available-court strategy.
+    // Per-team minimum rest (= one slot width) is enforced so the same team
+    // never plays two games back-to-back on different courts.
+    var gamesPlaced = [];
+    var minRest = slot; // gDur + bDur — one slot gap between a team's games
+    for (var d = 0; d < rrDays; d++) {
+      var dayGames = [];
+      groupRounds.forEach(function(r) {
+        if (r.day !== d) return;
+        r.games.forEach(function(g) {
+          dayGames.push({ t1: g.t1, t2: g.t2, name: r.name, color: r.color, group: r.group });
+        });
+      });
+      dayGames = shuffle(dayGames);
+
+      var ct = crts.map(function() { return st; }); // next free minute per court
+      var teamLastEnd = {};                           // team -> minute last game ends today
+
+      dayGames.forEach(function(game) {
+        var bestCourt = -1, bestTime = Infinity;
+        for (var ci = 0; ci < crts.length; ci++) {
+          var t = ct[ci];
+          // Wait for team rest if they already played today
+          t = Math.max(t,
+            (teamLastEnd[game.t1] || 0) + minRest,
+            (teamLastEnd[game.t2] || 0) + minRest);
+          // Skip over lunch break
+          if (t < lEm && t + gDur > lSm) t = lEm;
+          // Must finish before day end
+          if (t + gDur > et) continue;
+          if (t < bestTime) { bestTime = t; bestCourt = ci; }
+        }
+        if (bestCourt === -1) {
+          scheduleWarnings.push('UNSCHEDULED: ' + game.t1 + ' vs ' + game.t2
+            + ' \u2014 no court time left on day ' + (d + 1)
+            + '. Add more courts or extend daily hours.');
+          return;
+        }
+        gamesPlaced.push({
+          day: d, time: bestTime, court: crts[bestCourt].court,
+          t1: game.t1, t2: game.t2, name: game.name, color: game.color, group: game.group
+        });
+        ct[bestCourt] = bestTime + slot;
+        teamLastEnd[game.t1] = bestTime + gDur;
+        teamLastEnd[game.t2] = bestTime + gDur;
+      });
     }
-    console.log('Scheduling loop completed. Unplaced:', unplaced.length, 'overflowGuard:', overflowGuard);
 
     // now convert gamesPlaced into gameDays grouped by day and division
     var gameDays = [];
-    for (var d = 0; d <= currentDay; d++) {
+    for (var d = 0; d < rrDays; d++) {
       var dayGames = gamesPlaced.filter(function(g){ return g.day === d; });
       if (!dayGames.length) continue;
       var byDiv = {};
