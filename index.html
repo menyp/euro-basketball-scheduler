@@ -156,7 +156,7 @@ footer span{color:var(--o)}
       <div class="row">
         <div><label>Start Date</label><input type="date" id="sDate" value="2026-06-19"></div>
         <div><label>Daily Start Time</label><input type="time" id="sTime" value="09:00"></div>
-        <div><label>Daily End Time</label><input type="time" id="eTime" value="18:00"></div>
+        <div><label>Daily End Time</label><input type="time" id="eTime" value="20:00"></div>
       </div>
       <div class="row">
         <div><label>Game Duration (min)</label><input type="number" id="gDur" value="20" min="5" max="120"></div>
@@ -164,8 +164,8 @@ footer span{color:var(--o)}
       </div>
       <label>Lunch Break</label>
       <div class="row">
-        <div><input type="time" id="lS" value="13:00"></div>
-        <div><input type="time" id="lE" value="15:00"></div>
+        <div><input type="time" id="lS" value="13:30"></div>
+        <div><input type="time" id="lE" value="14:30"></div>
       </div>
       <p class="help">No games will be scheduled during the lunch break</p>
     </div>
@@ -175,11 +175,11 @@ footer span{color:var(--o)}
       <label>Paste your full team list</label>
       <textarea id="pasteBox">Boys U14: DAWHITEWAY (USA), CORK RED (IRE), CORK WHITE (IRE), TEAM SOLENT KESTRELS (ENG), STUTTGART EAGLES (GER), PORTALOISE PANTHERS (IRE), SURREY RAMS (ENG), GLOUCESTER SAXONS (ENG), LOBAS BASKET (SWE), KRETINGA SM (LIT), ELITE MADELENA (COL), SWSC-BAYANIHAN A (PHI), SWSC-BAYANIHAN B (PHI), LIMERICK CELTICS (IRE), NORWOOD STARS (CAD), USA ELITE (USA)
 Boys U16: PHD HOOPS (USA), TEAM SOLENT KESTRELS (ENG), MVP INTERNATIONAL (USA), KINGS COURT (CAD), STUTTGART EAGLES (GER), BASKET CHILE (CHI), SURREY RAMS (ENG), NKA (LIT), PUERTO RICO A (PR), LIMERICK CELTICS (IRE), ELITE MADELENA (COL), PUERTO RICO B (PR), HYVINKÄÄN PONTEVA (FIN), LINCOLN PANTHERS (ENG), SMOOTHHANDLES (GER), BC ALTE KANTI ARAU (SWI)
-Boys U18: PUERTO RICO A (PR), BAYANIHAN ELITE (PHI), PHD HOOPS (USA), SURREY RAMS (ENG), BOLLSTANÄS SK (SWE), 5 STAR UK (ENG), LNCA 18 (MEX), LNCA 17 (MEX), SMOOTHHANDLES (GER), VIBY (SWE)
+Boys U18: PUERTO RICO A (PR), BAYANIHAN ELITE (PHI), PHD HOOPS (USA), SURREY RAMS (ENG), BOLLSTANÄS SK (SWE), 5 STAR UK (ENG), LNCA 18 (MEX), LNCA 17 (MEX), SMOOTHHANDLES (GER), VIBY (SWE), Boys U18 test 1, Boys U18 test 2
 U12 Mix: TEAM SOLENT KESTRELS (ENG), LIM. CELTICS (IRE), PORTALOISE PANTHERS (IRE), STUTTGART EAGLES (GER), NEWPORT FIRE (WALES), VKKM 1 (LIT), VKKM 2 (LIT), PARIS SW (FR), SKM LIONS 1 (LIT), SKM LIONS 2 (LIT), HEROES BASKETBALL (HOL), IBAS (SLK)
-Girls U14: PUERTO RICO (PR), TEAM SOLENT KESTRELS (ENG), PARIS SW (FRA), ELITE MADELENA (COL), IBAS (SKL), AECAM (ESP)
+Girls U14: PUERTO RICO (PR), TEAM SOLENT KESTRELS (ENG), PARIS SW (FRA), ELITE MADELENA (COL), IBAS (SKL), AECAM (ESP), Girls U14 test 1, Girls U14 test 2
 Girls U16: TEAM SOLENT KESTRELS (ENG), PHD HOOPS (USA), BASKET CHILE (CHI), BC BERRWILLER STAFFELFELDEN (FRA), PARIS SW (FRA), LIMERICK SPARKS (IRE), LIMERICK STORM (IRE), BASKET VENARIA (ITA), AIK BASKET (SWE), LOBAS BASKET (SWE), IBAS (SLK), ETUGEN IRVESUUD (MON)
-Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE (CHI), C.B. GRANOLLERS (ESP), SKURU (SWE)</textarea>
+Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE (CHI), C.B. GRANOLLERS (ESP), SKURU (SWE), Girls U18 test 1, Girls U18 test 2</textarea>
       <p class="paste-hint">Format: <code>Division Name: Team1, Team2, Team3</code> &mdash; one division per line</p>
       <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
       <div id="divSummary"></div>
@@ -415,10 +415,17 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
   }
 
   // ── Groups editor ───────────────────────────────────
+  function optimalChunkSize(n) {
+    if (n <= 5)  return n;   // 1 group — everyone plays everyone
+    if (n <= 8)  return 4;   // 2 groups of 4
+    if (n <= 12) return 3;   // 3–4 groups of 3
+    return 4;                // 4 groups of 4
+  }
+
   function ensureManualGroups() {
     divisions.forEach(function(d){
       if (!d.manualGroups || !Array.isArray(d.manualGroups)) {
-        d.manualGroups = chunk(d.teams, 4);
+        d.manualGroups = chunk(d.teams, optimalChunkSize(d.teams.length));
       }
     });
   }
@@ -448,7 +455,8 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
                 + ' <button class="chip-right" title="Move right" data-di="' + di + '" data-gi="' + gi + '" data-ti="' + ti + '">&rarr;</button>'
                 + '</span>';
         });
-        if (g.length < 4) html += '<div><button class="group-add" data-di="' + di + '" data-gi="' + gi + '">+ add</button></div>';
+        var targetSize = optimalChunkSize(d.teams.length);
+        if (g.length < targetSize) html += '<div><button class="group-add" data-di="' + di + '" data-gi="' + gi + '">+ add</button></div>';
         html += '</div></div>';
       });
       html += '</div>';
@@ -464,7 +472,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     if (e.target.dataset && e.target.dataset.action) {
       var di = parseInt(e.target.dataset.di);
       if (e.target.dataset.action === 'auto') {
-        divisions[di].manualGroups = chunk(divisions[di].teams, 4);
+        divisions[di].manualGroups = chunk(divisions[di].teams, optimalChunkSize(divisions[di].teams.length));
         renderGroups();
       } else if (e.target.dataset.action === 'apply') {
         // apply manualGroups back to division teams preserving order
@@ -576,7 +584,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       }
       
       var endTime = bestSlot + gDur;
-      gs.push({ time: toT(bestSlot), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, court: crts[bestCourt].court, score1: null, score2: null, locked: false });
+      gs.push({ time: toT(bestSlot), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, bracket: m.bracket || null, court: crts[bestCourt].court, score1: null, score2: null, locked: false });
       
       if (!teamSchedule[m.t1]) teamSchedule[m.t1] = [];
       if (!teamSchedule[m.t2]) teamSchedule[m.t2] = [];
@@ -593,6 +601,126 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     return { games: gs, leftover: leftover };
   }
 
+  // ── Bracket game definitions ────────────────────────────
+  // Returns an array of {t1, t2, lbl, bracket} for the finals day.
+  // t1/t2 are placeholder strings like "1st Group A" for SF slots, or '' for
+  // games that depend on SF results (3rd Place, Final).
+  function getBracketGames(div) {
+    var groups = div.manualGroups && div.manualGroups.length
+      ? div.manualGroups
+      : chunk(div.teams, optimalChunkSize(div.teams.length));
+    var G = groups.length;
+    var maxGrpSize = groups.reduce(function(m, g) { return Math.max(m, g.length); }, 0);
+    var L = function(i) { return String.fromCharCode(65 + i); }; // 'A', 'B', …
+    var matchups = [];
+
+    if (G <= 1) {
+      // Single group — just a final
+      matchups.push({ t1: '1st Group A', t2: '2nd Group A', lbl: 'FINAL', bracket: 'Championship' });
+    } else if (G === 2) {
+      // 8-team cross-over: 1A vs 2B, 1B vs 2A
+      matchups.push({ t1: '1st Group A', t2: '2nd Group B', lbl: 'SF 1',      bracket: 'Championship' });
+      matchups.push({ t1: '1st Group B', t2: '2nd Group A', lbl: 'SF 2',      bracket: 'Championship' });
+      matchups.push({ t1: '',            t2: '',            lbl: '3rd Place',  bracket: 'Championship' });
+      matchups.push({ t1: '',            t2: '',            lbl: 'FINAL',      bracket: 'Championship' });
+      matchups.push({ t1: '3rd Group A', t2: '3rd Group B', lbl: '5th Place', bracket: '5th Place' });
+      matchups.push({ t1: '4th Group A', t2: '4th Group B', lbl: '7th Place', bracket: '7th Place' });
+    } else if (G === 4 && maxGrpSize <= 3) {
+      // 12-team (4 groups of 3): Championship / Silver / Bronze
+      var tiers = [
+        { name: 'Championship (1st\u20134th)', pos: '1st' },
+        { name: 'Silver (5th\u20138th)',        pos: '2nd' },
+        { name: 'Bronze (9th\u201312th)',       pos: '3rd' }
+      ];
+      tiers.forEach(function(t) {
+        matchups.push({ t1: t.pos + ' Group A', t2: t.pos + ' Group B', lbl: 'SF 1',     bracket: t.name });
+        matchups.push({ t1: t.pos + ' Group C', t2: t.pos + ' Group D', lbl: 'SF 2',     bracket: t.name });
+        matchups.push({ t1: '',                  t2: '',                  lbl: '3rd Place', bracket: t.name });
+        matchups.push({ t1: '',                  t2: '',                  lbl: 'FINAL',     bracket: t.name });
+      });
+    } else if (G === 4 && maxGrpSize >= 4) {
+      // 16-team (4 groups of 4): Championship + consolation pairs per rank
+      matchups.push({ t1: '1st Group A', t2: '1st Group B', lbl: 'SF 1',      bracket: 'Championship (1st\u20134th)' });
+      matchups.push({ t1: '1st Group C', t2: '1st Group D', lbl: 'SF 2',      bracket: 'Championship (1st\u20134th)' });
+      matchups.push({ t1: '',            t2: '',            lbl: '3rd Place',  bracket: 'Championship (1st\u20134th)' });
+      matchups.push({ t1: '',            t2: '',            lbl: 'FINAL',      bracket: 'Championship (1st\u20134th)' });
+      var cons = [
+        { b: '5th\u20138th Place',   p: '2nd', labels: ['5th/6th', '7th/8th'] },
+        { b: '9th\u201312th Place',  p: '3rd', labels: ['9th/10th', '11th/12th'] },
+        { b: '13th\u201316th Place', p: '4th', labels: ['13th/14th', '15th/16th'] }
+      ];
+      cons.forEach(function(c) {
+        matchups.push({ t1: c.p + ' Group A', t2: c.p + ' Group B', lbl: c.labels[0], bracket: c.b });
+        matchups.push({ t1: c.p + ' Group C', t2: c.p + ' Group D', lbl: c.labels[1], bracket: c.b });
+      });
+    } else {
+      // Generic: pair groups up for SFs → 3rd Place → Final
+      for (var i = 0; i < Math.floor(G / 2); i++) {
+        matchups.push({ t1: '1st Group ' + L(i * 2), t2: '1st Group ' + L(i * 2 + 1), lbl: 'SF ' + (i + 1), bracket: 'Championship' });
+      }
+      matchups.push({ t1: '', t2: '', lbl: '3rd Place', bracket: 'Championship' });
+      matchups.push({ t1: '', t2: '', lbl: 'FINAL',     bracket: 'Championship' });
+    }
+    return matchups;
+  }
+
+  // Per-group standings: { [divName]: { [groupLabel]: { teams:{}, order:[] } } }
+  function computeGroupStandings() {
+    var standing = {};
+    divisions.forEach(function(div) {
+      standing[div.name] = {};
+      var groups = div.manualGroups && div.manualGroups.length
+        ? div.manualGroups
+        : chunk(div.teams, optimalChunkSize(div.teams.length));
+      groups.forEach(function(g, gi) {
+        var lbl = div.name + ' Group ' + String.fromCharCode(65 + gi);
+        standing[div.name][lbl] = { teams: {}, order: [] };
+        g.forEach(function(t) { standing[div.name][lbl].teams[t] = { W:0, L:0, PF:0, PA:0 }; });
+      });
+    });
+    if (!sched.gameDays) return standing;
+    sched.gameDays.forEach(function(day) {
+      day.divs.forEach(function(d) {
+        if (!d.groups) return;
+        Object.keys(d.groups).forEach(function(gk) {
+          var grp = d.groups[gk];
+          var divSt = standing[d.name];
+          if (!divSt || !divSt[gk]) return;
+          grp.games.forEach(function(g) {
+            if (g.lbl) return;
+            if (g.score1 === null || g.score2 === null) return;
+            var ts = divSt[gk].teams;
+            if (!ts[g.t1]) ts[g.t1] = { W:0, L:0, PF:0, PA:0 };
+            if (!ts[g.t2]) ts[g.t2] = { W:0, L:0, PF:0, PA:0 };
+            ts[g.t1].PF += g.score1; ts[g.t1].PA += g.score2;
+            ts[g.t2].PF += g.score2; ts[g.t2].PA += g.score1;
+            if      (g.score1 > g.score2) { ts[g.t1].W++; ts[g.t2].L++; }
+            else if (g.score2 > g.score1) { ts[g.t2].W++; ts[g.t1].L++; }
+          });
+        });
+      });
+    });
+    Object.keys(standing).forEach(function(divName) {
+      Object.keys(standing[divName]).forEach(function(grpLbl) {
+        var grp = standing[divName][grpLbl];
+        grp.order = Object.keys(grp.teams).sort(function(a, b) {
+          var A = grp.teams[a], B = grp.teams[b];
+          if (B.W !== A.W) return B.W - A.W;
+          var dA = A.PF - A.PA, dB = B.PF - B.PA;
+          if (dB !== dA) return dB - dA;
+          return B.PF - A.PF;
+        });
+        // complete = true only when every team has played all their group games.
+        // This prevents placeholder resolution before any scores are entered.
+        var expG = grp.order.length - 1;
+        grp.complete = grp.order.length > 0 && grp.order.every(function(t) {
+          return grp.teams[t].W + grp.teams[t].L === expG;
+        });
+      });
+    });
+    return standing;
+  }
+
   // ── Generate ───────────────────────────────────────────
   document.getElementById('genBtn').addEventListener('click', function () {
     if (!divisions.length) { alert('Please parse your team list first!'); return; }
@@ -602,13 +730,16 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var gDur  = parseInt(document.getElementById('gDur').value)  || 20;
     var bDur  = parseInt(document.getElementById('bDur').value)  || 5;
     var slot  = gDur + bDur;
-    var lSm   = toM(document.getElementById('lS').value   || '13:00');
-    var lEm   = toM(document.getElementById('lE').value   || '15:00');
+    var lSm   = toM(document.getElementById('lS').value   || '13:30');
+    var lEm   = toM(document.getElementById('lE').value   || '14:30');
     var st    = toM(document.getElementById('sTime').value || '09:00');
-    var et    = toM(document.getElementById('eTime').value || '18:00');
+    var et    = toM(document.getElementById('eTime').value || '20:00');
     scheduleWarnings = [];
     var nDays = parseInt(document.getElementById('nDays').value);
-    var rrDays = Math.max(1, nDays - 1);
+    // All nDays are available for round-robin assignment.
+    // The finals/bracket are placed on top of whatever courts are still free on
+    // the last day, so RR overflow naturally falls in the morning before playoffs.
+    var rrDays = Math.max(1, nDays);
 
     var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
 
@@ -618,7 +749,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     // membership stays within a group's matchups.
     var groupRounds = []; // [{name, color, group, day, games:[{t1,t2}]}]
     divisions.forEach(function(d) {
-      var groups = d.manualGroups && Array.isArray(d.manualGroups) ? d.manualGroups : chunk(d.teams, 4);
+      var groups = d.manualGroups && Array.isArray(d.manualGroups) ? d.manualGroups : chunk(d.teams, optimalChunkSize(d.teams.length));
       groups.forEach(function(g, gi) {
         var grpLabel = d.name + ' Group ' + String.fromCharCode(65 + gi);
         var pairs = [];
@@ -638,22 +769,27 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     // For each round, find the earliest day where every team in that round
     // is still under the maxGPD cap. This is O(rounds × days) and always
     // produces a valid assignment if enough days exist.
+    // Keys are "DivisionName\x00TeamName" so the same club playing in multiple
+    // age divisions (e.g. Surrey Rams U14 vs Surrey Rams U18) are treated as
+    // independent entities and don't consume each other's maxGPD budget.
     var teamDayCount = {};
     groupRounds.forEach(function(round) {
       for (var d = 0; d < rrDays; d++) {
         var ok = true;
         for (var gi = 0; gi < round.games.length && ok; gi++) {
           var g = round.games[gi];
-          if (((teamDayCount[g.t1] || {})[d] || 0) >= maxGPD) ok = false;
-          if (((teamDayCount[g.t2] || {})[d] || 0) >= maxGPD) ok = false;
+          var k1 = round.name + '\x00' + g.t1, k2 = round.name + '\x00' + g.t2;
+          if (((teamDayCount[k1] || {})[d] || 0) >= maxGPD) ok = false;
+          if (((teamDayCount[k2] || {})[d] || 0) >= maxGPD) ok = false;
         }
         if (ok) {
           round.day = d;
           round.games.forEach(function(g) {
-            teamDayCount[g.t1] = teamDayCount[g.t1] || {};
-            teamDayCount[g.t1][d] = (teamDayCount[g.t1][d] || 0) + 1;
-            teamDayCount[g.t2] = teamDayCount[g.t2] || {};
-            teamDayCount[g.t2][d] = (teamDayCount[g.t2][d] || 0) + 1;
+            var k1 = round.name + '\x00' + g.t1, k2 = round.name + '\x00' + g.t2;
+            teamDayCount[k1] = teamDayCount[k1] || {};
+            teamDayCount[k1][d] = (teamDayCount[k1][d] || 0) + 1;
+            teamDayCount[k2] = teamDayCount[k2] || {};
+            teamDayCount[k2][d] = (teamDayCount[k2][d] || 0) + 1;
           });
           break;
         }
@@ -681,6 +817,10 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     //   teamLastEnd + minRest remains as a hard safety floor.
     var gamesPlaced = [];
     var minRest = slot; // gDur + bDur — hard minimum between a team's games
+    // ct2 starts as day-start on every court; if RR overflows to the last day,
+    // Phase 3 updates ct2 to the actual court-free time so bracket games
+    // are placed AFTER any morning RR games (no court conflict).
+    var ct2 = crts.map(function() { return st; });
     for (var d = 0; d < rrDays; d++) {
       var seenToday = {};
       var batchA = [], batchB = []; // A = first game for both teams, B = repeat for ≥1 team
@@ -688,12 +828,13 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
         if (r.day !== d) return;
         r.games.forEach(function(g) {
           var obj = { t1: g.t1, t2: g.t2, name: r.name, color: r.color, group: r.group };
-          if (seenToday[g.t1] || seenToday[g.t2]) {
+          var sk1 = r.name + '\x00' + g.t1, sk2 = r.name + '\x00' + g.t2;
+          if (seenToday[sk1] || seenToday[sk2]) {
             batchB.push(obj);
           } else {
             batchA.push(obj);
-            seenToday[g.t1] = true;
-            seenToday[g.t2] = true;
+            seenToday[sk1] = true;
+            seenToday[sk2] = true;
           }
         });
       });
@@ -701,16 +842,19 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       var dayGames = shuffle(batchA).concat(shuffle(batchB));
 
       var ct = crts.map(function() { return st; }); // next free minute per court
-      var teamLastEnd = {};                           // team -> minute last game ends today
+      // keyed as "DivisionName\x00TeamName" — same club in multiple divisions
+      // gets independent rest tracking (they are different people on different courts)
+      var teamLastEnd = {};
 
       dayGames.forEach(function(game) {
+        var lk1 = game.name + '\x00' + game.t1, lk2 = game.name + '\x00' + game.t2;
         var bestCourt = -1, bestTime = Infinity;
         for (var ci = 0; ci < crts.length; ci++) {
           var t = ct[ci];
-          // Wait for team rest if they already played today
+          // Wait for team rest if they already played today (within same division)
           t = Math.max(t,
-            (teamLastEnd[game.t1] || 0) + minRest,
-            (teamLastEnd[game.t2] || 0) + minRest);
+            (teamLastEnd[lk1] || 0) + minRest,
+            (teamLastEnd[lk2] || 0) + minRest);
           // Skip over lunch break
           if (t < lEm && t + gDur > lSm) t = lEm;
           // Must finish before day end
@@ -728,16 +872,30 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
           t1: game.t1, t2: game.t2, name: game.name, color: game.color, group: game.group
         });
         ct[bestCourt] = bestTime + slot;
-        teamLastEnd[game.t1] = bestTime + gDur;
-        teamLastEnd[game.t2] = bestTime + gDur;
+        teamLastEnd[lk1] = bestTime + gDur;
+        teamLastEnd[lk2] = bestTime + gDur;
       });
+
+      // On the last day, capture court availability so bracket games don't
+      // overlap with any morning RR overflow games on the same day.
+      if (d === nDays - 1) ct2 = ct.slice();
     }
 
     // now convert gamesPlaced into gameDays grouped by day and division
+    // lastDayEntry is captured so Phase 4 can inject playoff games directly into it.
     var gameDays = [];
+    var lastDayEntry = null;
     for (var d = 0; d < rrDays; d++) {
+      var isLastDay = (d === nDays - 1);
       var dayGames = gamesPlaced.filter(function(g){ return g.day === d; });
-      if (!dayGames.length) continue;
+      if (!dayGames.length) {
+        if (isLastDay) {
+          // No RR overflow on last day — create an entry so playoffs have somewhere to land
+          lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [] };
+          gameDays.push(lastDayEntry);
+        }
+        continue;
+      }
       var byDiv = {};
       dayGames.forEach(function(g){
         if (!byDiv[g.name]) byDiv[g.name] = { name: g.name, color: g.color, groups: {} };
@@ -746,25 +904,82 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
         divEntry.groups[g.group].games.push({ time: toT(g.time), t1: g.t1, t2: g.t2, court: g.court, score1:null, score2:null, locked:false });
       });
       var divs = Object.keys(byDiv).map(function(k){ return byDiv[k]; });
-      gameDays.push({ label: 'Day ' + (d+1) + ' \u2014 Round Robin', divs: divs });
+      var dayLabel = isLastDay
+        ? ('Day ' + nDays + ' \u2014 Round Robin & Playoffs')
+        : ('Day ' + (d + 1) + ' \u2014 Round Robin');
+      var dayEntry = { label: dayLabel, divs: divs };
+      if (isLastDay) lastDayEntry = dayEntry;
+      gameDays.push(dayEntry);
+    }
+    if (!lastDayEntry) {
+      lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [] };
+      gameDays.push(lastDayEntry);
     }
 
-    // finals day generation remains unchanged below
-    var ct2 = crts.map(function () { return st; });
-    var bDivs = divisions.map(function (div) {
-      var n = Math.max(2, Math.ceil(div.teams.length / 2));
-      var lbls = [];
-      for (var x = 0; x < n - 1; x++) lbls.push('SF ' + (x + 1));
-      lbls.push('FINAL');
-      var matchups = lbls.map(function (l) { return { t1: '', t2: '', lbl: l }; });
-      var res = placeGames(matchups, gDur, slot, lSm, lEm, et, ct2, crts, null, false, {});
-      var games = res.games;
-      if (res.leftover && res.leftover.length) {
-        scheduleWarnings.push(res.leftover.length + ' bracket games overflowed day ' + nDays);
-      }
-      return { name: div.name, color: div.color, teams: div.teams, games: games };
+    // ── Phase 4: Schedule playoff games on last day ──────────────────────────
+    // Early games: SFs and placement games — no prerequisite, placed as soon as
+    //              courts are free (after any morning RR overflow).
+    // Late games:  FINAL and '3rd Place' — forced to start ≥90 min after the
+    //              last SF of the same bracket category finishes.
+    // Games are injected directly into lastDayEntry so the Schedule tab renders
+    // them alongside RR games with real time/court values.
+    var LATE_LBLS = { 'FINAL': 1, '3rd Place': 1 };
+    var PO_GK = function(n) { return n + ' \u2014 Playoffs'; };
+
+    divisions.forEach(function(div) {
+      var matchups = getBracketGames(div);
+      var earlyM = matchups.filter(function(m) { return !LATE_LBLS[m.lbl]; });
+      var lateM  = matchups.filter(function(m) { return  LATE_LBLS[m.lbl]; });
+      var sfEnd  = {}; // bracket -> minute when last early game for that bracket ends
+
+      var placePlayoff = function(m, minStart) {
+        var bestCi = 0;
+        for (var ci = 1; ci < crts.length; ci++) { if (ct2[ci] < ct2[bestCi]) bestCi = ci; }
+        var t = Math.max(ct2[bestCi], minStart || 0);
+        if (t < lEm && t + gDur > lSm) t = lEm;
+        if (t + gDur > et) {
+          scheduleWarnings.push('UNSCHEDULED: ' + m.lbl + ' (' + div.name
+            + ') \u2014 overflowed finals day. Extend daily hours or add courts.');
+          return;
+        }
+        if (!LATE_LBLS[m.lbl]) sfEnd[m.bracket] = Math.max(sfEnd[m.bracket] || 0, t + gDur);
+        ct2[bestCi] = t + slot;
+        // Write into the last-day gameDays entry (the single source of truth)
+        var divEntry = lastDayEntry.divs.find(function(dx) { return dx.name === div.name; });
+        if (!divEntry) {
+          divEntry = { name: div.name, color: div.color, groups: {} };
+          lastDayEntry.divs.push(divEntry);
+        }
+        var gk = PO_GK(div.name);
+        if (!divEntry.groups[gk]) divEntry.groups[gk] = { group: gk, games: [] };
+        divEntry.groups[gk].games.push({
+          time: toT(t), t1: m.t1, t2: m.t2, lbl: m.lbl, bracket: m.bracket,
+          court: crts[bestCi].court, score1: null, score2: null, locked: false
+        });
+      };
+
+      earlyM.forEach(function(m) { placePlayoff(m, 0); });
+      lateM.forEach(function(m)  { placePlayoff(m, (sfEnd[m.bracket] || 0) + 90); });
     });
-    var bracketDays = [{ label: 'Day ' + nDays + ' \u2014 Semifinals & Finals', divs: bDivs }];
+
+    // bracketDays is a thin derived view over the gameDays playoff groups.
+    // The game objects are the SAME references, so edits in the Bracket tab
+    // (seedBracketFromStandings, manual typing) instantly reflect in the Schedule tab.
+    var bracketDivs = [];
+    lastDayEntry.divs.forEach(function(d) {
+      var gk = PO_GK(d.name);
+      if (d.groups && d.groups[gk]) {
+        var divDef = divisions.find(function(dv) { return dv.name === d.name; });
+        bracketDivs.push({
+          name: d.name, color: d.color,
+          teams: (divDef ? divDef.teams : []),
+          games: d.groups[gk].games  // shared reference
+        });
+      }
+    });
+    var bracketDays = bracketDivs.length
+      ? [{ label: lastDayEntry.label, divs: bracketDivs }]
+      : [];
 
     sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
     renderSched();
@@ -812,7 +1027,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
         try {
           var divDef = divisions.find(function(dd){ return dd.name === item.name; });
           if (divDef) {
-            var groups = chunk(divDef.teams, 4);
+            var groups = divDef.manualGroups && divDef.manualGroups.length ? divDef.manualGroups : chunk(divDef.teams, optimalChunkSize(divDef.teams.length));
             for (var gi = 0; gi < groups.length; gi++) {
               var lbl = divDef.name + ' Group ' + String.fromCharCode(65 + gi);
               if (lbl === (item.gk || item.group)) { grpSize = groups[gi].length; break; }
@@ -839,8 +1054,12 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
                   + '<span class="vs">-</span>'
                   + '<input type="number" inputmode="numeric" pattern="\d*" min="0" class="score-in score2" data-day="' + dayIdx + '" data-div="' + item.name + '" data-gi="' + item.gi + '" data-gk="' + (item.gk || '') + '" placeholder="0" value="' + v2 + '">';
       }
+      var lblBadge = g.lbl
+        ? ('<span class="rb" style="border-color:' + item.color + '66;color:' + item.color + ';white-space:nowrap;flex-shrink:0">' + g.lbl + '</span>')
+        : '';
       h += '<div class="gc" style="border-left-color:' + item.color + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
+        + lblBadge
         + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
         + '<div class="gm"><span>' + g.court + '</span></div></div>'
         + '<div style="margin-left:8px;">' + scoreHtml + '</div>'
@@ -850,8 +1069,8 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
   }
 
   function renderSched() {
-    var lS = document.getElementById('lS').value || '13:00';
-    var lE = document.getElementById('lE').value || '15:00';
+    var lS = document.getElementById('lS').value || '13:30';
+    var lE = document.getElementById('lE').value || '14:30';
     var totTeams = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
     var h = '';
     // Show critical warnings (unscheduled games) prominently; suppress minor ones.
@@ -910,80 +1129,92 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     }
   });
 
-  // ── Render bracket (with datalist dropdowns per division) ──
+  // ── Render bracket ─────────────────────────────────────
+  // Always visible after schedule is generated. SF slots are pre-filled with
+  // group-winner placeholders and auto-resolved when round robin is complete.
+  // Bracket games are grouped by their `bracket` category (Championship, Silver…).
   function renderBrack() {
     if (!sched.bracketDays || !sched.bracketDays.length) {
-      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">&#127942;</div><p>No bracket days</p></div>';
+      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">&#127942;</div><p>Generate a schedule first</p></div>';
       return;
     }
+
     var rrComplete = isRoundRobinComplete();
+    // Seed round-robin winners into SF slots whenever possible
+    seedBracketFromStandings();
+
+    var lS = document.getElementById('lS').value || '13:30';
+    var lE = document.getElementById('lE').value || '14:30';
+
+    var h = '';
     if (!rrComplete) {
-      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">⏳</div><p>Waiting for round robin to complete...</p></div>';
-      return;
+      h += '<div style="background:rgba(255,165,0,.1);border:1px solid rgba(255,165,0,.3);border-radius:8px;padding:12px;margin-bottom:14px">'
+        + '<div style="color:#ffa040;font-size:12px;font-weight:700">&#9202; Round robin in progress \u2014 SF slots will auto-fill when complete. You can also type team names manually below.</div>'
+        + '</div>';
     }
-    var lS = document.getElementById('lS').value || '13:00';
-    var lE = document.getElementById('lE').value || '15:00';
+    h += '<p class="help" style="margin-bottom:18px">Click any team slot to pick from the division\'s teams, or type freely.</p>';
 
-    var h = '<p class="help" style="margin-bottom:18px">Click any team slot to pick from the division\'s teams, or type freely. Each division has its own dropdown list.</p>';
-
-    sched.bracketDays.forEach(function (day, dIdx) {
+    sched.bracketDays.forEach(function(day, dIdx) {
       h += '<div class="day-hdr">' + day.label + '</div>';
 
-      // Build one <datalist> per division — id keyed to division name
-      day.divs.forEach(function (d) {
+      day.divs.forEach(function(d) {
         var dlId = 'dl-' + d.name.replace(/[^a-zA-Z0-9]/g, '_');
+        // datalist for autocomplete
         h += '<datalist id="' + dlId + '">';
-        d.teams.forEach(function (t) { h += '<option value="' + t + '">'; });
+        d.teams.forEach(function(t) { h += '<option value="' + t + '">'; });
         h += '</datalist>';
-      });
 
-      // Collect all games, sort by time
-      var all = [];
-      day.divs.forEach(function (d) {
-        d.games.forEach(function (g, gi) {
-          all.push({ g: g, name: d.name, color: d.color, dIdx: dIdx, gi: gi });
+        // Division header
+        h += '<div class="div-hdr" style="background:linear-gradient(135deg,' + d.color + '22,' + d.color + '0a);border-left:4px solid ' + d.color + ';margin-top:12px">'
+          + '<div style="width:10px;height:10px;border-radius:50%;background:' + d.color + ';flex-shrink:0"></div>'
+          + d.name + '</div>';
+
+        // Group games by bracket category, preserving insertion order
+        var byBracket = {}, bracketOrder = [];
+        d.games.forEach(function(g) {
+          var bk = g.bracket || 'Championship';
+          if (!byBracket[bk]) { byBracket[bk] = []; bracketOrder.push(bk); }
+          byBracket[bk].push(g);
         });
-      });
-      all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
 
-      var lunchShown = false, lastDiv = '';
-      all.forEach(function (item) {
-        var g = item.g;
-        if (!lunchShown && toM(g.time) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
-
-        if (item.name !== lastDiv) {
-          h += '<div class="div-hdr" style="background:linear-gradient(135deg,' + item.color + '22,' + item.color + '0a);border-left:4px solid ' + item.color + ';margin-top:12px">'
-            + '<div style="width:10px;height:10px;border-radius:50%;background:' + item.color + ';flex-shrink:0"></div>'
-            + item.name + '</div>';
-          lastDiv = item.name;
-        }
-
-        var dlId = 'dl-' + item.name.replace(/[^a-zA-Z0-9]/g, '_');
-        var p = fmt(g.time).split(' ');
-
-        h += '<div class="bs">'
-          + '<div style="min-width:55px">'
-          + '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:15px;color:' + item.color + '">' + p[0] + '</div>'
-          + '<div style="font-size:10px;color:var(--g)">' + p[1] + '</div>'
-          + '</div>'
-          + '<span class="rb" style="border-color:' + item.color + '66;color:' + item.color + '">' + (g.lbl || '') + '</span>'
-          + '<input class="be" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t1 || '') + '" autocomplete="off">'
-          + '<span class="bvs">VS</span>'
-          + '<input class="be" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t2 || '') + '" autocomplete="off">'
-          + '<span style="font-size:11px;color:var(--g);white-space:nowrap">' + g.court + '</span>'
-          + '</div>';
+        bracketOrder.forEach(function(bk) {
+          var games = byBracket[bk];
+          h += '<div style="font-size:11px;font-weight:700;color:' + d.color + ';margin:8px 0 4px 12px;text-transform:uppercase;letter-spacing:0.5px">' + bk + '</div>';
+          games.forEach(function(g) {
+            var gIdx = d.games.indexOf(g);
+            var p = fmt(g.time).split(' ');
+            h += '<div class="bs">'
+              + '<div style="min-width:55px">'
+              + '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:15px;color:' + d.color + '">' + p[0] + '</div>'
+              + '<div style="font-size:10px;color:var(--g)">' + p[1] + '</div>'
+              + '</div>'
+              + '<span class="rb" style="border-color:' + d.color + '66;color:' + d.color + '">' + (g.lbl || '') + '</span>'
+              + '<input class="be brk-in" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t1 || '') + '" autocomplete="off"'
+              + ' data-didx="' + dIdx + '" data-divname="' + d.name + '" data-gi="' + gIdx + '" data-field="t1">'
+              + '<span class="bvs">VS</span>'
+              + '<input class="be brk-in" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t2 || '') + '" autocomplete="off"'
+              + ' data-didx="' + dIdx + '" data-divname="' + d.name + '" data-gi="' + gIdx + '" data-field="t2">'
+              + '<span style="font-size:11px;color:var(--g);white-space:nowrap">' + g.court + '</span>'
+              + '</div>';
+          });
+        });
       });
     });
 
-    // before output we may seed bracket from standings
-    var rrComplete = isRoundRobinComplete();
-    if (!rrComplete) {
-      document.getElementById('brackOut').innerHTML = '<div class="empty"><div class="ico">\u23f3</div><p>Waiting for round robin to complete...</p></div>';
-      return;
-    }
-    seedBracketFromStandings();
     document.getElementById('brackOut').innerHTML = h;
   }
+
+  // Persist manual bracket edits back into sched when admin types
+  document.getElementById('brackOut').addEventListener('change', function(e) {
+    if (!e.target || !e.target.classList.contains('brk-in')) return;
+    var dIdx    = parseInt(e.target.dataset.didx);
+    var divName = e.target.dataset.divname;
+    var gi      = parseInt(e.target.dataset.gi);
+    var field   = e.target.dataset.field;
+    if (!sched.bracketDays || !sched.bracketDays[dIdx]) return;
+    var divObj = sched.bracketDays[dIdx].divs.find(function(d) { return d.name === divName; });
+    if (divObj && divObj.games[gi]) divObj.games[gi][field] = e.target.value;
+  });
 
   // ── Standings / seeding helpers ─────────────────────────
   function computeStandings() {
@@ -1031,7 +1262,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var issues = {};
     divisions.forEach(function(div){
       // Expected games per team = group_size - 1 (round robin within each group only).
-      var groups = div.manualGroups && div.manualGroups.length ? div.manualGroups : chunk(div.teams, 4);
+      var groups = div.manualGroups && div.manualGroups.length ? div.manualGroups : chunk(div.teams, optimalChunkSize(div.teams.length));
       var expectedByTeam = {};
       groups.forEach(function(g){
         g.forEach(function(t){ expectedByTeam[t] = g.length - 1; });
@@ -1101,21 +1332,29 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
   }
 
   function seedBracketFromStandings() {
-    var st = computeStandings();
+    // Resolve placeholder strings like "1st Group A", "2nd Group B" etc.
+    // using per-group standings from computeGroupStandings().
+    var grpSt = computeGroupStandings();
+    var ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
+    var re = /^(\d+(?:st|nd|rd|th)) Group ([A-Z])$/;
     if (!sched.bracketDays) return;
-    sched.bracketDays.forEach(function(day){
-      day.divs.forEach(function(d){
-        var order = st[d.name] && st[d.name].order;
-        if (order && order.length >= 2) {
-          // fill final game
-          for (var i = d.games.length - 1; i >= 0; i--) {
-            if (d.games[i].lbl && d.games[i].lbl.toLowerCase().indexOf('final') !== -1) {
-              d.games[i].t1 = order[0];
-              d.games[i].t2 = order[1];
-              break;
-            }
-          }
-        }
+    sched.bracketDays.forEach(function(day) {
+      day.divs.forEach(function(d) {
+        var divGrpSt = grpSt[d.name];
+        if (!divGrpSt) return;
+        d.games.forEach(function(game) {
+          ['t1', 't2'].forEach(function(field) {
+            var val = game[field];
+            if (!val) return;
+            var m = val.match(re);
+            if (!m) return;
+            var posIdx = ordinals.indexOf(m[1]);
+            if (posIdx === -1) return;
+            var grpLbl = d.name + ' Group ' + m[2];
+            var grp = divGrpSt[grpLbl];
+            if (grp && grp.complete && grp.order[posIdx]) game[field] = grp.order[posIdx];
+          });
+        });
       });
     });
   }
