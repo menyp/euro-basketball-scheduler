@@ -17,7 +17,7 @@ header img:hover{filter:drop-shadow(0 0 14px rgba(255,107,0,0.9))}
 .htxt h1 span{color:var(--o)}
 .htxt p{font-size:10px;color:var(--g);text-transform:uppercase;letter-spacing:2px;margin-top:2px;font-family:'Montserrat',sans-serif;font-weight:600}
 .hbadge{margin-left:auto;background:var(--o);color:#fff;font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;flex-shrink:0}
-.tabs{background:var(--n3);display:flex;border-bottom:2px solid var(--b);overflow-x:auto}
+.tabs{background:var(--n3);display:flex;border-bottom:2px solid var(--b);overflow-x:auto;position:sticky;top:0;z-index:99}
 .tab{padding:13px 22px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s}
 .tab.active{color:var(--o);border-bottom-color:var(--o);background:rgba(255,107,0,.08)}
 .main{max-width:760px;margin:0 auto;padding:22px 16px}
@@ -145,6 +145,10 @@ footer span{color:var(--o)}
 <div class="main">
   <div class="page active" id="page-setup">
 
+    <div class="card" style="background:rgba(255,107,0,.08);border-color:rgba(255,107,0,.25)">
+      <p class="help" style="margin:0;color:var(--ol)"><strong>Workflow:</strong> Complete this setup, then go to the <strong>Groups</strong> tab to finalize your groups and generate the schedule.</p>
+    </div>
+
     <div class="card">
       <div class="stitle">Tournament Info</div>
       <label>Tournament Name</label>
@@ -169,14 +173,13 @@ footer span{color:var(--o)}
     <div class="card">
       <div class="stitle">Teams and Divisions</div>
       <label>Paste your full team list</label>
-      <textarea id="pasteBox">Boys U12: Grey Wolves, Red Foxes, Coyotes, Jackals, Wildcats
-Boys U18: Silverbacks, Kodiaks, Bengals, Stallions, Apex Lions
-Girls U12: Blue Falcons, Ospreys, Kestrels, Swift Harriers, Golden Eagles
-Girls U18: Valkyries, Sirens, Phoenix Elite, Midnight Ravens, Storm Harpy
-Boys U10: Cubs, Pups, Colts, Kittens, Hatchlings
-Girls U10: Sprites, Pixies, Sparks, Wisps, Glows
-Boys U14: Rhinos, Bulls, Rams, Boars, Grizzhies
-Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
+      <textarea id="pasteBox">Boys U14: DAWHITEWAY (USA), CORK RED (IRE), CORK WHITE (IRE), TEAM SOLENT KESTRELS (ENG), STUTTGART EAGLES (GER), PORTALOISE PANTHERS (IRE), SURREY RAMS (ENG), GLOUCESTER SAXONS (ENG), LOBAS BASKET (SWE), KRETINGA SM (LIT), ELITE MADELENA (COL), SWSC-BAYANIHAN A (PHI), SWSC-BAYANIHAN B (PHI), LIMERICK CELTICS (IRE), NORWOOD STARS (CAD), USA ELITE (USA)
+Boys U16: PHD HOOPS (USA), TEAM SOLENT KESTRELS (ENG), MVP INTERNATIONAL (USA), KINGS COURT (CAD), STUTTGART EAGLES (GER), BASKET CHILE (CHI), SURREY RAMS (ENG), NKA (LIT), PUERTO RICO A (PR), LIMERICK CELTICS (IRE), ELITE MADELENA (COL), PUERTO RICO B (PR), HYVINKÄÄN PONTEVA (FIN), LINCOLN PANTHERS (ENG), SMOOTHHANDLES (GER), BC ALTE KANTI ARAU (SWI)
+Boys U18: PUERTO RICO A (PR), BAYANIHAN ELITE (PHI), PHD HOOPS (USA), SURREY RAMS (ENG), BOLLSTANÄS SK (SWE), 5 STAR UK (ENG), LNCA 18 (MEX), LNCA 17 (MEX), SMOOTHHANDLES (GER), VIBY (SWE)
+U12 Mix: TEAM SOLENT KESTRELS (ENG), LIM. CELTICS (IRE), PORTALOISE PANTHERS (IRE), STUTTGART EAGLES (GER), NEWPORT FIRE (WALES), VKKM 1 (LIT), VKKM 2 (LIT), PARIS SW (FR), SKM LIONS 1 (LIT), SKM LIONS 2 (LIT), HEROES BASKETBALL (HOL), IBAS (SLK)
+Girls U14: PUERTO RICO (PR), TEAM SOLENT KESTRELS (ENG), PARIS SW (FRA), ELITE MADELENA (COL), IBAS (SKL), AECAM (ESP)
+Girls U16: TEAM SOLENT KESTRELS (ENG), PHD HOOPS (USA), BASKET CHILE (CHI), BC BERRWILLER STAFFELFELDEN (FRA), PARIS SW (FRA), LIMERICK SPARKS (IRE), LIMERICK STORM (IRE), BASKET VENARIA (ITA), AIK BASKET (SWE), LOBAS BASKET (SWE), IBAS (SLK), ETUGEN IRVESUUD (MON)
+Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE (CHI), C.B. GRANOLLERS (ESP), SKURU (SWE)</textarea>
       <p class="paste-hint">Format: <code>Division Name: Team1, Team2, Team3</code> &mdash; one division per line</p>
       <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
       <div id="divSummary"></div>
@@ -209,16 +212,15 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       <label>Max games per team per day</label>
       <input type="number" id="maxGPD" value="2" min="1" max="10">
     </div>
-
-    <button class="btn-go" id="genBtn">Generate Tournament Schedule</button>
   </div>
 
   <div class="page" id="page-groups">
     <div class="card">
       <div class="stitle">Groups Editor</div>
-      <p class="help">Edit groups before generating the schedule. You can add, remove or move teams between groups. Changes persist for this session.</p>
+      <p class="help">Review and finalize your groups. You can organize teams into groups, add, remove or move teams between groups. Once groups are finalized, click the button below to generate the schedule.</p>
       <div id="groupsOut"></div>
     </div>
+    <button class="btn-go" id="genBtn">🎯 Generate Tournament Schedule</button>
   </div>
 
   <div class="page" id="page-schedule">
@@ -271,6 +273,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     document.getElementById('tab-' + id).classList.add('active');
     document.getElementById('page-' + id).classList.add('active');
     if (id === 'standings') renderStandings();
+    window.scrollTo(0, 0);
   }
   document.getElementById('tab-setup').addEventListener('click', function () { switchTab('setup'); });
   document.getElementById('tab-groups').addEventListener('click', function () { switchTab('groups'); renderGroups(); });
@@ -590,32 +593,6 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     return { games: gs, leftover: leftover };
   }
 
-  function collectSchedulingWarnings() {
-    var warns = scheduleWarnings.slice();
-    if (!sched.gameDays) return warns;
-    var teamGames = {};
-    sched.gameDays.forEach(function(day){
-      day.divs.forEach(function(d){
-        d.games.forEach(function(g){
-          if (!g.lbl) {
-            var t = toM(g.time);
-            if (!teamGames[g.t1]) teamGames[g.t1] = [];
-            if (!teamGames[g.t2]) teamGames[g.t2] = [];
-            for (var i = 0; i < teamGames[g.t1].length; i++) {
-              if (Math.abs(t - teamGames[g.t1][i]) < 30) warns.push('⚠️ ' + g.t1 + ' has concurrent games around ' + g.time);
-            }
-            for (var i = 0; i < teamGames[g.t2].length; i++) {
-              if (Math.abs(t - teamGames[g.t2][i]) < 30) warns.push('⚠️ ' + g.t2 + ' has concurrent games around ' + g.time);
-            }
-            teamGames[g.t1].push(t);
-            teamGames[g.t2].push(t);
-          }
-        });
-      });
-    });
-    return warns;
-  }
-
   // ── Generate ───────────────────────────────────────────
   document.getElementById('genBtn').addEventListener('click', function () {
     if (!divisions.length) { alert('Please parse your team list first!'); return; }
@@ -652,7 +629,6 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     var gamesPlaced = [];
     var daySlotList = [];
     var currentDay = 0;
-    var MAX_EXTRA_DAYS = 10;
 
     function generateSlotsForDay(dayIndex) {
       var ct = crts.map(function(){ return st; });
@@ -710,13 +686,16 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         }
       }
       if (!assigned) {
-        // need more slots, add one extra day
-        generateSlotsForDay(currentDay);
-        currentDay++;
-        if (currentDay > rrDays + MAX_EXTRA_DAYS) {
-          scheduleWarnings.push('Unable to schedule ' + unplaced.length + ' round robin games');
+        if (currentDay >= rrDays) {
+          // All configured round-robin days are exhausted — stop here.
+          // Do NOT spill into the finals day.
+          if (unplaced.length) {
+            scheduleWarnings.push('UNSCHEDULED: ' + unplaced.length + ' game(s) could not fit in ' + rrDays + ' round-robin day(s). Add more courts, extend daily hours, or increase the number of tournament days.');
+          }
           break;
         }
+        generateSlotsForDay(currentDay);
+        currentDay++;
       }
     }
     console.log('Scheduling loop completed. Unplaced:', unplaced.length, 'overflowGuard:', overflowGuard);
@@ -840,11 +819,16 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
   function renderSched() {
     var lS = document.getElementById('lS').value || '13:00';
     var lE = document.getElementById('lE').value || '15:00';
-    // hide scheduling warnings to keep UI clean
-    var warnings = [];
     var totTeams = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
-        var h = '';
-        // no warning banner
+    var h = '';
+    // Show critical warnings (unscheduled games) prominently; suppress minor ones.
+    var criticalWarns = scheduleWarnings.filter(function(w){ return w.indexOf('UNSCHEDULED:') === 0; });
+    if (criticalWarns.length) {
+      h += '<div style="background:rgba(255,60,60,.15);border:1px solid rgba(255,60,60,.4);border-radius:8px;padding:14px;margin-bottom:14px">'
+        + '<div style="color:#ff8080;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">⚠️ Scheduling Conflict</div>'
+        + criticalWarns.map(function(w){ return '<div style="color:#ffb3b3;font-size:12px;margin-top:4px">' + w.replace('UNSCHEDULED: ', '') + '</div>'; }).join('')
+        + '</div>';
+    }
     var totGames = sched.gameDays.reduce(function (s, day) {
       return s + day.divs.reduce(function (s2, d) {
         if (d.games) return s2 + d.games.length;
@@ -1013,10 +997,14 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
   function validateRoundRobin() {
     var issues = {};
     divisions.forEach(function(div){
-      var teamCount = div.teams.length;
-      var expectedGames = teamCount - 1;
+      // Expected games per team = group_size - 1 (round robin within each group only).
+      var groups = div.manualGroups && div.manualGroups.length ? div.manualGroups : chunk(div.teams, 4);
+      var expectedByTeam = {};
+      groups.forEach(function(g){
+        g.forEach(function(t){ expectedByTeam[t] = g.length - 1; });
+      });
       var gamesByTeam = {};
-      div.teams.forEach(function(t){ gamesByTeam[t] = 0; });
+      Object.keys(expectedByTeam).forEach(function(t){ gamesByTeam[t] = 0; });
       if (sched.gameDays) {
         sched.gameDays.forEach(function(day){
           var divGames = day.divs.find(function(d){return d.name === div.name;});
@@ -1037,11 +1025,12 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
         });
       }
       var incomplete = [];
-      div.teams.forEach(function(t){
-        if (gamesByTeam[t] < expectedGames) incomplete.push(t);
+      Object.keys(expectedByTeam).forEach(function(t){
+        var exp = expectedByTeam[t];
+        if (exp > 0 && (gamesByTeam[t] || 0) < exp) incomplete.push(t + ' (' + (gamesByTeam[t]||0) + '/' + exp + ')');
       });
       if (incomplete.length) {
-        issues[div.name] = { expected: expectedGames, incomplete: incomplete };
+        issues[div.name] = { incomplete: incomplete };
       }
     });
     return issues;
@@ -1057,7 +1046,7 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       Object.keys(validation).forEach(function(div){
         var v = validation[div];
         h += '<div style="color:#ffb3b3;font-size:12px;margin-top:6px"><strong>' + div + ':</strong> '
-          + v.incomplete.join(', ') + ' missing game(s) (need ' + v.expected + ' each)</div>';
+          + v.incomplete.join(', ') + ' missing game(s)</div>';
       });
       h += '</div>';
     }
@@ -1118,14 +1107,18 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
     var day = pendingScoreEdit.day;
     var divName = pendingScoreEdit.divName;
     var gi = pendingScoreEdit.gi;
+    var gk = pendingScoreEdit.gk;
     var dayObj = sched.gameDays && sched.gameDays[day];
     if (dayObj) {
       var divObj = dayObj.divs.find(function(x){return x.name === divName;});
       if (divObj) {
-        var game = divObj.games[gi];
-        if (game) {
-          game.locked = false;
+        var game = null;
+        if (divObj.games && divObj.games[gi]) {
+          game = divObj.games[gi];
+        } else if (divObj.groups && gk && divObj.groups[gk]) {
+          game = divObj.groups[gk].games[gi];
         }
+        if (game) game.locked = false;
       }
     }
     document.getElementById('scoreModal').classList.remove('active');
@@ -1140,7 +1133,8 @@ Girls U14: Panthers, Cheetahs, Vipers, Lynxes, Leopards</textarea>
       var day = parseInt(e.target.dataset.day);
       var divName = e.target.dataset.div;
       var gi = parseInt(e.target.dataset.gi);
-      pendingScoreEdit = { day: day, divName: divName, gi: gi };
+      var gk = e.target.dataset.gk || '';
+      pendingScoreEdit = { day: day, divName: divName, gi: gi, gk: gk };
       document.getElementById('scoreModal').classList.add('active');
     }
   });
