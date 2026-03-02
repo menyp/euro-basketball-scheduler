@@ -668,21 +668,37 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     });
 
     // ── PHASE 3: Pack games onto courts within each day ─────────────────────
-    // For each day, shuffle all assigned games for variety, then place them
-    // on courts using an earliest-available-court strategy.
-    // Per-team minimum rest (= one slot width) is enforced so the same team
-    // never plays two games back-to-back on different courts.
+    // Priority order (high → low):
+    //   1. Minimise days used & maximise court utilisation  (handled by Phase 2 + greedy courts)
+    //   2. Maximise team rest within each day
+    //
+    // To maximise rest without sacrificing court utilisation:
+    //   Split the day's games into two batches before placement.
+    //   Batch A — games where NEITHER team has played today yet (place early).
+    //   Batch B — games where at least one team has already played today (place late).
+    //   Because Batch B starts after Batch A fills the courts, a team's second
+    //   game lands as late in the day as court density allows — maximum rest.
+    //   teamLastEnd + minRest remains as a hard safety floor.
     var gamesPlaced = [];
-    var minRest = slot; // gDur + bDur — one slot gap between a team's games
+    var minRest = slot; // gDur + bDur — hard minimum between a team's games
     for (var d = 0; d < rrDays; d++) {
-      var dayGames = [];
+      var seenToday = {};
+      var batchA = [], batchB = []; // A = first game for both teams, B = repeat for ≥1 team
       groupRounds.forEach(function(r) {
         if (r.day !== d) return;
         r.games.forEach(function(g) {
-          dayGames.push({ t1: g.t1, t2: g.t2, name: r.name, color: r.color, group: r.group });
+          var obj = { t1: g.t1, t2: g.t2, name: r.name, color: r.color, group: r.group };
+          if (seenToday[g.t1] || seenToday[g.t2]) {
+            batchB.push(obj);
+          } else {
+            batchA.push(obj);
+            seenToday[g.t1] = true;
+            seenToday[g.t2] = true;
+          }
         });
       });
-      dayGames = shuffle(dayGames);
+      // Shuffle within each batch for variety, then place A then B
+      var dayGames = shuffle(batchA).concat(shuffle(batchB));
 
       var ct = crts.map(function() { return st; }); // next free minute per court
       var teamLastEnd = {};                           // team -> minute last game ends today
