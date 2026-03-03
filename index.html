@@ -10,14 +10,15 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--n);color:#fff;font-family:'Open Sans',sans-serif;min-height:100vh}
 
-header{background:var(--n2);border-bottom:3px solid var(--o);padding:10px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+header{background:var(--n2);border-bottom:3px solid var(--o);padding:10px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 4px 24px rgba(0,0,0,.6)}
 header img{width:54px;height:54px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(255,107,0,0.55));transition:filter .3s}
 header img:hover{filter:drop-shadow(0 0 14px rgba(255,107,0,0.9))}
 .htxt h1{font-family:'Montserrat',sans-serif;font-weight:900;font-size:clamp(14px,3vw,21px);text-transform:uppercase;letter-spacing:1px;line-height:1.1}
 .htxt h1 span{color:var(--o)}
 .htxt p{font-size:10px;color:var(--g);text-transform:uppercase;letter-spacing:2px;margin-top:2px;font-family:'Montserrat',sans-serif;font-weight:600}
 .hbadge{margin-left:auto;background:var(--o);color:#fff;font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;flex-shrink:0}
-.tabs{background:var(--n3);display:flex;border-bottom:2px solid var(--b);overflow-x:auto;position:sticky;top:0;z-index:99}
+.sticky-top{position:sticky;top:0;z-index:100}
+.tabs{background:var(--n3);display:flex;border-bottom:2px solid var(--b);overflow-x:auto}
 .tab{padding:13px 22px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s}
 .tab.active{color:var(--o);border-bottom-color:var(--o);background:rgba(255,107,0,.08)}
 .main{max-width:760px;margin:0 auto;padding:22px 16px}
@@ -123,6 +124,7 @@ footer span{color:var(--o)}
 </head>
 <body>
 
+<div class="sticky-top">
 <header>
   <a href="https://www.eurobasketballcup.com" target="_blank" style="flex-shrink:0;display:flex">
     <img src="data:image/png;base64,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" alt="Euro Youth Basketball Cup" title="Euro Youth Basketball Cup">
@@ -140,6 +142,7 @@ footer span{color:var(--o)}
   <button class="tab" id="tab-schedule">Schedule</button>
   <button class="tab" id="tab-standings">Standings</button>
   <button class="tab" id="tab-bracket">Bracket</button>
+</div>
 </div>
 
 <div class="main">
@@ -412,6 +415,16 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       remaining = leftover;
     }
     return rounds;
+  }
+
+  // Extract the club name from a team string, e.g.:
+  //   "STUTTGART EAGLES (GER)"  →  "STUTTGART EAGLES"
+  //   "TEAM SOLENT KESTRELS (ENG)" → "TEAM SOLENT KESTRELS"
+  //   Strings with no parentheses are returned as-is (uppercased).
+  function extractClub(teamName) {
+    if (!teamName) return '';
+    var m = teamName.match(/^(.+?)\s*\([^)]+\)\s*$/);
+    return (m ? m[1] : teamName).trim().toUpperCase();
   }
 
   // ── Groups editor ───────────────────────────────────
@@ -845,10 +858,14 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       // keyed as "DivisionName\x00TeamName" — same club in multiple divisions
       // gets independent rest tracking (they are different people on different courts)
       var teamLastEnd = {};
+      // club name → [{start, end}] for same-day cross-division overlap detection
+      var clubDaySchedule = {};
 
       dayGames.forEach(function(game) {
         var lk1 = game.name + '\x00' + game.t1, lk2 = game.name + '\x00' + game.t2;
+        var club1 = extractClub(game.t1), club2 = extractClub(game.t2);
         var bestCourt = -1, bestTime = Infinity;
+        var fallbackCourt = -1, fallbackTime = Infinity; // best slot ignoring club conflicts
         for (var ci = 0; ci < crts.length; ci++) {
           var t = ct[ci];
           // Wait for team rest if they already played today (within same division)
@@ -859,7 +876,25 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
           if (t < lEm && t + gDur > lSm) t = lEm;
           // Must finish before day end
           if (t + gDur > et) continue;
-          if (t < bestTime) { bestTime = t; bestCourt = ci; }
+          // Track best slot without any club-conflict check (fallback)
+          if (t < fallbackTime) { fallbackTime = t; fallbackCourt = ci; }
+          // Check for club overlap: skip if club1 or club2 has an overlapping game
+          var tEnd = t + gDur;
+          var clubConflict = false;
+          [club1, club2].forEach(function(club) {
+            if (!club || clubConflict) return;
+            (clubDaySchedule[club] || []).forEach(function(busy) {
+              if (t < busy.end && tEnd > busy.start) clubConflict = true;
+            });
+          });
+          if (!clubConflict && t < bestTime) { bestTime = t; bestCourt = ci; }
+        }
+        // Soft constraint: if no conflict-free slot found, fall back to best available
+        if (bestCourt === -1 && fallbackCourt !== -1) {
+          scheduleWarnings.push('CLUB CONFLICT: ' + game.t1 + ' vs ' + game.t2
+            + ' (Day ' + (d + 1) + ') \u2014 same-club staff overlap unavoidable.');
+          bestCourt = fallbackCourt;
+          bestTime  = fallbackTime;
         }
         if (bestCourt === -1) {
           scheduleWarnings.push('UNSCHEDULED: ' + game.t1 + ' vs ' + game.t2
@@ -874,6 +909,10 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
         ct[bestCourt] = bestTime + slot;
         teamLastEnd[lk1] = bestTime + gDur;
         teamLastEnd[lk2] = bestTime + gDur;
+        // Update club schedule so subsequent games can detect overlaps
+        var placed = { start: bestTime, end: bestTime + gDur };
+        if (club1) { if (!clubDaySchedule[club1]) clubDaySchedule[club1] = []; clubDaySchedule[club1].push(placed); }
+        if (club2) { if (!clubDaySchedule[club2]) clubDaySchedule[club2] = []; clubDaySchedule[club2].push(placed); }
       });
 
       // On the last day, capture court availability so bracket games don't
@@ -1075,10 +1114,18 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var h = '';
     // Show critical warnings (unscheduled games) prominently; suppress minor ones.
     var criticalWarns = scheduleWarnings.filter(function(w){ return w.indexOf('UNSCHEDULED:') === 0; });
+    var clubWarns     = scheduleWarnings.filter(function(w){ return w.indexOf('CLUB CONFLICT:') === 0; });
     if (criticalWarns.length) {
       h += '<div style="background:rgba(255,60,60,.15);border:1px solid rgba(255,60,60,.4);border-radius:8px;padding:14px;margin-bottom:14px">'
-        + '<div style="color:#ff8080;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">⚠️ Scheduling Conflict</div>'
+        + '<div style="color:#ff8080;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">\u26a0\ufe0f Scheduling Conflict</div>'
         + criticalWarns.map(function(w){ return '<div style="color:#ffb3b3;font-size:12px;margin-top:4px">' + w.replace('UNSCHEDULED: ', '') + '</div>'; }).join('')
+        + '</div>';
+    }
+    if (clubWarns.length) {
+      h += '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:14px;margin-bottom:14px">'
+        + '<div style="color:#fbbf24;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">\u26a0\ufe0f Club Staff Conflict</div>'
+        + '<div style="color:#fde68a;font-size:12px;margin-bottom:6px">The following games could not avoid a same-club time overlap. Notify club staff.</div>'
+        + clubWarns.map(function(w){ return '<div style="color:#fde68a;font-size:12px;margin-top:4px">' + w.replace('CLUB CONFLICT: ', '') + '</div>'; }).join('')
         + '</div>';
     }
     var totGames = sched.gameDays.reduce(function (s, day) {
