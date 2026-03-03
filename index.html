@@ -117,6 +117,19 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .algo-section ul{margin:4px 0 0 14px;padding:0}
 .algo-config{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
 .algo-pill{background:rgba(255,107,0,.12);border:1px solid rgba(255,107,0,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-family:'Montserrat',sans-serif;font-weight:700;color:var(--ol)}
+.day-hours-grid{display:grid;grid-template-columns:100px 1fr 1fr;gap:7px 10px;align-items:center;margin-top:10px}
+.day-hours-grid .dh-hdr{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g)}
+.day-hours-grid .dh-lbl{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:#fff;white-space:nowrap}
+.final-day-badge{font-size:9px;background:rgba(255,107,0,.15);color:var(--ol);padding:2px 5px;border-radius:3px;vertical-align:middle;margin-left:5px;font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:.5px}
+.rule-row{display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid var(--b)}.rule-row:last-child{border-bottom:none}
+.rule-toggle{position:relative;flex-shrink:0;width:40px;height:22px;margin-top:1px}
+.rule-toggle input{opacity:0;width:0;height:0;position:absolute}
+.rule-slider{position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,.12);border-radius:22px;transition:.2s}
+.rule-slider::before{content:'';position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.rule-toggle input:checked+.rule-slider{background:var(--o)}
+.rule-toggle input:checked+.rule-slider::before{transform:translateX(18px)}
+.rule-lbl strong{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:#fff;display:block;margin-bottom:3px}
+.rule-lbl small{font-size:11px;color:var(--g);line-height:1.55}
 .settings-wrap{position:relative;display:flex;align-items:center;padding:0 6px;flex-shrink:0}
 .settings-btn{background:none;border:none;color:var(--g);cursor:pointer;width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
 .settings-btn:hover{color:#fff;background:rgba(255,255,255,.1)}
@@ -186,12 +199,6 @@ footer span{color:var(--o)}
       <input type="text" id="tName" value="Euro Youth Basketball Cup 2026">
       <div class="row">
         <div><label>Start Date</label><input type="date" id="sDate" value="2026-06-19"></div>
-        <div><label>Daily Start Time</label><input type="time" id="sTime" value="09:00"></div>
-        <div><label>Daily End Time</label><input type="time" id="eTime" value="20:00"></div>
-      </div>
-      <div class="row">
-        <div><label>Game Duration (min)</label><input type="number" id="gDur" value="20" min="5" max="120"></div>
-        <div><label>Break Between Games (min)</label><input type="number" id="bDur" value="5" min="0" max="60"></div>
       </div>
       <label>Lunch Break</label>
       <div class="row">
@@ -204,13 +211,13 @@ footer span{color:var(--o)}
     <div class="card">
       <div class="stitle">Teams and Divisions</div>
       <label>Paste your full team list</label>
-      <textarea id="pasteBox">Boys U14: DAWHITEWAY (USA), CORK RED (IRE), CORK WHITE (IRE), TEAM SOLENT KESTRELS (ENG), STUTTGART EAGLES (GER), PORTALOISE PANTHERS (IRE), SURREY RAMS (ENG), GLOUCESTER SAXONS (ENG), LOBAS BASKET (SWE), KRETINGA SM (LIT), ELITE MADELENA (COL), SWSC-BAYANIHAN A (PHI), SWSC-BAYANIHAN B (PHI), LIMERICK CELTICS (IRE), NORWOOD STARS (CAD), USA ELITE (USA)
-Boys U16: PHD HOOPS (USA), TEAM SOLENT KESTRELS (ENG), MVP INTERNATIONAL (USA), KINGS COURT (CAD), STUTTGART EAGLES (GER), BASKET CHILE (CHI), SURREY RAMS (ENG), NKA (LIT), PUERTO RICO A (PR), LIMERICK CELTICS (IRE), ELITE MADELENA (COL), PUERTO RICO B (PR), HYVINKÄÄN PONTEVA (FIN), LINCOLN PANTHERS (ENG), SMOOTHHANDLES (GER), BC ALTE KANTI ARAU (SWI)
-Boys U18: PUERTO RICO A (PR), BAYANIHAN ELITE (PHI), PHD HOOPS (USA), SURREY RAMS (ENG), BOLLSTANÄS SK (SWE), 5 STAR UK (ENG), LNCA 18 (MEX), LNCA 17 (MEX), SMOOTHHANDLES (GER), VIBY (SWE), Boys U18 test 1, Boys U18 test 2
-U12 Mix: TEAM SOLENT KESTRELS (ENG), LIM. CELTICS (IRE), PORTALOISE PANTHERS (IRE), STUTTGART EAGLES (GER), NEWPORT FIRE (WALES), VKKM 1 (LIT), VKKM 2 (LIT), PARIS SW (FR), SKM LIONS 1 (LIT), SKM LIONS 2 (LIT), HEROES BASKETBALL (HOL), IBAS (SLK)
-Girls U14: PUERTO RICO (PR), TEAM SOLENT KESTRELS (ENG), PARIS SW (FRA), ELITE MADELENA (COL), IBAS (SKL), AECAM (ESP), Girls U14 test 1, Girls U14 test 2
-Girls U16: TEAM SOLENT KESTRELS (ENG), PHD HOOPS (USA), BASKET CHILE (CHI), BC BERRWILLER STAFFELFELDEN (FRA), PARIS SW (FRA), LIMERICK SPARKS (IRE), LIMERICK STORM (IRE), BASKET VENARIA (ITA), AIK BASKET (SWE), LOBAS BASKET (SWE), IBAS (SLK), ETUGEN IRVESUUD (MON)
-Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE (CHI), C.B. GRANOLLERS (ESP), SKURU (SWE), Girls U18 test 1, Girls U18 test 2</textarea>
+      <textarea id="pasteBox">U12 MIXED: VKKM (LIT), GLOUCESTER SAXONS (ENG), PARIS SW (FRA), DEREE C. ATHLETIC (GRE), LIMERICK CELTICS (IRE), LIMITLESS HOOPS (USA), MANCHESTER GIANTS 1 (ENG), St. Josephs Basketball Club (IRE), PORTLAOISE PANTHERS (IRE), MANCHESTER GIANTS 2 (ENG), MANCHESTER GIANTS 3 (ENG), TIGERS (CZE)
+U14 BOYS: KILKENNY STARS (IRE), ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), CORK (IRE), CORK (IRE), KCB JALANDHAR (IND), GLOUCESTER SAXONS (ENG), SILVA BACKS (USA), PHD HOOPS (USA), DEREE C. ATHLETIC (GRE), St. Josephs Basketball Club (IRE), LIMERICK CELTICS (IRE), BASKETBALL WALES (WAL), SURREY RAMS (ENG), LEEDS BASKETBALL (ENG)
+U16 BOYS: UMF SINDRI (ICE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), KCB JALANDHAR (IND), Kaiserslautern Thunder (GER), PHD HOOPS (USA), LEEDS BASKETBALL (ENG), SMOOTHHANDLES (GER), KINGS COURT CANADA (CAD), SURREY RAMS (ENG), ALTE KANTI (SWI), MVP (USA), LIMITLESS HOOPS (USA), TIGERS (CZE), FLAMES VIENNA (AUT), MADELENA (COL)
+U18 BOYS: BANTRY BC (IRE), Mhaigh Cuilinn U17 (IRE), Mhaigh Cuilinn U17 (IRE), SOLLENTUNA (SWE), SOLLENTUNA (SWE), KCB JALANDHAR (IND), PHD HOOPS (USA), FORTROSE ACADEMY (SCO), TINDASTOLL (ICE), BC ALTE KANTI (SWI), LNCA (MEX), SURREY RAMS (ENG)
+U14 GIRLS: KILKENNY STARS (IRE), ST. BRIDGET'S CURROW (IRE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), LIMERICK CELTICKS (IRE), BASKETBALL WALES (WAL), BASKETBALL WALES (WAL), LNCA (MEX), Eagles (SLK), Madelena (COL), Team11, Team12
+U16 GIRLS: ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), GLANMIRE BASKETBALL (IRE), GLANMIRE BASKETBALL (IRE), LOBAS (SWE), PHD HOOPS (USA), GRASSHOPPER ZURICH (SWI), GRASSHOPPER ZURICH (SWI), BASKET CHILE (CHI), LIMERICK CELTICS (IRE), IBAS (SLK)
+U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), Team 5, FALCONS (SWI), MADELENA (COL), LNCA 2 (MEX)</textarea>
       <p class="paste-hint">Format: <code>Division Name: Team1, Team2, Team3</code> &mdash; one division per line</p>
       <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
       <div id="divSummary"></div>
@@ -240,8 +247,39 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
         The <strong style="color:var(--o)">last day</strong> is always semifinals and finals.
         We try to spread games evenly – teams will never have more than <strong style="color:var(--o)">max games per day</strong>.
       </p>
-      <label>Max games per team per day</label>
+      <label style="margin-top:18px">Operating Hours per Day</label>
+      <div id="dayHoursContainer"></div>
+      <label style="margin-top:18px">Max games per team per day</label>
       <input type="number" id="maxGPD" value="2" min="1" max="10">
+    </div>
+
+    <div class="card">
+      <div class="stitle">Advanced Scheduling Rules</div>
+      <p class="help" style="margin-bottom:4px">Toggle rules <strong style="color:#FF3030">OFF</strong> to relax constraints when games fail to schedule. Disabled rules show amber warnings instead of blocking placement.</p>
+
+      <div class="rule-row">
+        <label class="rule-toggle"><input type="checkbox" id="ruleBlanes" checked><span class="rule-slider"></span></label>
+        <div class="rule-lbl">
+          <strong>Enforce Blanes Exclusivity (U16/U18 Boys)</strong>
+          <small>ON: Boys U16/U18 are placed at Blanes courts only — a red error is shown if Blanes is full. OFF: Blanes is preferred but any court is used as fallback, shown as an amber warning.</small>
+        </div>
+      </div>
+
+      <div class="rule-row">
+        <label class="rule-toggle"><input type="checkbox" id="ruleClub" checked><span class="rule-slider"></span></label>
+        <div class="rule-lbl">
+          <strong>Enforce Club Staff Overlap Protection</strong>
+          <small>ON: teams from the same club are kept in different time slots where possible. OFF: club conflicts are ignored entirely to free up slots for placement.</small>
+        </div>
+      </div>
+
+      <div class="rule-row">
+        <label class="rule-toggle"><input type="checkbox" id="ruleRest" checked><span class="rule-slider"></span></label>
+        <div class="rule-lbl">
+          <strong>Enforce 90-Minute Team Rest</strong>
+          <small>ON: a team must skip at least one full 90-min slot between games. OFF: back-to-back slots are allowed and flagged with an amber warning.</small>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -301,7 +339,8 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     { name: 'Palafolls',    numCourts: 2 }
   ];
   var sched = {};
-  var scheduleWarnings = [];
+  var scheduleWarnings = [];  // amber / soft warnings (club conflicts etc.)
+  var unscheduledGames = []; // structured list of games that failed to place
   var DIV_COLORS = [
     '#FF6B00','#3B82F6','#10B981','#8B5CF6',
     '#F59E0B','#EF4444','#06B6D4','#EC4899',
@@ -421,6 +460,57 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     return all;
   }
 
+  // ── Rule toggles ───────────────────────────────────────
+  // Reads the three Advanced Scheduling Rule checkboxes.
+  // Called at the start of each schedule generation so settings persist across runs.
+  function getRuleToggles() {
+    return {
+      blanes: document.getElementById('ruleBlanes').checked,
+      club:   document.getElementById('ruleClub').checked,
+      rest:   document.getElementById('ruleRest').checked
+    };
+  }
+
+  // ── Per-day operating hours ────────────────────────────
+  // Returns [{start:'09:00', end:'19:00'}, ...] for each tournament day.
+  // Falls back to defaults when inputs are missing (e.g. before first render).
+  function getDayHours() {
+    var n = parseInt(document.getElementById('nDays').value) || 3;
+    var result = [];
+    for (var i = 0; i < n; i++) {
+      var startEl = document.getElementById('dayStart_' + i);
+      var endEl   = document.getElementById('dayEnd_'   + i);
+      result.push({
+        start: startEl ? startEl.value : '09:00',
+        end:   endEl   ? endEl.value   : (i === n - 1 ? '17:30' : '19:00')
+      });
+    }
+    return result;
+  }
+
+  // Renders the per-day operating hours grid inside #dayHoursContainer.
+  // Called on init and whenever nDays changes. Preserves any values already entered.
+  function renderDayHours() {
+    var n = parseInt(document.getElementById('nDays').value) || 3;
+    var prev = getDayHours(); // preserve current values before redraw
+    var h = '<div class="day-hours-grid">'
+      + '<div class="dh-hdr"></div>'
+      + '<div class="dh-hdr">First Game</div>'
+      + '<div class="dh-hdr">Last Game Start</div>';
+    for (var i = 0; i < n; i++) {
+      var isLast   = (i === n - 1);
+      var defStart = prev[i] ? prev[i].start : '09:00';
+      var defEnd   = prev[i] ? prev[i].end   : (isLast ? '17:30' : '19:00');
+      h += '<div class="dh-lbl">Day ' + (i + 1)
+        + (isLast ? '<span class="final-day-badge">Finals</span>' : '')
+        + '</div>';
+      h += '<input type="time" id="dayStart_' + i + '" value="' + defStart + '">';
+      h += '<input type="time" id="dayEnd_'   + i + '" value="' + defEnd   + '">';
+    }
+    h += '</div>';
+    document.getElementById('dayHoursContainer').innerHTML = h;
+  }
+
   // ── Scheduling helpers ─────────────────────────────────
   function shuffle(a) {
     var b = a.slice();
@@ -442,7 +532,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
   }
 
   function buildRounds(pairs) {
-    var rounds = [], remaining = shuffle(pairs.slice());
+    var rounds = [], remaining = pairs.slice();
     while (remaining.length > 0) {
       var round = [], used = {}, leftover = [];
       remaining.forEach(function (p) {
@@ -465,6 +555,54 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var m = teamName.match(/^(.+?)\s*\([^)]+\)\s*$/);
     return (m ? m[1] : teamName).trim().toUpperCase();
   }
+
+  // ── Fixed time-slot helpers ────────────────────────────
+  // Returns valid game start times (minutes) at 90-min intervals, skipping lunch.
+  // `et` is the latest ALLOWED start time (inclusive). Each slot occupies 90 min.
+  function buildTimeSlots(st, et, lSm, lEm) {
+    var slots = [], t = st;
+    while (t <= et) {
+      // Skip any slot whose 90-min window overlaps the lunch break.
+      if (t < lEm && t + 90 > lSm) { t = lEm; continue; }
+      slots.push(t);
+      t += 90;
+    }
+    return slots;
+  }
+
+  // ── Venue-priority helpers ─────────────────────────────
+  // Boys U16/U18 → Blanes only  (hard constraint)
+  // Girls U18    → Blanes first  (soft priority 1)
+  // Girls U16    → Blanes second (soft priority 2)
+  // All others   → non-Blanes first (leave Blanes for priority divs)
+  function getVenuePriority(divName) {
+    var n = divName.toUpperCase();
+    var isGirls = /GIRL|WOMEN/.test(n);
+    var u18 = n.indexOf('18') !== -1, u16 = n.indexOf('16') !== -1;
+    if (!isGirls && u18) return 'blanes-only';
+    if (!isGirls && u16) return 'blanes-only';
+    if (isGirls  && u18) return 'blanes-pref-1';
+    if (isGirls  && u16) return 'blanes-pref-2';
+    return 'any';
+  }
+  function venueTierNum(divName) {
+    var p = getVenuePriority(divName);
+    return p === 'blanes-only' ? 0 : p === 'blanes-pref-1' ? 1 : p === 'blanes-pref-2' ? 2 : 3;
+  }
+  function isBlanesCourt(crt) {
+    return (crt.loc || '').toLowerCase().indexOf('blanes') !== -1;
+  }
+  // Returns court indices in the preferred order for a given division.
+  // Pass overridePref to substitute a different priority (e.g. when a rule is toggled off).
+  function courtPriorityOrder(divName, crts, overridePref) {
+    var prio = (overridePref !== undefined) ? overridePref : getVenuePriority(divName);
+    var bIdx = [], oIdx = [];
+    crts.forEach(function(c, i) { (isBlanesCourt(c) ? bIdx : oIdx).push(i); });
+    if (prio === 'blanes-only')   return bIdx;
+    if (prio === 'blanes-pref-1' || prio === 'blanes-pref-2') return bIdx.concat(oIdx);
+    return oIdx.concat(bIdx); // 'any': prefer non-Blanes to keep Blanes free
+  }
+
 
   // ── Groups editor ───────────────────────────────────
   function optimalChunkSize(n) {
@@ -570,88 +708,6 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       renderGroups();
     }
   });
-
-  // placeGames now returns an object containing placed games plus any matchups that couldn't
-  // fit in the given day. When `spill` is true leftover matchups are carried forward instead of
-  // being force–scheduled past the day end. teamSchedule is shared across multiple calls so we
-  // continue tracking teams' occupied times.
-  function placeGames(matchups, gDur, slot, lSm, lEm, dayEnd, ct, crts, teamSchedule, spill, dayCounts) {
-    console.log('placeGames: incoming ct sample=', (ct||[]).slice(0,6), 'gDur=', gDur, 'slot=', slot, 'lSm=', lSm, 'lEm=', lEm, 'dayEnd=', dayEnd, 'spill=', spill);
-    var gs = [];
-    var leftover = [];
-    teamSchedule = teamSchedule || {};
-    dayCounts = dayCounts || {};
-    matchups.forEach(function (m) {
-      var bestSlot = null;
-      var bestCourt = 0;
-      
-      for (var courtIdx = 0; courtIdx < crts.length; courtIdx++) {
-        var candidateTime = ct[courtIdx];
-        // skip courts that can't host a full game before day end
-        if (candidateTime + gDur > dayEnd) continue;
-        if (candidateTime < lEm && candidateTime + gDur > lSm) {
-          candidateTime = lEm;
-        }
-
-        // enforce at most two games per team per day
-        var t1count = dayCounts[m.t1] || 0;
-        var t2count = dayCounts[m.t2] || 0;
-        if (t1count >= 2 || t2count >= 2) continue;
-        
-        var t1Busy = teamSchedule[m.t1] || [];
-        var t2Busy = teamSchedule[m.t2] || [];
-        var minGapMins = 120;
-        var conflict = false;
-        
-        for (var i = 0; i < t1Busy.length; i++) {
-          var existingEnd = t1Busy[i].endTime;
-          if (Math.abs(candidateTime - existingEnd) < minGapMins) {
-            conflict = true;
-            break;
-          }
-        }
-        for (var i = 0; i < t2Busy.length; i++) {
-          var existingEnd = t2Busy[i].endTime;
-          if (Math.abs(candidateTime - existingEnd) < minGapMins) {
-            conflict = true;
-            break;
-          }
-        }
-        
-        if (!conflict && (!bestSlot || candidateTime < bestSlot)) {
-          bestSlot = candidateTime;
-          bestCourt = courtIdx;
-        }
-      }
-      
-      if (bestSlot === null) {
-        if (spill) {
-          // leave this matchup for the next day
-          leftover.push(m);
-          return;
-        } else {
-          bestSlot = Math.max(dayEnd - gDur, 0);
-          scheduleWarnings.push('Could not place ' + (m.t1 || '') + ' vs ' + (m.t2 || '') + ' before day end; forced to ' + toT(bestSlot));
-        }
-      }
-      
-      var endTime = bestSlot + gDur;
-      gs.push({ time: toT(bestSlot), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl || null, bracket: m.bracket || null, court: crts[bestCourt].court, score1: null, score2: null, locked: false });
-      
-      if (!teamSchedule[m.t1]) teamSchedule[m.t1] = [];
-      if (!teamSchedule[m.t2]) teamSchedule[m.t2] = [];
-      teamSchedule[m.t1].push({ time: toT(bestSlot), endTime: endTime, opponent: m.t2 });
-      teamSchedule[m.t2].push({ time: toT(bestSlot), endTime: endTime, opponent: m.t1 });
-      
-      // increment today's count for each team
-      dayCounts[m.t1] = (dayCounts[m.t1] || 0) + 1;
-      dayCounts[m.t2] = (dayCounts[m.t2] || 0) + 1;
-      
-      ct[bestCourt] = endTime + slot;
-      if (ct[bestCourt] + gDur > dayEnd) ct[bestCourt] = 1e9;
-    });
-    return { games: gs, leftover: leftover };
-  }
 
   // ── Bracket game definitions ────────────────────────────
   // Returns an array of {t1, t2, lbl, bracket} for the finals day.
@@ -787,27 +843,38 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
   // getAlgorithmSummary() describes the scheduler in plain language for organisers.
   // UPDATE THIS FUNCTION whenever the scheduling algorithm changes.
   function getAlgorithmSummary() {
-    var gDur   = parseInt(document.getElementById('gDur').value)  || 20;
-    var bDur   = parseInt(document.getElementById('bDur').value)  || 5;
-    var sTime  = document.getElementById('sTime').value || '09:00';
-    var eTime  = document.getElementById('eTime').value || '20:00';
     var lS     = document.getElementById('lS').value   || '13:30';
     var lE     = document.getElementById('lE').value   || '14:30';
     var nDays  = parseInt(document.getElementById('nDays').value) || 3;
     var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
     var crts   = getCourts();
     var rrDays = Math.max(1, nDays - 1);
+    var dayHours = getDayHours();
 
     var pills = [
-      'Game duration: ' + gDur + ' min',
-      'Break between games: ' + bDur + ' min',
-      'Day: ' + sTime + '\u2013' + eTime,
+      'Slot interval: 90 min',
       'Lunch: ' + lS + '\u2013' + lE,
       'Tournament days: ' + nDays,
       'Round-robin days: ' + rrDays,
       'Max games / team / day: ' + maxGPD,
       'Available courts: ' + crts.length
     ].map(function(t){ return '<span class="algo-pill">' + t + '</span>'; }).join('');
+
+    // Build per-day slot pills (show regular day + final day if they differ)
+    var regularSlots = buildTimeSlots(
+      toM(dayHours[0].start), toM(dayHours[0].end), toM(lS), toM(lE)
+    ).map(function(m) { return toT(m); });
+    var finalHours = dayHours[dayHours.length - 1];
+    var finalSlots = buildTimeSlots(
+      toM(finalHours.start), toM(finalHours.end), toM(lS), toM(lE)
+    ).map(function(m) { return toT(m); });
+    var slotsMatch = regularSlots.join() === finalSlots.join();
+
+    var slotHtml = regularSlots.map(function(s){ return '<span class="algo-pill">' + s + '</span>'; }).join('');
+    var finalSlotHtml = slotsMatch ? '' :
+      '<p style="margin-top:8px;font-size:11px;color:var(--g)"><strong style="color:var(--ol)">Final day (' + finalHours.start + '\u2013' + finalHours.end + '):</strong> '
+      + finalSlots.map(function(s){ return '<span class="algo-pill">' + s + '</span>'; }).join(' ')
+      + '</p>';
 
     return '<div class="algo-config">' + pills + '</div>'
 
@@ -822,28 +889,46 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       + 'Games are distributed to keep each team\'s workload as even as possible across the tournament. '
       + 'If there are too many games to fit within this limit, a red warning will appear after you generate the schedule.</p></div>'
 
+      + '<div class="algo-section"><h4>Fixed Time Slots &amp; Operating Hours</h4>'
+      + '<p>The tournament uses a <strong>90-minute interval system</strong>. '
+      + 'Operating hours are <strong>' + dayHours[0].start + '\u2013' + dayHours[0].end + '</strong> for regular days'
+      + (slotsMatch ? '.' : ', except for the <strong>final day which ends at ' + finalHours.end + '</strong> to accommodate finals and ceremonies.')
+      + ' Every game starts at one of these fixed slots:</p>'
+      + '<div class="algo-config" style="margin-bottom:0">' + slotHtml + '</div>'
+      + finalSlotHtml
+      + '<p style="margin-top:8px">No game can start outside these times. The lunch break ('
+      + lS + '\u2013' + lE + ') is automatically skipped — any slot that falls in the lunch window is moved to ' + lE + '.</p></div>'
+
       + '<div class="algo-section"><h4>How Courts &amp; Times Are Assigned</h4>'
-      + '<p>Once games are allocated to days, each game is given a specific court and start time:</p><ul>'
-      + '<li>Games start filling courts from <strong>' + sTime + '</strong> — each game is placed on the earliest available court.</li>'
-      + '<li>A team always has a minimum of <strong>50 minutes between the start of their games</strong>, ensuring they never play two matches in a row. Where court availability allows, the scheduler aims for a <strong>90-minute gap</strong> for extra recovery time.</li>'
-      + '<li>No games are placed during the lunch break (<strong>' + lS + '\u2013' + lE + '</strong>). Any game that would overlap is automatically pushed to after ' + lE + '.</li>'
-      + '<li>All games must finish by <strong>' + eTime + '</strong>.</li>'
-      + '<li><strong>Club staff consideration:</strong> if two teams from the same club appear in different age groups (e.g. SURREY RAMS in Boys U14 and Boys U16), the scheduler tries to avoid scheduling them at the same time so coaching staff are not needed on two courts simultaneously. '
-      + 'If this is unavoidable, an amber notice will appear listing the affected clubs.</li>'
+      + '<p>Each game is placed in the earliest available slot that meets all constraints:</p><ul>'
+      + '<li><strong>Team rest (hard):</strong> a team must always skip at least one full slot between their games — so a team playing at 09:00 cannot play again until 12:00. This guarantees <strong>90 minutes minimum</strong> between the start of any two games for the same team.</li>'
+      + '<li><strong>Venue priority (see below):</strong> courts are offered in priority order for each division.</li>'
+      + '<li><strong>Club staff consideration:</strong> if two teams from the same club appear in different age groups (e.g. SURREY RAMS in Boys U14 and Boys U16), the scheduler tries to avoid scheduling them in the same slot. If unavoidable, an amber notice will appear.</li>'
+      + '<li>Each day\'s games must finish by its own <strong>last game start</strong> time.</li>'
       + '</ul></div>'
 
-      + '<div class="algo-section"><h4>Playoffs &amp; Finals (Day ' + nDays + ')</h4>'
-      + '<p>The last day is dedicated to knockout games. Semi-finals are scheduled first, '
-      + 'right after any morning round-robin games wrap up. '
-      + 'Finals and 3rd-place games are then placed with a <strong>minimum 90-minute gap</strong> after the last semi-final — '
-      + 'giving teams time to recover and prepare. '
-      + 'Playoff slots show placeholder names (e.g. <em>"1st Group A"</em>) until all round-robin results are entered. '
-      + 'They fill in automatically once every group\'s games are fully scored.</p></div>'
+      + '<div class="algo-section"><h4>Venue Priority Rules (Blanes)</h4><ul>'
+      + '<li><strong>Boys U18 / Boys U16 — exclusive Blanes access (hard rule):</strong> these divisions are always placed in the Blanes venue. If Blanes runs out of capacity, a red warning appears — their games will not be moved to another venue.</li>'
+      + '<li><strong>Girls U18 — highest priority for remaining Blanes slots:</strong> after Boys U18/U16 are placed, Girls U18 games fill Blanes courts first before any other division can use them.</li>'
+      + '<li><strong>Girls U16 — second priority for Blanes:</strong> Girls U16 take the next available Blanes slots after Girls U18 are satisfied.</li>'
+      + '<li><strong>All other divisions (U14, U12 Mix):</strong> scheduled in non-Blanes venues first, only using Blanes courts if all other venues are full.</li>'
+      + '</ul></div>'
+
+      + '<div class="algo-section"><h4>Playoffs &amp; Finals</h4>'
+      + '<p>Playoff games (Semi-finals, Finals, 3rd Place) are normally placed on the <strong>last day</strong> of the tournament. '
+      + 'However, if a division completes all its round-robin games before the last day <em>and</em> there are enough remaining slots on that earlier day, '
+      + 'the scheduler will move that division\'s entire playoff bracket to the earlier day — '
+      + 'keeping the last day free for divisions that still need it. '
+      + 'Finals and 3rd-place games always start at least <strong>90 minutes after the last semi-final ends</strong>. '
+      + 'Venue priority rules apply to playoff games too. '
+      + 'Playoff team slots show placeholders (e.g. <em>"1st Group A"</em>) until all round-robin results are scored — they fill in automatically.</p></div>'
 
       + '<div class="algo-section"><h4>What the Scheduler Always Guarantees</h4><ul>'
       + '<li>\u2705 No team is ever scheduled on two courts at the same time.</li>'
-      + '<li>\u2705 Every team has at least 50 minutes of recovery time between their games each day (90 minutes preferred).</li>'
-      + '<li>\u2705 No games run past <strong>' + eTime + '</strong>.</li>'
+      + '<li>\u2705 Every team has at least 90 minutes of recovery time between their games each day.</li>'
+      + '<li>\u2705 Boys U18/U16 have exclusive access to Blanes courts.</li>'
+      + '<li>\u2705 Girls U18/U16 are prioritised for Blanes, with U18 receiving higher precedence over U16.</li>'
+      + '<li>\u2705 Each day\'s games respect that day\'s own operating hours (final day ends at <strong>' + finalHours.end + '</strong>).</li>'
       + '<li>\u2705 No games are placed during lunch (<strong>' + lS + '\u2013' + lE + '</strong>).</li>'
       + '<li>\u2705 Finals always start at least 90 minutes after the semi-finals end.</li>'
       + '<li>\u26A0\uFE0F Same-club time overlaps are avoided where possible — if unavoidable, an amber notice is shown so you can inform the club.</li>'
@@ -868,14 +953,12 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var crts = getCourts();
     if (!crts.length) { alert('Please add at least 1 venue!'); return; }
 
-    var gDur  = parseInt(document.getElementById('gDur').value)  || 20;
-    var bDur  = parseInt(document.getElementById('bDur').value)  || 5;
-    var slot  = gDur + bDur;
-    var lSm   = toM(document.getElementById('lS').value   || '13:30');
-    var lEm   = toM(document.getElementById('lE').value   || '14:30');
-    var st    = toM(document.getElementById('sTime').value || '09:00');
-    var et    = toM(document.getElementById('eTime').value || '20:00');
-    scheduleWarnings = [];
+    var lSm      = toM(document.getElementById('lS').value || '13:30');
+    var lEm      = toM(document.getElementById('lE').value || '14:30');
+    var dayHours = getDayHours();
+    var rules    = getRuleToggles();
+    scheduleWarnings  = [];
+    unscheduledGames  = [];
     var nDays = parseInt(document.getElementById('nDays').value);
     // All nDays are available for round-robin assignment.
     // The finals/bracket are placed on top of whatever courts are still free on
@@ -883,6 +966,11 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     var rrDays = Math.max(1, nDays);
 
     var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
+
+    // Per-day time-slot arrays — built once here, used by Phase 2, 3, and 4.
+    var dayTimeSlots = dayHours.map(function(h) {
+      return buildTimeSlots(toM(h.start), toM(h.end), lSm, lEm);
+    });
 
     // ── PHASE 1: Build rounds per group ────────────────────────────────────
     // A "round" is a set of games where no team appears more than once.
@@ -913,7 +1001,15 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     // Keys are "DivisionName\x00TeamName" so the same club playing in multiple
     // age divisions (e.g. Surrey Rams U14 vs Surrey Rams U18) are treated as
     // independent entities and don't consume each other's maxGPD budget.
+    // Reserve last-day court-slots for playoff games (Phase 4 places them after Phase 2).
+    var totalPlayoffGames = divisions.reduce(function(sum, div) {
+      return sum + getBracketGames(div).length;
+    }, 0);
+    var lastDaySlotCount = dayTimeSlots[dayTimeSlots.length - 1].length;
+    var lastDayRRCap = Math.max(0, lastDaySlotCount * crts.length - totalPlayoffGames);
+
     var teamDayCount = {};
+    var dayGameCount = []; for (var _i = 0; _i < rrDays; _i++) dayGameCount[_i] = 0; // total RR games assigned per day
     groupRounds.forEach(function(round) {
       for (var d = 0; d < rrDays; d++) {
         var ok = true;
@@ -923,8 +1019,18 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
           if (((teamDayCount[k1] || {})[d] || 0) >= maxGPD) ok = false;
           if (((teamDayCount[k2] || {})[d] || 0) >= maxGPD) ok = false;
         }
+        // Court-capacity cap: can't schedule more games than courts×slots can hold.
+        // Last day reserves room for playoff games (Phase 4).
+        if (ok) {
+          var capIdx = Math.min(d, dayTimeSlots.length - 1);
+          var dayCapLimit = (d === rrDays - 1 && rrDays >= 2)
+            ? lastDayRRCap
+            : dayTimeSlots[capIdx].length * crts.length;
+          if (dayGameCount[d] + round.games.length > dayCapLimit) ok = false;
+        }
         if (ok) {
           round.day = d;
+          dayGameCount[d] += round.games.length;
           round.games.forEach(function(g) {
             var k1 = round.name + '\x00' + g.t1, k2 = round.name + '\x00' + g.t2;
             teamDayCount[k1] = teamDayCount[k1] || {};
@@ -937,37 +1043,39 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       }
       if (round.day === -1) {
         round.games.forEach(function(g) {
-          scheduleWarnings.push('UNSCHEDULED: ' + g.t1 + ' vs ' + g.t2
-            + ' \u2014 no available day within ' + rrDays + ' round-robin day(s).'
-            + ' Add more tournament days or increase max games per day.');
+          unscheduledGames.push({
+            div: round.name, group: round.group, t1: g.t1, t2: g.t2, lbl: null,
+            reason: 'No available day within ' + rrDays + ' round-robin day(s). '
+              + 'Add more tournament days or increase max games per day.'
+          });
         });
       }
     });
 
-    // ── PHASE 3: Pack games onto courts within each day ─────────────────────
-    // Priority order (high → low):
-    //   1. Minimise days used & maximise court utilisation  (handled by Phase 2 + greedy courts)
-    //   2. Maximise team rest within each day
-    //
-    // To maximise rest without sacrificing court utilisation:
-    //   Split the day's games into two batches before placement.
-    //   Batch A — games where NEITHER team has played today yet (place early).
-    //   Batch B — games where at least one team has already played today (place late).
-    //   Because Batch B starts after Batch A fills the courts, a team's second
-    //   game lands as late in the day as court density allows — maximum rest.
-    //   Rest is measured between game START times:
-    //     minRest (50 min, hard)  — a team never plays two games in a row.
-    //     prefRest (90 min, soft) — preferred gap; used if a qualifying court exists.
+    // ── PHASE 3: Pack games onto courts within each day (slot-based) ──────────
+    // Games start on fixed 90-minute intervals derived from the daily schedule.
+    // Hard constraint: a team must skip at least one full slot (90 min) between games.
+    // Venue constraints:
+    //   Boys U16/U18  → Blanes courts only (hard — capacity warning if full).
+    //   Girls U18     → Blanes courts first, others as fallback.
+    //   Girls U16     → Blanes courts second priority, others as fallback.
+    //   All others    → non-Blanes first, Blanes only if non-Blanes is full.
+    // Club-conflict (soft): avoid scheduling same-club teams simultaneously; if
+    //   unavoidable, the game is still placed and an amber warning is shown.
+    // Within each day, games are sorted by venue-priority tier so Blanes-only
+    // divisions claim their courts before lower-priority divisions.
+
     var gamesPlaced = [];
-    var minRest  = 50; // hard: new game start must be ≥50 min after previous game start
-    var prefRest = 90; // soft: prefer ≥90 min between starts if a free court allows it
-    // ct2 starts as day-start on every court; if RR overflows to the last day,
-    // Phase 3 updates ct2 to the actual court-free time so bracket games
-    // are placed AFTER any morning RR games (no court conflict).
-    var ct2 = crts.map(function() { return st; });
+    // dayCourtSlotUsed[day][courtIdx][slotIdx] = true — used by Phase 4
+    var dayCourtSlotUsed = {};
+    // divDayLastSlot[divName][day] = last slot index used by this division that day
+    var divDayLastSlot  = {};
+
     for (var d = 0; d < rrDays; d++) {
+      // Use this day's specific time slots (day's own first/last game start).
+      var timeSlots = dayTimeSlots[Math.min(d, dayTimeSlots.length - 1)];
       var seenToday = {};
-      var batchA = [], batchB = []; // A = first game for both teams, B = repeat for ≥1 team
+      var batchA = [], batchB = [];
       groupRounds.forEach(function(r) {
         if (r.day !== d) return;
         r.games.forEach(function(g) {
@@ -977,109 +1085,147 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
             batchB.push(obj);
           } else {
             batchA.push(obj);
-            seenToday[sk1] = true;
-            seenToday[sk2] = true;
+            seenToday[sk1] = true; seenToday[sk2] = true;
           }
         });
       });
-      // Shuffle within each batch for variety, then place A then B
-      var dayGames = shuffle(batchA).concat(shuffle(batchB));
+      // Sort deterministically: venue tier first (Blanes-only claims courts first),
+      // then division name → group label → team pair — so identical inputs always
+      // produce identical output with no random variance.
+      var byKey = function(a, b) {
+        var d = venueTierNum(a.name) - venueTierNum(b.name);
+        if (d) return d;
+        if (a.name  < b.name)  return -1; if (a.name  > b.name)  return 1;
+        if (a.group < b.group) return -1; if (a.group > b.group) return 1;
+        if (a.t1 < b.t1) return -1; if (a.t1 > b.t1) return 1;
+        return a.t2 < b.t2 ? -1 : a.t2 > b.t2 ? 1 : 0;
+      };
+      var dayGames = batchA.sort(byKey).concat(batchB.sort(byKey));
 
-      var ct = crts.map(function() { return st; }); // next free minute per court
-      // keyed as "DivisionName\x00TeamName" — stores START time of last game.
-      // Measured from START so minRest/prefRest directly represent gap between starts.
-      var teamLastStart = {};
-      // club name → [{start, end}] for same-day cross-division overlap detection
+      // Per-court slot occupancy for this day: courtSlotUsed[ci][si] = true
+      var courtSlotUsed = crts.map(function() { return {}; });
+      // Per-team last slot index (namespaced by division to avoid cross-div collisions)
+      var teamLastSlotIdx = {};
+      // Club schedule for cross-division overlap detection (time-based)
       var clubDaySchedule = {};
 
       dayGames.forEach(function(game) {
         var lk1 = game.name + '\x00' + game.t1, lk2 = game.name + '\x00' + game.t2;
         var club1 = extractClub(game.t1), club2 = extractClub(game.t2);
-        // Three tiers (best → worst):
-        //   pref  — ≥90 min gap from last start (soft) + no club conflict
-        //   best  — ≥50 min gap from last start (hard) + no club conflict
-        //   fallback — ≥50 min gap (hard), club conflict ignored
-        var prefCourt = -1, prefTime = Infinity;
-        var bestCourt = -1, bestTime = Infinity;
-        var fallbackCourt = -1, fallbackTime = Infinity;
-        for (var ci = 0; ci < crts.length; ci++) {
-          var t = ct[ci];
-          // Hard constraint: next start must be ≥50 min after each team's last start
-          t = Math.max(t,
-            (teamLastStart[lk1] || 0) + minRest,
-            (teamLastStart[lk2] || 0) + minRest);
-          // Skip over lunch break
-          if (t < lEm && t + gDur > lSm) t = lEm;
-          // Must finish before day end
-          if (t + gDur > et) continue;
-          // Track hard-constraint-only best (fallback ignoring club conflicts)
-          if (t < fallbackTime) { fallbackTime = t; fallbackCourt = ci; }
-          // Soft preference: both teams start ≥90 min after their last game
-          var isPref = (!teamLastStart[lk1] || t >= teamLastStart[lk1] + prefRest)
-                    && (!teamLastStart[lk2] || t >= teamLastStart[lk2] + prefRest);
-          // Check for club overlap
-          var tEnd = t + gDur;
-          var clubConflict = false;
-          [club1, club2].forEach(function(club) {
-            if (!club || clubConflict) return;
-            (clubDaySchedule[club] || []).forEach(function(busy) {
-              if (t < busy.end && tEnd > busy.start) clubConflict = true;
-            });
-          });
-          if (!clubConflict) {
-            if (isPref && t < prefTime) { prefTime = t; prefCourt = ci; }
-            if (t < bestTime)           { bestTime = t; bestCourt = ci; }
+
+        // ── Venue constraint (rule-aware) ────────────────────────────
+        var venuePref        = getVenuePriority(game.name);
+        var wasBlanesMandatory = (venuePref === 'blanes-only');
+        // When Blanes rule is OFF, downgrade hard requirement to strong preference
+        var effectivePref    = (!rules.blanes && wasBlanesMandatory) ? 'blanes-pref-1' : venuePref;
+        var isBlanesOnly     = (effectivePref === 'blanes-only'); // false when rule is off
+        var orderedCi        = courtPriorityOrder(game.name, crts, effectivePref);
+
+        var bestPlacement     = null; // conflict-free (or club-rule-off) slot
+        var fallbackPlacement = null; // club-conflict fallback (only used when rule is ON)
+
+        outer: for (var si = 0; si < timeSlots.length; si++) {
+          // ── Team conflict & rest constraint ────────────────────────
+          // minGap=1: same slot always blocked (two games at once is impossible).
+          // minGap=2: back-to-back slot also blocked (90-min rest rule).
+          var last1 = teamLastSlotIdx[lk1], last2 = teamLastSlotIdx[lk2];
+          var minGap = rules.rest ? 2 : 1;
+          if (last1 !== undefined && si < last1 + minGap) continue;
+          if (last2 !== undefined && si < last2 + minGap) continue;
+
+          var t = timeSlots[si], tEnd = t + 90;
+          for (var cci = 0; cci < orderedCi.length; cci++) {
+            var ci = orderedCi[cci];
+            if (courtSlotUsed[ci][si]) continue; // court busy
+            // ── Club overlap constraint (rule-aware) ─────────────────
+            var clubConflict = false;
+            if (rules.club) {
+              [club1, club2].forEach(function(club) {
+                if (!club || clubConflict) return;
+                (clubDaySchedule[club] || []).forEach(function(busy) {
+                  if (t < busy.end && tEnd > busy.start) clubConflict = true;
+                });
+              });
+            }
+            if (!clubConflict) { bestPlacement = { si: si, ci: ci }; break outer; }
+            if (!fallbackPlacement) fallbackPlacement = { si: si, ci: ci };
           }
         }
-        // Resolve: use best available tier
-        var chosenCourt, chosenTime;
-        if      (prefCourt     !== -1) { chosenCourt = prefCourt;     chosenTime = prefTime; }
-        else if (bestCourt     !== -1) { chosenCourt = bestCourt;     chosenTime = bestTime; }
-        else if (fallbackCourt !== -1) {
+
+        // ── Resolve placement ─────────────────────────────────────────
+        var chosen = bestPlacement;
+        if (!chosen && fallbackPlacement) {
+          // Only reachable when rules.club is ON (otherwise clubConflict is never true)
           scheduleWarnings.push('CLUB CONFLICT: ' + game.t1 + ' vs ' + game.t2
             + ' (Day ' + (d + 1) + ') \u2014 same-club staff overlap unavoidable.');
-          chosenCourt = fallbackCourt; chosenTime = fallbackTime;
-        } else {
-          scheduleWarnings.push('UNSCHEDULED: ' + game.t1 + ' vs ' + game.t2
-            + ' \u2014 no court time left on day ' + (d + 1)
-            + '. Add more courts or extend daily hours.');
+          chosen = fallbackPlacement;
+        }
+        if (!chosen) {
+          unscheduledGames.push({
+            div: game.name, group: game.group, t1: game.t1, t2: game.t2, lbl: null,
+            reason: isBlanesOnly
+              ? 'Blanes courts at capacity on Day ' + (d + 1) + '. This division can only use Blanes \u2014 add Blanes courts or move games to another day.'
+              : 'No available slot on Day ' + (d + 1) + '. Add more courts or extend that day\'s operating hours.'
+          });
           return;
         }
+
+        // ── Amber warnings for relaxed rules ─────────────────────────
+        var chosenTime = timeSlots[chosen.si];
+        // Warn if Blanes mandate was relaxed and the chosen court is non-Blanes
+        if (wasBlanesMandatory && !rules.blanes && !isBlanesCourt(crts[chosen.ci])) {
+          scheduleWarnings.push('VENUE RELAXED: ' + game.name + ' \u2014 '
+            + game.t1 + ' vs ' + game.t2 + ' placed at non-Blanes court on Day ' + (d + 1)
+            + ' (Blanes exclusivity rule is OFF).');
+        }
+        // Warn if back-to-back slots were allowed because rest rule is OFF
+        if (!rules.rest) {
+          var prevSi1 = teamLastSlotIdx[lk1], prevSi2 = teamLastSlotIdx[lk2];
+          if ((prevSi1 !== undefined && chosen.si < prevSi1 + 2) ||
+              (prevSi2 !== undefined && chosen.si < prevSi2 + 2)) {
+            scheduleWarnings.push('REST RELAXED: ' + game.t1 + ' vs ' + game.t2
+              + ' (Day ' + (d + 1) + ') \u2014 back-to-back slots allowed (90-min rest rule is OFF).');
+          }
+        }
+
         gamesPlaced.push({
-          day: d, time: chosenTime, court: crts[chosenCourt].court,
+          day: d, slotIdx: chosen.si, time: chosenTime,
+          court: crts[chosen.ci].court, courtIdx: chosen.ci,
           t1: game.t1, t2: game.t2, name: game.name, color: game.color, group: game.group
         });
-        ct[chosenCourt] = chosenTime + slot;
-        teamLastStart[lk1] = chosenTime;
-        teamLastStart[lk2] = chosenTime;
-        // Update club schedule so subsequent games can detect overlaps
-        var placed = { start: chosenTime, end: chosenTime + gDur };
+        courtSlotUsed[chosen.ci][chosen.si] = true;
+        teamLastSlotIdx[lk1] = chosen.si;
+        teamLastSlotIdx[lk2] = chosen.si;
+        var placed = { start: chosenTime, end: chosenTime + 90 };
         if (club1) { if (!clubDaySchedule[club1]) clubDaySchedule[club1] = []; clubDaySchedule[club1].push(placed); }
         if (club2) { if (!clubDaySchedule[club2]) clubDaySchedule[club2] = []; clubDaySchedule[club2].push(placed); }
+        // Track per-division last slot on this day (for early-playoff feasibility in Phase 4)
+        if (!divDayLastSlot[game.name]) divDayLastSlot[game.name] = {};
+        if (divDayLastSlot[game.name][d] === undefined || chosen.si > divDayLastSlot[game.name][d]) {
+          divDayLastSlot[game.name][d] = chosen.si;
+        }
       });
 
-      // On the last day, capture court availability so bracket games don't
-      // overlap with any morning RR overflow games on the same day.
-      if (d === nDays - 1) ct2 = ct.slice();
+      // Save this day's slot occupancy so Phase 4 can place playoffs without collisions.
+      dayCourtSlotUsed[d] = courtSlotUsed;
     }
 
-    // now convert gamesPlaced into gameDays grouped by day and division
-    // lastDayEntry is captured so Phase 4 can inject playoff games directly into it.
+    // now convert gamesPlaced into gameDays grouped by day and division.
+    // Each entry gets a dayIndex so Phase 4 can locate it by day number.
     var gameDays = [];
     var lastDayEntry = null;
     for (var d = 0; d < rrDays; d++) {
       var isLastDay = (d === nDays - 1);
-      var dayGames = gamesPlaced.filter(function(g){ return g.day === d; });
-      if (!dayGames.length) {
+      var dayGameList = gamesPlaced.filter(function(g){ return g.day === d; });
+      if (!dayGameList.length) {
         if (isLastDay) {
-          // No RR overflow on last day — create an entry so playoffs have somewhere to land
-          lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [] };
+          lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [], dayIndex: d };
           gameDays.push(lastDayEntry);
         }
         continue;
       }
       var byDiv = {};
-      dayGames.forEach(function(g){
+      dayGameList.forEach(function(g){
         if (!byDiv[g.name]) byDiv[g.name] = { name: g.name, color: g.color, groups: {} };
         var divEntry = byDiv[g.name];
         if (!divEntry.groups[g.group]) divEntry.groups[g.group] = { group:g.group, games: [] };
@@ -1089,78 +1235,157 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       var dayLabel = isLastDay
         ? ('Day ' + nDays + ' \u2014 Round Robin & Playoffs')
         : ('Day ' + (d + 1) + ' \u2014 Round Robin');
-      var dayEntry = { label: dayLabel, divs: divs };
+      var dayEntry = { label: dayLabel, divs: divs, dayIndex: d };
       if (isLastDay) lastDayEntry = dayEntry;
       gameDays.push(dayEntry);
     }
     if (!lastDayEntry) {
-      lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [] };
+      lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [], dayIndex: nDays - 1 };
       gameDays.push(lastDayEntry);
     }
 
-    // ── Phase 4: Schedule playoff games on last day ──────────────────────────
-    // Early games: SFs and placement games — no prerequisite, placed as soon as
-    //              courts are free (after any morning RR overflow).
-    // Late games:  FINAL and '3rd Place' — forced to start ≥90 min after the
-    //              last SF of the same bracket category finishes.
-    // Games are injected directly into lastDayEntry so the Schedule tab renders
-    // them alongside RR games with real time/court values.
+    // ── Phase 4: Schedule playoff games ──────────────────────────────────────
+    // For each division, check whether an "early playoff" is feasible:
+    //   - All RR games finish before the last day  (divLastRRDay < nDays-1)
+    //   - There are enough remaining slots on that day for all playoff games
+    // If feasible, SFs + Finals all go on divLastRRDay; otherwise last day.
+    // SFs are placed first; Finals/3rd-Place must start ≥90 min after last SF ends.
+    // Court selection respects venue priority (Blanes rules apply to playoffs too).
+
     var LATE_LBLS = { 'FINAL': 1, '3rd Place': 1 };
     var PO_GK = function(n) { return n + ' \u2014 Playoffs'; };
 
     divisions.forEach(function(div) {
       var matchups = getBracketGames(div);
+      if (!matchups.length) return;
       var earlyM = matchups.filter(function(m) { return !LATE_LBLS[m.lbl]; });
       var lateM  = matchups.filter(function(m) { return  LATE_LBLS[m.lbl]; });
-      var sfEnd  = {}; // bracket -> minute when last early game for that bracket ends
+      var sfLastSi = {}; // bracket → slot index of last SF placed
 
-      var placePlayoff = function(m, minStart) {
-        var bestCi = 0;
-        for (var ci = 1; ci < crts.length; ci++) { if (ct2[ci] < ct2[bestCi]) bestCi = ci; }
-        var t = Math.max(ct2[bestCi], minStart || 0);
-        if (t < lEm && t + gDur > lSm) t = lEm;
-        if (t + gDur > et) {
-          scheduleWarnings.push('UNSCHEDULED: ' + m.lbl + ' (' + div.name
-            + ') \u2014 overflowed finals day. Extend daily hours or add courts.');
+      // ── Phase 4 venue constraint (rule-aware) ─────────────
+      var venuePref4         = getVenuePriority(div.name);
+      var wasBlanesMandatory4 = (venuePref4 === 'blanes-only');
+      var effectivePref4     = (!rules.blanes && wasBlanesMandatory4) ? 'blanes-pref-1' : venuePref4;
+      var isBlanesOnly       = (effectivePref4 === 'blanes-only');
+      var courtOrder         = courtPriorityOrder(div.name, crts, effectivePref4);
+
+      // Determine which day to host playoffs for this division.
+      var divLastRRDay = undefined;
+      Object.keys(divDayLastSlot[div.name] || {}).forEach(function(dd) {
+        dd = parseInt(dd);
+        if (divLastRRDay === undefined || dd > divLastRRDay) divLastRRDay = dd;
+      });
+
+      var playoffDayIdx, targetDayEntry;
+      if (divLastRRDay !== undefined && divLastRRDay < nDays - 1) {
+        // Check early-playoff feasibility on divLastRRDay.
+        var earlySlots  = dayTimeSlots[Math.min(divLastRRDay, dayTimeSlots.length - 1)];
+        var lastRRSi    = divDayLastSlot[div.name][divLastRRDay];
+        var minPOSi     = lastRRSi + 2; // 90-min rest after last RR game
+        var slotsLeft   = earlySlots.length - minPOSi;
+        var gamesNeeded = earlyM.length + lateM.length + 1; // +1 gap for SF→Final
+        var courtsAvail = courtOrder.length;
+        if (slotsLeft > 0 && slotsLeft * courtsAvail >= gamesNeeded) {
+          // Early playoff fits — reuse or update that day's entry.
+          playoffDayIdx   = divLastRRDay;
+          targetDayEntry  = gameDays.find(function(de) { return de.dayIndex === playoffDayIdx; });
+          if (targetDayEntry && targetDayEntry.label.indexOf('Playoff') === -1) {
+            targetDayEntry.label = targetDayEntry.label.replace('Round Robin', 'Round Robin & Playoffs');
+          }
+        }
+      }
+      if (!targetDayEntry) {
+        playoffDayIdx  = nDays - 1;
+        targetDayEntry = lastDayEntry;
+      }
+
+      // Time slots for the resolved playoff day.
+      var timeSlots = dayTimeSlots[Math.min(playoffDayIdx, dayTimeSlots.length - 1)];
+
+      // Ensure slot-occupancy map exists for the chosen playoff day.
+      if (!dayCourtSlotUsed[playoffDayIdx]) {
+        dayCourtSlotUsed[playoffDayIdx] = crts.map(function() { return {}; });
+      }
+      var pSlots = dayCourtSlotUsed[playoffDayIdx];
+
+      // minSi: for early playoffs, start after the RR rest gap; else slot 0.
+      var poStartSi = (playoffDayIdx < nDays - 1)
+        ? (divDayLastSlot[div.name][playoffDayIdx] + 2)
+        : 0;
+
+      var placePlayoff = function(m, minSi) {
+        var chosen = null;
+        for (var si = minSi; si < timeSlots.length && !chosen; si++) {
+          for (var cci = 0; cci < courtOrder.length && !chosen; cci++) {
+            var ci = courtOrder[cci];
+            if (!pSlots[ci][si]) chosen = { si: si, ci: ci };
+          }
+        }
+        if (!chosen) {
+          unscheduledGames.push({
+            div: div.name, group: PO_GK(div.name), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl,
+            reason: isBlanesOnly
+              ? 'Blanes courts full on playoff day. Add a Blanes court or shift to a different day.'
+              : 'No available slot on playoff day. Add courts or extend operating hours.'
+          });
           return;
         }
-        if (!LATE_LBLS[m.lbl]) sfEnd[m.bracket] = Math.max(sfEnd[m.bracket] || 0, t + gDur);
-        ct2[bestCi] = t + slot;
-        // Write into the last-day gameDays entry (the single source of truth)
-        var divEntry = lastDayEntry.divs.find(function(dx) { return dx.name === div.name; });
+        pSlots[chosen.ci][chosen.si] = true;
+        // Amber warning when Blanes mandate was relaxed and non-Blanes court was used
+        if (wasBlanesMandatory4 && !rules.blanes && !isBlanesCourt(crts[chosen.ci])) {
+          scheduleWarnings.push('VENUE RELAXED: ' + div.name + ' \u2014 playoff ['
+            + m.lbl + '] placed at non-Blanes court (Blanes exclusivity rule is OFF).');
+        }
+        if (!LATE_LBLS[m.lbl]) {
+          if (sfLastSi[m.bracket] === undefined || chosen.si > sfLastSi[m.bracket]) {
+            sfLastSi[m.bracket] = chosen.si;
+          }
+        }
+        var divEntry = targetDayEntry.divs.find(function(dx) { return dx.name === div.name; });
         if (!divEntry) {
           divEntry = { name: div.name, color: div.color, groups: {} };
-          lastDayEntry.divs.push(divEntry);
+          targetDayEntry.divs.push(divEntry);
         }
         var gk = PO_GK(div.name);
         if (!divEntry.groups[gk]) divEntry.groups[gk] = { group: gk, games: [] };
         divEntry.groups[gk].games.push({
-          time: toT(t), t1: m.t1, t2: m.t2, lbl: m.lbl, bracket: m.bracket,
-          court: crts[bestCi].court, score1: null, score2: null, locked: false
+          time: toT(timeSlots[chosen.si]), t1: m.t1, t2: m.t2, lbl: m.lbl, bracket: m.bracket,
+          court: crts[chosen.ci].court, score1: null, score2: null, locked: false
         });
       };
 
-      earlyM.forEach(function(m) { placePlayoff(m, 0); });
-      lateM.forEach(function(m)  { placePlayoff(m, (sfEnd[m.bracket] || 0) + 90); });
+      earlyM.forEach(function(m) { placePlayoff(m, poStartSi); });
+      lateM.forEach(function(m) {
+        // Final must skip at least one full slot after the last SF (pure slot-based rest).
+        var sfSi = sfLastSi[m.bracket];
+        var minFinalSi = sfSi !== undefined ? sfSi + 2 : poStartSi;
+        placePlayoff(m, minFinalSi);
+      });
     });
 
-    // bracketDays is a thin derived view over the gameDays playoff groups.
-    // The game objects are the SAME references, so edits in the Bracket tab
-    // (seedBracketFromStandings, manual typing) instantly reflect in the Schedule tab.
-    var bracketDivs = [];
-    lastDayEntry.divs.forEach(function(d) {
-      var gk = PO_GK(d.name);
-      if (d.groups && d.groups[gk]) {
-        var divDef = divisions.find(function(dv) { return dv.name === d.name; });
-        bracketDivs.push({
-          name: d.name, color: d.color,
-          teams: (divDef ? divDef.teams : []),
-          games: d.groups[gk].games  // shared reference
-        });
-      }
+    // bracketDays: merged view of all playoff game objects across ALL gameDays entries.
+    // Scanning all days handles early-playoff divisions (SFs on Day 2, Finals on Day 3).
+    // The game objects are SHARED references with gameDays, so scoring in either tab
+    // is instantly visible in both.
+    var bracketDivMap = {};
+    gameDays.forEach(function(de) {
+      de.divs.forEach(function(d) {
+        var gk = PO_GK(d.name);
+        if (d.groups && d.groups[gk]) {
+          if (!bracketDivMap[d.name]) {
+            var divDef = divisions.find(function(dv) { return dv.name === d.name; });
+            bracketDivMap[d.name] = { name: d.name, color: d.color,
+              teams: (divDef ? divDef.teams : []), games: d.groups[gk].games };
+          } else {
+            // Division split across days (early SFs + later Finals) — merge arrays.
+            bracketDivMap[d.name].games = bracketDivMap[d.name].games.concat(d.groups[gk].games);
+          }
+        }
+      });
     });
-    var bracketDays = bracketDivs.length
-      ? [{ label: lastDayEntry.label, divs: bracketDivs }]
+    var bracketDivsList = Object.keys(bracketDivMap).map(function(k) { return bracketDivMap[k]; });
+    var bracketDays = bracketDivsList.length
+      ? [{ label: lastDayEntry.label, divs: bracketDivsList }]
       : [];
 
     sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
@@ -1253,26 +1478,12 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
   function renderSched() {
     var lS = document.getElementById('lS').value || '13:30';
     var lE = document.getElementById('lE').value || '14:30';
-    var totTeams = divisions.reduce(function (s, d) { return s + d.teams.length; }, 0);
+    var totTeams = divisions.reduce(function(s, d) { return s + d.teams.length; }, 0);
     var h = '';
-    // Show critical warnings (unscheduled games) prominently; suppress minor ones.
-    var criticalWarns = scheduleWarnings.filter(function(w){ return w.indexOf('UNSCHEDULED:') === 0; });
-    var clubWarns     = scheduleWarnings.filter(function(w){ return w.indexOf('CLUB CONFLICT:') === 0; });
-    if (criticalWarns.length) {
-      h += '<div style="background:rgba(255,60,60,.15);border:1px solid rgba(255,60,60,.4);border-radius:8px;padding:14px;margin-bottom:14px">'
-        + '<div style="color:#ff8080;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">\u26a0\ufe0f Scheduling Conflict</div>'
-        + criticalWarns.map(function(w){ return '<div style="color:#ffb3b3;font-size:12px;margin-top:4px">' + w.replace('UNSCHEDULED: ', '') + '</div>'; }).join('')
-        + '</div>';
-    }
-    if (clubWarns.length) {
-      h += '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:14px;margin-bottom:14px">'
-        + '<div style="color:#fbbf24;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">\u26a0\ufe0f Club Staff Conflict</div>'
-        + '<div style="color:#fde68a;font-size:12px;margin-bottom:6px">The following games could not avoid a same-club time overlap. Notify club staff.</div>'
-        + clubWarns.map(function(w){ return '<div style="color:#fde68a;font-size:12px;margin-top:4px">' + w.replace('CLUB CONFLICT: ', '') + '</div>'; }).join('')
-        + '</div>';
-    }
-    var totGames = sched.gameDays.reduce(function (s, day) {
-      return s + day.divs.reduce(function (s2, d) {
+
+    // ── Count games ───────────────────────────────────────
+    var scheduledCount = sched.gameDays.reduce(function(s, day) {
+      return s + day.divs.reduce(function(s2, d) {
         if (d.games) return s2 + d.games.length;
         if (d.groups) {
           var cnt = 0;
@@ -1282,13 +1493,95 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
         return s2;
       }, 0);
     }, 0);
+    var failedCount = unscheduledGames.length;
+    var totalCount  = scheduledCount + failedCount;
+    var clubWarns  = scheduleWarnings.filter(function(w){ return w.indexOf('CLUB CONFLICT:')  === 0; });
+    var venueWarns = scheduleWarnings.filter(function(w){ return w.indexOf('VENUE RELAXED:')  === 0; });
+    var restWarns  = scheduleWarnings.filter(function(w){ return w.indexOf('REST RELAXED:')   === 0; });
+    var allGood    = failedCount === 0;
+
+    // ── Scheduling Status card ────────────────────────────
+    h += '<div style="background:' + (allGood ? 'rgba(16,185,129,.08)' : 'rgba(255,50,50,.08)') + ';'
+      + 'border:1px solid ' + (allGood ? 'rgba(16,185,129,.3)' : 'rgba(255,60,60,.35)') + ';'
+      + 'border-radius:8px;padding:14px 18px;margin-bottom:14px">'
+      + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);margin-bottom:10px">Scheduling Status</div>'
+      + '<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start">'
+      + '<div><div style="font-family:Montserrat,sans-serif;font-size:26px;font-weight:900;color:#fff;line-height:1">' + totalCount + '</div>'
+      + '<div style="font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-top:3px">Total Games</div></div>'
+      + '<div><div style="font-family:Montserrat,sans-serif;font-size:26px;font-weight:900;color:#10B981;line-height:1">' + scheduledCount + ' \u2705</div>'
+      + '<div style="font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-top:3px">Scheduled</div></div>'
+      + '<div><div style="font-family:Montserrat,sans-serif;font-size:26px;font-weight:900;line-height:1;color:' + (failedCount > 0 ? '#FF3030' : '#10B981') + '">'
+      + (failedCount > 0 ? failedCount + ' \u274C' : '0 \u2705') + '</div>'
+      + '<div style="font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-top:3px">Failed / Unscheduled</div></div>'
+      + '</div>'
+      + (failedCount > 0
+          ? '<div style="font-size:11px;color:#ff8080;margin-top:10px;font-family:Montserrat,sans-serif;font-weight:600">'
+            + '\u26A0\uFE0F Fix: increase the court count, extend daily operating hours, or add more tournament days, then regenerate.</div>'
+          : '')
+      + '</div>';
+
+    // ── CRITICAL: missed games list ───────────────────────
+    if (failedCount > 0) {
+      // Group by division
+      var byDiv = {};
+      unscheduledGames.forEach(function(u) {
+        if (!byDiv[u.div]) byDiv[u.div] = [];
+        byDiv[u.div].push(u);
+      });
+      h += '<div style="background:rgba(255,30,30,.13);border:2px solid rgba(255,60,60,.6);border-radius:8px;padding:14px 18px;margin-bottom:14px">'
+        + '<div style="color:#FF3030;font-family:Montserrat,sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">'
+        + '\u26A0\uFE0F CRITICAL \u2014 The following games were NOT scheduled</div>';
+      Object.keys(byDiv).forEach(function(divName) {
+        var divColor = (divisions.find(function(d){ return d.name === divName; }) || {}).color || '#FF6B00';
+        h += '<div style="border-left:3px solid ' + divColor + ';padding:4px 0 4px 12px;margin-bottom:10px">'
+          + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:' + divColor + ';margin-bottom:5px">' + divName + '</div>';
+        byDiv[divName].forEach(function(u) {
+          var gameLabel = u.lbl
+            ? ('[' + u.lbl + '] ' + (u.t1 || '\u2014') + ' vs ' + (u.t2 || 'TBD'))
+            : (u.t1 + ' vs ' + u.t2);
+          if (u.group && !u.lbl) gameLabel = u.group.replace(divName + ' ', '') + ' \u2014 ' + gameLabel;
+          h += '<div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">'
+            + '<span style="color:#FF3030;font-weight:900;font-size:14px">\u274C</span>'
+            + '<span style="color:#ffb3b3;font-size:12px;font-family:Montserrat,sans-serif;font-weight:700">' + gameLabel + '</span>'
+            + '</div>'
+            + '<div style="color:#ff8080;font-size:11px;margin-left:20px;font-style:italic;margin-bottom:2px">' + u.reason + '</div>';
+        });
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+
+    // ── Amber: rule relaxations and soft-preference violations ──
+    var amberTotal = clubWarns.length + venueWarns.length + restWarns.length;
+    if (amberTotal > 0) {
+      h += '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:8px;padding:14px;margin-bottom:14px">'
+        + '<div style="color:#fbbf24;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">'
+        + '\u26a0\ufe0f Scheduling Warnings \u2014 all games below were placed</div>';
+      if (venueWarns.length) {
+        h += '<div style="color:#fde68a;font-size:11px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">Venue Rule Relaxed (Blanes exclusivity OFF)</div>'
+          + venueWarns.map(function(w){ return '<div style="color:#fde68a;font-size:12px;margin-top:3px">' + w.replace('VENUE RELAXED: ', '') + '</div>'; }).join('');
+      }
+      if (restWarns.length) {
+        h += '<div style="color:#fde68a;font-size:11px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin:' + (venueWarns.length ? '10px' : '0') + ' 0 4px">Rest Rule Relaxed (90-min rest OFF)</div>'
+          + restWarns.map(function(w){ return '<div style="color:#fde68a;font-size:12px;margin-top:3px">' + w.replace('REST RELAXED: ', '') + '</div>'; }).join('');
+      }
+      if (clubWarns.length) {
+        h += '<div style="color:#fde68a;font-size:11px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin:' + ((venueWarns.length || restWarns.length) ? '10px' : '0') + ' 0 4px">Club Staff Overlap (games still scheduled)</div>'
+          + '<div style="color:#fde68a;font-size:12px;margin-bottom:4px">Notify affected club staff of the time conflict.</div>'
+          + clubWarns.map(function(w){ return '<div style="color:#fde68a;font-size:12px;margin-top:3px">' + w.replace('CLUB CONFLICT: ', '') + '</div>'; }).join('');
+      }
+      h += '</div>';
+    }
+
+    // ── Stats row ─────────────────────────────────────────
     h += '<div class="stats-row">'
       + '<div class="stat"><div class="stn">' + divisions.length + '</div><div class="stl">Divisions</div></div>'
       + '<div class="stat"><div class="stn">' + totTeams + '</div><div class="stl">Teams</div></div>'
-      + '<div class="stat"><div class="stn">' + totGames + '</div><div class="stl">Games</div></div>'
+      + '<div class="stat"><div class="stn">' + scheduledCount + '</div><div class="stl">Games</div></div>'
       + '<div class="stat"><div class="stn">' + sched.totalCourts + '</div><div class="stl">Courts</div></div>'
       + '</div>';
-    sched.gameDays.forEach(function (day, dIdx) {
+
+    sched.gameDays.forEach(function(day, dIdx) {
       h += '<div class="day-hdr">' + day.label + '</div>';
       h += renderDayBlock(day.divs, lS, lE, dIdx);
     });
@@ -1747,8 +2040,12 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     if (genBtn) genBtn.click();
   });
 
+  // Re-render day-hours grid whenever the number of days changes.
+  document.getElementById('nDays').addEventListener('change', renderDayHours);
+
   // ── Init ──────────────────────────────────────────────
   renderSites();
+  renderDayHours();
   parseTeams();
 
 }());
