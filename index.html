@@ -18,7 +18,8 @@ header img:hover{filter:drop-shadow(0 0 14px rgba(255,107,0,0.9))}
 .htxt p{font-size:10px;color:var(--g);text-transform:uppercase;letter-spacing:2px;margin-top:2px;font-family:'Montserrat',sans-serif;font-weight:600}
 .hbadge{margin-left:auto;background:var(--o);color:#fff;font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;flex-shrink:0}
 .sticky-top{position:sticky;top:0;z-index:100}
-.tabs{background:var(--n3);display:flex;border-bottom:2px solid var(--b);overflow-x:auto}
+.tabs-bar{background:var(--n3);display:flex;align-items:stretch;border-bottom:2px solid var(--b)}
+.tabs{display:flex;overflow-x:auto;flex:1}
 .tab{padding:13px 22px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s}
 .tab.active{color:var(--o);border-bottom-color:var(--o);background:rgba(255,107,0,.08)}
 .main{max-width:760px;margin:0 auto;padding:22px 16px}
@@ -109,6 +110,23 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.active{display:flex}
 .modal-card{background:var(--n2);border:1px solid var(--b);border-radius:12px;padding:28px;max-width:400px;box-shadow:0 12px 40px rgba(0,0,0,0.8)}
+.modal-card.modal-wide{max-width:660px;width:92vw;max-height:82vh;overflow-y:auto}
+.algo-section{margin-bottom:18px}
+.algo-section h4{font-family:'Montserrat',sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--o);margin-bottom:6px}
+.algo-section p,.algo-section li{font-size:12px;color:var(--g);line-height:1.7;margin:0}
+.algo-section ul{margin:4px 0 0 14px;padding:0}
+.algo-config{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
+.algo-pill{background:rgba(255,107,0,.12);border:1px solid rgba(255,107,0,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-family:'Montserrat',sans-serif;font-weight:700;color:var(--ol)}
+.settings-wrap{position:relative;display:flex;align-items:center;padding:0 6px;flex-shrink:0}
+.settings-btn{background:none;border:none;color:var(--g);cursor:pointer;width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.settings-btn:hover{color:#fff;background:rgba(255,255,255,.1)}
+.settings-btn svg{width:18px;height:18px;fill:currentColor}
+.settings-dropdown{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--n2);border:1px solid var(--b);border-radius:10px;min-width:210px;box-shadow:0 10px 28px rgba(0,0,0,.7);z-index:150;overflow:hidden;padding:6px 0}
+.settings-dropdown.open{display:block}
+.settings-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px 16px;font-size:12px;font-family:'Open Sans',sans-serif;color:var(--g);background:none;border:none;cursor:pointer;transition:background .15s;white-space:nowrap}
+.settings-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.settings-item-icon{font-size:15px;flex-shrink:0}
+.settings-sep{height:1px;background:var(--b);margin:5px 0}
 .modal-card h3{font-family:'Montserrat',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;color:#fff}
 .modal-card p{font-size:13px;color:var(--g);margin-bottom:20px;line-height:1.6}
 .modal-buttons{display:flex;gap:10px;justify-content:flex-end}
@@ -136,13 +154,23 @@ footer span{color:var(--o)}
   <div class="hbadge">June 19-21, 2026</div>
 </header>
 
+  <div class="tabs-bar">
   <div class="tabs">
-  <button class="tab active" id="tab-setup">Setup</button>
-  <button class="tab" id="tab-groups">Groups</button>
-  <button class="tab" id="tab-schedule">Schedule</button>
-  <button class="tab" id="tab-standings">Standings</button>
-  <button class="tab" id="tab-bracket">Bracket</button>
-</div>
+    <button class="tab active" id="tab-setup">Setup</button>
+    <button class="tab" id="tab-groups">Groups</button>
+    <button class="tab" id="tab-schedule">Schedule</button>
+    <button class="tab" id="tab-standings">Standings</button>
+    <button class="tab" id="tab-bracket">Bracket</button>
+  </div>
+  <div class="settings-wrap">
+    <button class="settings-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.92c.04-.34.07-.69.07-1.08s-.03-.74-.07-1.08l2.32-1.82c.21-.16.27-.46.13-.7l-2.2-3.81c-.14-.24-.42-.32-.67-.24l-2.73 1.1c-.57-.44-1.17-.8-1.84-1.07L14 2.42C13.96 2.18 13.74 2 13.5 2h-3c-.24 0-.46.18-.49.42l-.41 2.46c-.67.27-1.27.63-1.84 1.07L5 4.85c-.25-.08-.53 0-.67.24l-2.2 3.81c-.14.24-.08.54.13.7l2.32 1.82c-.04.34-.07.69-.07 1.08s.03.74.07 1.08L2.26 15.4c-.21.16-.27.46-.13.7l2.2 3.81c.14.24.42.32.67.24l2.73-1.1c.57.44 1.17.8 1.84 1.07l.41 2.46c.03.24.25.42.49.42h3c.24 0 .46-.18.49-.42l.41-2.46c.67-.27 1.27-.63 1.84-1.07l2.73 1.1c.25.08.53 0 .67-.24l2.2-3.81c.14-.24.08-.54-.13-.7l-2.32-1.82z"/></svg>
+    </button>
+    <div class="settings-dropdown" id="settingsDropdown">
+      <button class="settings-item" id="algoBtn"><span class="settings-item-icon">&#x1F4CB;</span>Scheduling Logic &amp; Rules</button>
+    </div>
+  </div>
+  </div>
 </div>
 
 <div class="main">
@@ -215,6 +243,7 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       <label>Max games per team per day</label>
       <input type="number" id="maxGPD" value="2" min="1" max="10">
     </div>
+
   </div>
 
   <div class="page" id="page-groups">
@@ -246,6 +275,16 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     <div class="modal-buttons">
       <button class="modal-btn cancel" id="modalCancel">Cancel</button>
       <button class="modal-btn confirm" id="modalConfirm">Change Score</button>
+    </div>
+  </div>
+</div>
+
+<div id="algoModal" class="modal-overlay">
+  <div class="modal-card modal-wide">
+    <h3>&#x1F4CB; Scheduling Logic &amp; Rules</h3>
+    <div id="algoModalBody"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn confirm" id="algoModalClose">Close</button>
     </div>
   </div>
 </div>
@@ -734,6 +773,95 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     return standing;
   }
 
+  // ── Settings dropdown ──────────────────────────────────
+  var settingsDropdown = document.getElementById('settingsDropdown');
+  document.getElementById('settingsBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    settingsDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', function () {
+    settingsDropdown.classList.remove('open');
+  });
+
+  // ── Logic & Rules modal ────────────────────────────────
+  // getAlgorithmSummary() describes the scheduler in plain language for organisers.
+  // UPDATE THIS FUNCTION whenever the scheduling algorithm changes.
+  function getAlgorithmSummary() {
+    var gDur   = parseInt(document.getElementById('gDur').value)  || 20;
+    var bDur   = parseInt(document.getElementById('bDur').value)  || 5;
+    var sTime  = document.getElementById('sTime').value || '09:00';
+    var eTime  = document.getElementById('eTime').value || '20:00';
+    var lS     = document.getElementById('lS').value   || '13:30';
+    var lE     = document.getElementById('lE').value   || '14:30';
+    var nDays  = parseInt(document.getElementById('nDays').value) || 3;
+    var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
+    var crts   = getCourts();
+    var rrDays = Math.max(1, nDays - 1);
+
+    var pills = [
+      'Game duration: ' + gDur + ' min',
+      'Break between games: ' + bDur + ' min',
+      'Day: ' + sTime + '\u2013' + eTime,
+      'Lunch: ' + lS + '\u2013' + lE,
+      'Tournament days: ' + nDays,
+      'Round-robin days: ' + rrDays,
+      'Max games / team / day: ' + maxGPD,
+      'Available courts: ' + crts.length
+    ].map(function(t){ return '<span class="algo-pill">' + t + '</span>'; }).join('');
+
+    return '<div class="algo-config">' + pills + '</div>'
+
+      + '<div class="algo-section"><h4>How Groups Are Formed</h4>'
+      + '<p>Each division is split into groups so every team plays every other team in their group exactly once. '
+      + 'Smaller divisions (up to 5 teams) stay in one group. Larger divisions are split into balanced groups of 3 or 4. '
+      + 'You can review and rearrange teams between groups in the <strong>Groups</strong> tab before generating the schedule.</p></div>'
+
+      + '<div class="algo-section"><h4>How Games Are Spread Across Days</h4>'
+      + '<p>All group games are spread across the ' + rrDays + ' round-robin day(s). '
+      + 'The key rule is: <strong>no team plays more than ' + maxGPD + ' game(s) on the same day</strong>. '
+      + 'Games are distributed to keep each team\'s workload as even as possible across the tournament. '
+      + 'If there are too many games to fit within this limit, a red warning will appear after you generate the schedule.</p></div>'
+
+      + '<div class="algo-section"><h4>How Courts &amp; Times Are Assigned</h4>'
+      + '<p>Once games are allocated to days, each game is given a specific court and start time:</p><ul>'
+      + '<li>Games start filling courts from <strong>' + sTime + '</strong> — each game is placed on the earliest available court.</li>'
+      + '<li>A team always has a minimum of <strong>50 minutes between the start of their games</strong>, ensuring they never play two matches in a row. Where court availability allows, the scheduler aims for a <strong>90-minute gap</strong> for extra recovery time.</li>'
+      + '<li>No games are placed during the lunch break (<strong>' + lS + '\u2013' + lE + '</strong>). Any game that would overlap is automatically pushed to after ' + lE + '.</li>'
+      + '<li>All games must finish by <strong>' + eTime + '</strong>.</li>'
+      + '<li><strong>Club staff consideration:</strong> if two teams from the same club appear in different age groups (e.g. SURREY RAMS in Boys U14 and Boys U16), the scheduler tries to avoid scheduling them at the same time so coaching staff are not needed on two courts simultaneously. '
+      + 'If this is unavoidable, an amber notice will appear listing the affected clubs.</li>'
+      + '</ul></div>'
+
+      + '<div class="algo-section"><h4>Playoffs &amp; Finals (Day ' + nDays + ')</h4>'
+      + '<p>The last day is dedicated to knockout games. Semi-finals are scheduled first, '
+      + 'right after any morning round-robin games wrap up. '
+      + 'Finals and 3rd-place games are then placed with a <strong>minimum 90-minute gap</strong> after the last semi-final — '
+      + 'giving teams time to recover and prepare. '
+      + 'Playoff slots show placeholder names (e.g. <em>"1st Group A"</em>) until all round-robin results are entered. '
+      + 'They fill in automatically once every group\'s games are fully scored.</p></div>'
+
+      + '<div class="algo-section"><h4>What the Scheduler Always Guarantees</h4><ul>'
+      + '<li>\u2705 No team is ever scheduled on two courts at the same time.</li>'
+      + '<li>\u2705 Every team has at least 50 minutes of recovery time between their games each day (90 minutes preferred).</li>'
+      + '<li>\u2705 No games run past <strong>' + eTime + '</strong>.</li>'
+      + '<li>\u2705 No games are placed during lunch (<strong>' + lS + '\u2013' + lE + '</strong>).</li>'
+      + '<li>\u2705 Finals always start at least 90 minutes after the semi-finals end.</li>'
+      + '<li>\u26A0\uFE0F Same-club time overlaps are avoided where possible — if unavoidable, an amber notice is shown so you can inform the club.</li>'
+      + '</ul></div>';
+  }
+
+  document.getElementById('algoBtn').addEventListener('click', function () {
+    settingsDropdown.classList.remove('open');
+    document.getElementById('algoModalBody').innerHTML = getAlgorithmSummary();
+    document.getElementById('algoModal').classList.add('active');
+  });
+  document.getElementById('algoModalClose').addEventListener('click', function () {
+    document.getElementById('algoModal').classList.remove('active');
+  });
+  document.getElementById('algoModal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+
   // ── Generate ───────────────────────────────────────────
   document.getElementById('genBtn').addEventListener('click', function () {
     if (!divisions.length) { alert('Please parse your team list first!'); return; }
@@ -827,9 +955,12 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
     //   Batch B — games where at least one team has already played today (place late).
     //   Because Batch B starts after Batch A fills the courts, a team's second
     //   game lands as late in the day as court density allows — maximum rest.
-    //   teamLastEnd + minRest remains as a hard safety floor.
+    //   Rest is measured between game START times:
+    //     minRest (50 min, hard)  — a team never plays two games in a row.
+    //     prefRest (90 min, soft) — preferred gap; used if a qualifying court exists.
     var gamesPlaced = [];
-    var minRest = slot; // gDur + bDur — hard minimum between a team's games
+    var minRest  = 50; // hard: new game start must be ≥50 min after previous game start
+    var prefRest = 90; // soft: prefer ≥90 min between starts if a free court allows it
     // ct2 starts as day-start on every court; if RR overflows to the last day,
     // Phase 3 updates ct2 to the actual court-free time so bracket games
     // are placed AFTER any morning RR games (no court conflict).
@@ -855,30 +986,38 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
       var dayGames = shuffle(batchA).concat(shuffle(batchB));
 
       var ct = crts.map(function() { return st; }); // next free minute per court
-      // keyed as "DivisionName\x00TeamName" — same club in multiple divisions
-      // gets independent rest tracking (they are different people on different courts)
-      var teamLastEnd = {};
+      // keyed as "DivisionName\x00TeamName" — stores START time of last game.
+      // Measured from START so minRest/prefRest directly represent gap between starts.
+      var teamLastStart = {};
       // club name → [{start, end}] for same-day cross-division overlap detection
       var clubDaySchedule = {};
 
       dayGames.forEach(function(game) {
         var lk1 = game.name + '\x00' + game.t1, lk2 = game.name + '\x00' + game.t2;
         var club1 = extractClub(game.t1), club2 = extractClub(game.t2);
+        // Three tiers (best → worst):
+        //   pref  — ≥90 min gap from last start (soft) + no club conflict
+        //   best  — ≥50 min gap from last start (hard) + no club conflict
+        //   fallback — ≥50 min gap (hard), club conflict ignored
+        var prefCourt = -1, prefTime = Infinity;
         var bestCourt = -1, bestTime = Infinity;
-        var fallbackCourt = -1, fallbackTime = Infinity; // best slot ignoring club conflicts
+        var fallbackCourt = -1, fallbackTime = Infinity;
         for (var ci = 0; ci < crts.length; ci++) {
           var t = ct[ci];
-          // Wait for team rest if they already played today (within same division)
+          // Hard constraint: next start must be ≥50 min after each team's last start
           t = Math.max(t,
-            (teamLastEnd[lk1] || 0) + minRest,
-            (teamLastEnd[lk2] || 0) + minRest);
+            (teamLastStart[lk1] || 0) + minRest,
+            (teamLastStart[lk2] || 0) + minRest);
           // Skip over lunch break
           if (t < lEm && t + gDur > lSm) t = lEm;
           // Must finish before day end
           if (t + gDur > et) continue;
-          // Track best slot without any club-conflict check (fallback)
+          // Track hard-constraint-only best (fallback ignoring club conflicts)
           if (t < fallbackTime) { fallbackTime = t; fallbackCourt = ci; }
-          // Check for club overlap: skip if club1 or club2 has an overlapping game
+          // Soft preference: both teams start ≥90 min after their last game
+          var isPref = (!teamLastStart[lk1] || t >= teamLastStart[lk1] + prefRest)
+                    && (!teamLastStart[lk2] || t >= teamLastStart[lk2] + prefRest);
+          // Check for club overlap
           var tEnd = t + gDur;
           var clubConflict = false;
           [club1, club2].forEach(function(club) {
@@ -887,30 +1026,34 @@ Girls U18: ALVIK BASKET (SWE), AIK BASKET (SWE), BK KLOKANI (SLK), BASKET CHILE 
               if (t < busy.end && tEnd > busy.start) clubConflict = true;
             });
           });
-          if (!clubConflict && t < bestTime) { bestTime = t; bestCourt = ci; }
+          if (!clubConflict) {
+            if (isPref && t < prefTime) { prefTime = t; prefCourt = ci; }
+            if (t < bestTime)           { bestTime = t; bestCourt = ci; }
+          }
         }
-        // Soft constraint: if no conflict-free slot found, fall back to best available
-        if (bestCourt === -1 && fallbackCourt !== -1) {
+        // Resolve: use best available tier
+        var chosenCourt, chosenTime;
+        if      (prefCourt     !== -1) { chosenCourt = prefCourt;     chosenTime = prefTime; }
+        else if (bestCourt     !== -1) { chosenCourt = bestCourt;     chosenTime = bestTime; }
+        else if (fallbackCourt !== -1) {
           scheduleWarnings.push('CLUB CONFLICT: ' + game.t1 + ' vs ' + game.t2
             + ' (Day ' + (d + 1) + ') \u2014 same-club staff overlap unavoidable.');
-          bestCourt = fallbackCourt;
-          bestTime  = fallbackTime;
-        }
-        if (bestCourt === -1) {
+          chosenCourt = fallbackCourt; chosenTime = fallbackTime;
+        } else {
           scheduleWarnings.push('UNSCHEDULED: ' + game.t1 + ' vs ' + game.t2
             + ' \u2014 no court time left on day ' + (d + 1)
             + '. Add more courts or extend daily hours.');
           return;
         }
         gamesPlaced.push({
-          day: d, time: bestTime, court: crts[bestCourt].court,
+          day: d, time: chosenTime, court: crts[chosenCourt].court,
           t1: game.t1, t2: game.t2, name: game.name, color: game.color, group: game.group
         });
-        ct[bestCourt] = bestTime + slot;
-        teamLastEnd[lk1] = bestTime + gDur;
-        teamLastEnd[lk2] = bestTime + gDur;
+        ct[chosenCourt] = chosenTime + slot;
+        teamLastStart[lk1] = chosenTime;
+        teamLastStart[lk2] = chosenTime;
         // Update club schedule so subsequent games can detect overlaps
-        var placed = { start: bestTime, end: bestTime + gDur };
+        var placed = { start: chosenTime, end: chosenTime + gDur };
         if (club1) { if (!clubDaySchedule[club1]) clubDaySchedule[club1] = []; clubDaySchedule[club1].push(placed); }
         if (club2) { if (!clubDaySchedule[club2]) clubDaySchedule[club2] = []; clubDaySchedule[club2].push(placed); }
       });
