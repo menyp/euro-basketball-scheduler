@@ -253,33 +253,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       <input type="number" id="maxGPD" value="2" min="1" max="10">
     </div>
 
-    <div class="card">
-      <div class="stitle">Advanced Scheduling Rules</div>
-      <p class="help" style="margin-bottom:4px">Toggle rules <strong style="color:#FF3030">OFF</strong> to relax constraints when games fail to schedule. Disabled rules show amber warnings instead of blocking placement.</p>
-
-      <div class="rule-row">
-        <label class="rule-toggle"><input type="checkbox" id="ruleBlanes" checked><span class="rule-slider"></span></label>
-        <div class="rule-lbl">
-          <strong>Enforce Blanes Exclusivity (U16/U18 Boys)</strong>
-          <small>ON: Boys U16/U18 are placed at Blanes courts only — a red error is shown if Blanes is full. OFF: Blanes is preferred but any court is used as fallback, shown as an amber warning.</small>
-        </div>
-      </div>
-
-      <div class="rule-row">
-        <label class="rule-toggle"><input type="checkbox" id="ruleClub" checked><span class="rule-slider"></span></label>
-        <div class="rule-lbl">
-          <strong>Enforce Club Staff Overlap Protection</strong>
-          <small>ON: teams from the same club are kept in different time slots where possible. OFF: club conflicts are ignored entirely to free up slots for placement.</small>
-        </div>
-      </div>
-
-      <div class="rule-row">
-        <label class="rule-toggle"><input type="checkbox" id="ruleRest" checked><span class="rule-slider"></span></label>
-        <div class="rule-lbl">
-          <strong>Enforce 90-Minute Team Rest</strong>
-          <small>ON: a team must skip at least one full 90-min slot between games. OFF: back-to-back slots are allowed and flagged with an amber warning.</small>
-        </div>
-      </div>
+    <!-- Restriction toggles disabled — all venue/club rules off, back-to-back always enforced -->
+    <div style="display:none">
+      <input type="checkbox" id="ruleBlanes">
+      <input type="checkbox" id="ruleClub">
+      <input type="checkbox" id="ruleRest" checked>
     </div>
 
   </div>
@@ -956,417 +934,279 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var lSm      = toM(document.getElementById('lS').value || '13:30');
     var lEm      = toM(document.getElementById('lE').value || '14:30');
     var dayHours = getDayHours();
-    var rules    = getRuleToggles();
-    scheduleWarnings  = [];
-    unscheduledGames  = [];
-    var nDays = parseInt(document.getElementById('nDays').value);
-    // All nDays are available for round-robin assignment.
-    // The finals/bracket are placed on top of whatever courts are still free on
-    // the last day, so RR overflow naturally falls in the morning before playoffs.
-    var rrDays = Math.max(1, nDays);
+    scheduleWarnings = [];
+    unscheduledGames = [];
+    var nDays   = parseInt(document.getElementById('nDays').value);
+    var maxGPD  = parseInt(document.getElementById('maxGPD').value) || 2;
+    var nCourts = crts.length;
 
-    var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
-
-    // Per-day time-slot arrays — built once here, used by Phase 2, 3, and 4.
+    // Per-day time-slot arrays (minute values). Derived from setup — never hardcoded.
     var dayTimeSlots = dayHours.map(function(h) {
       return buildTimeSlots(toM(h.start), toM(h.end), lSm, lEm);
     });
 
-    // ── PHASE 1: Build rounds per group ────────────────────────────────────
-    // A "round" is a set of games where no team appears more than once.
-    // buildRounds() guarantees this. We run it per group so that round
-    // membership stays within a group's matchups.
-    var groupRounds = []; // [{name, color, group, day, games:[{t1,t2}]}]
-    divisions.forEach(function(d) {
-      var groups = d.manualGroups && Array.isArray(d.manualGroups) ? d.manualGroups : chunk(d.teams, optimalChunkSize(d.teams.length));
+    // ══════════════════════════════════════════════════════════════════════════
+    // GLOBAL ALLOCATION ENGINE — Constraint-Satisfaction, Time-First
+    // ══════════════════════════════════════════════════════════════════════════
+    // Iterates the 3D resource grid (Day → Slot → Court) and at each free
+    // court-slot picks the highest-priority placeable game from a global queue.
+    //
+    // Hard constraints enforced:
+    //  1. Team Rest   — same-day gap of ≥2 slots between a team's games
+    //  2. Daily Quota — ≤ maxGPD games per team per day
+    //  3. Causality   — all RR for a division before any of its playoffs
+    //  4. Spillover   — any day (incl. last) available for RR overflow
+    //  5. Atomic PO   — SF look-ahead: Final slot must exist on same day
+    // ══════════════════════════════════════════════════════════════════════════
+
+    var LATE_LBLS = { 'FINAL': 1, '3rd Place': 1 };
+    var PO_GK = function(n) { return n + ' \u2014 Playoffs'; };
+
+    // ── 1. Build flat game item queues ────────────────────────────────────────
+    var rrItems = []; // one item per individual RR game
+    var poItems = []; // one item per playoff matchup slot
+    var divRRTotal = {}; // divName → total RR game count
+
+    divisions.forEach(function(div) {
+      var groups = div.manualGroups && div.manualGroups.length
+        ? div.manualGroups
+        : chunk(div.teams, optimalChunkSize(div.teams.length));
+      divRRTotal[div.name] = 0;
       groups.forEach(function(g, gi) {
-        var grpLabel = d.name + ' Group ' + String.fromCharCode(65 + gi);
+        var grpLabel = div.name + ' Group ' + String.fromCharCode(65 + gi);
         var pairs = [];
         for (var i = 0; i < g.length; i++)
           for (var j = i + 1; j < g.length; j++)
             pairs.push([g[i], g[j]]);
-        buildRounds(pairs).forEach(function(roundPairs) {
-          groupRounds.push({
-            name: d.name, color: d.color, group: grpLabel, day: -1,
-            games: roundPairs.map(function(p) { return { t1: p[0], t2: p[1] }; })
+        buildRounds(pairs).forEach(function(roundPairs, ri) {
+          roundPairs.forEach(function(p) {
+            rrItems.push({
+              type: 'RR', divName: div.name, color: div.color, group: grpLabel,
+              roundIdx: ri, t1: p[0], t2: p[1],
+              placed: false, day: -1, slotIdx: -1, court: null
+            });
+            divRRTotal[div.name]++;
           });
+        });
+      });
+      // Playoff items — earlyM tagged with needsFinalSlot when bracket has a Final
+      var matchups = getBracketGames(div);
+      var lateBrackets = {};
+      matchups.forEach(function(m) { if (LATE_LBLS[m.lbl]) lateBrackets[m.bracket] = true; });
+      matchups.forEach(function(m) {
+        poItems.push({
+          type: 'PO', divName: div.name, color: div.color,
+          group: PO_GK(div.name), lbl: m.lbl, bracket: m.bracket,
+          t1: m.t1 || '', t2: m.t2 || '',
+          isLate: !!LATE_LBLS[m.lbl],
+          needsFinalSlot: !LATE_LBLS[m.lbl] && !!lateBrackets[m.bracket],
+          placed: false, day: -1, slotIdx: -1, court: null
         });
       });
     });
 
-    // ── PHASE 2: Assign rounds to days ──────────────────────────────────────
-    // For each round, find the earliest day where every team in that round
-    // is still under the maxGPD cap. This is O(rounds × days) and always
-    // produces a valid assignment if enough days exist.
-    // Keys are "DivisionName\x00TeamName" so the same club playing in multiple
-    // age divisions (e.g. Surrey Rams U14 vs Surrey Rams U18) are treated as
-    // independent entities and don't consume each other's maxGPD budget.
-    // Reserve last-day court-slots for playoff games (Phase 4 places them after Phase 2).
-    var totalPlayoffGames = divisions.reduce(function(sum, div) {
-      return sum + getBracketGames(div).length;
-    }, 0);
-    var lastDaySlotCount = dayTimeSlots[dayTimeSlots.length - 1].length;
-    var lastDayRRCap = Math.max(0, lastDaySlotCount * crts.length - totalPlayoffGames);
-
-    var teamDayCount = {};
-    var dayGameCount = []; for (var _i = 0; _i < rrDays; _i++) dayGameCount[_i] = 0; // total RR games assigned per day
-    groupRounds.forEach(function(round) {
-      for (var d = 0; d < rrDays; d++) {
-        var ok = true;
-        for (var gi = 0; gi < round.games.length && ok; gi++) {
-          var g = round.games[gi];
-          var k1 = round.name + '\x00' + g.t1, k2 = round.name + '\x00' + g.t2;
-          if (((teamDayCount[k1] || {})[d] || 0) >= maxGPD) ok = false;
-          if (((teamDayCount[k2] || {})[d] || 0) >= maxGPD) ok = false;
-        }
-        // Court-capacity cap: can't schedule more games than courts×slots can hold.
-        // Last day reserves room for playoff games (Phase 4).
-        if (ok) {
-          var capIdx = Math.min(d, dayTimeSlots.length - 1);
-          var dayCapLimit = (d === rrDays - 1 && rrDays >= 2)
-            ? lastDayRRCap
-            : dayTimeSlots[capIdx].length * crts.length;
-          if (dayGameCount[d] + round.games.length > dayCapLimit) ok = false;
-        }
-        if (ok) {
-          round.day = d;
-          dayGameCount[d] += round.games.length;
-          round.games.forEach(function(g) {
-            var k1 = round.name + '\x00' + g.t1, k2 = round.name + '\x00' + g.t2;
-            teamDayCount[k1] = teamDayCount[k1] || {};
-            teamDayCount[k1][d] = (teamDayCount[k1][d] || 0) + 1;
-            teamDayCount[k2] = teamDayCount[k2] || {};
-            teamDayCount[k2][d] = (teamDayCount[k2][d] || 0) + 1;
-          });
-          break;
-        }
+    // ── 2. 3-D resource grid & scheduling state ───────────────────────────────
+    // grid[day][slotIdx][courtIdx] = true when occupied
+    var grid = [];
+    for (var _d = 0; _d < nDays; _d++) {
+      grid[_d] = [];
+      var _ns = dayTimeSlots[Math.min(_d, dayTimeSlots.length - 1)].length;
+      for (var _s = 0; _s < _ns; _s++) {
+        var _row = [];
+        for (var _c = 0; _c < nCourts; _c++) _row.push(false);
+        grid[_d][_s] = _row;
       }
-      if (round.day === -1) {
-        round.games.forEach(function(g) {
-          unscheduledGames.push({
-            div: round.name, group: round.group, t1: g.t1, t2: g.t2, lbl: null,
-            reason: 'No available day within ' + rrDays + ' round-robin day(s). '
-              + 'Add more tournament days or increase max games per day.'
-          });
-        });
-      }
-    });
+    }
+    var teamLastPlacement = {}; // divTeamKey → {day, slotIdx}
+    var teamDayCount      = {}; // divTeamKey → {day: count}
+    var divRRPlaced       = {}; // divName → count of RR games placed
+    // sfBracketLastSlot[divName+'\0'+bracket] = {day,slotIdx} — max SF slot placed
+    var sfBracketLastSlot = {};
 
-    // ── PHASE 3: Pack games onto courts within each day (slot-based) ──────────
-    // Games start on fixed 90-minute intervals derived from the daily schedule.
-    // Hard constraint: a team must skip at least one full slot (90 min) between games.
-    // Venue constraints:
-    //   Boys U16/U18  → Blanes courts only (hard — capacity warning if full).
-    //   Girls U18     → Blanes courts first, others as fallback.
-    //   Girls U16     → Blanes courts second priority, others as fallback.
-    //   All others    → non-Blanes first, Blanes only if non-Blanes is full.
-    // Club-conflict (soft): avoid scheduling same-club teams simultaneously; if
-    //   unavoidable, the game is still placed and an amber warning is shown.
-    // Within each day, games are sorted by venue-priority tier so Blanes-only
-    // divisions claim their courts before lower-priority divisions.
-
-    var gamesPlaced = [];
-    // dayCourtSlotUsed[day][courtIdx][slotIdx] = true — used by Phase 4
-    var dayCourtSlotUsed = {};
-    // divDayLastSlot[divName][day] = last slot index used by this division that day
-    var divDayLastSlot  = {};
-
-    for (var d = 0; d < rrDays; d++) {
-      // Use this day's specific time slots (day's own first/last game start).
-      var timeSlots = dayTimeSlots[Math.min(d, dayTimeSlots.length - 1)];
-      var seenToday = {};
-      var batchA = [], batchB = [];
-      groupRounds.forEach(function(r) {
-        if (r.day !== d) return;
-        r.games.forEach(function(g) {
-          var obj = { t1: g.t1, t2: g.t2, name: r.name, color: r.color, group: r.group };
-          var sk1 = r.name + '\x00' + g.t1, sk2 = r.name + '\x00' + g.t2;
-          if (seenToday[sk1] || seenToday[sk2]) {
-            batchB.push(obj);
-          } else {
-            batchA.push(obj);
-            seenToday[sk1] = true; seenToday[sk2] = true;
-          }
-        });
-      });
-      // Sort deterministically: venue tier first (Blanes-only claims courts first),
-      // then division name → group label → team pair — so identical inputs always
-      // produce identical output with no random variance.
-      var byKey = function(a, b) {
-        var d = venueTierNum(a.name) - venueTierNum(b.name);
-        if (d) return d;
-        if (a.name  < b.name)  return -1; if (a.name  > b.name)  return 1;
-        if (a.group < b.group) return -1; if (a.group > b.group) return 1;
-        if (a.t1 < b.t1) return -1; if (a.t1 > b.t1) return 1;
-        return a.t2 < b.t2 ? -1 : a.t2 > b.t2 ? 1 : 0;
-      };
-      var dayGames = batchA.sort(byKey).concat(batchB.sort(byKey));
-
-      // Per-court slot occupancy for this day: courtSlotUsed[ci][si] = true
-      var courtSlotUsed = crts.map(function() { return {}; });
-      // Per-team last slot index (namespaced by division to avoid cross-div collisions)
-      var teamLastSlotIdx = {};
-      // Club schedule for cross-division overlap detection (time-based)
-      var clubDaySchedule = {};
-
-      dayGames.forEach(function(game) {
-        var lk1 = game.name + '\x00' + game.t1, lk2 = game.name + '\x00' + game.t2;
-        var club1 = extractClub(game.t1), club2 = extractClub(game.t2);
-
-        // ── Venue constraint (rule-aware) ────────────────────────────
-        var venuePref        = getVenuePriority(game.name);
-        var wasBlanesMandatory = (venuePref === 'blanes-only');
-        // When Blanes rule is OFF, downgrade hard requirement to strong preference
-        var effectivePref    = (!rules.blanes && wasBlanesMandatory) ? 'blanes-pref-1' : venuePref;
-        var isBlanesOnly     = (effectivePref === 'blanes-only'); // false when rule is off
-        var orderedCi        = courtPriorityOrder(game.name, crts, effectivePref);
-
-        var bestPlacement     = null; // conflict-free (or club-rule-off) slot
-        var fallbackPlacement = null; // club-conflict fallback (only used when rule is ON)
-
-        outer: for (var si = 0; si < timeSlots.length; si++) {
-          // ── Team conflict & rest constraint ────────────────────────
-          // minGap=1: same slot always blocked (two games at once is impossible).
-          // minGap=2: back-to-back slot also blocked (90-min rest rule).
-          var last1 = teamLastSlotIdx[lk1], last2 = teamLastSlotIdx[lk2];
-          var minGap = rules.rest ? 2 : 1;
-          if (last1 !== undefined && si < last1 + minGap) continue;
-          if (last2 !== undefined && si < last2 + minGap) continue;
-
-          var t = timeSlots[si], tEnd = t + 90;
-          for (var cci = 0; cci < orderedCi.length; cci++) {
-            var ci = orderedCi[cci];
-            if (courtSlotUsed[ci][si]) continue; // court busy
-            // ── Club overlap constraint (rule-aware) ─────────────────
-            var clubConflict = false;
-            if (rules.club) {
-              [club1, club2].forEach(function(club) {
-                if (!club || clubConflict) return;
-                (clubDaySchedule[club] || []).forEach(function(busy) {
-                  if (t < busy.end && tEnd > busy.start) clubConflict = true;
-                });
-              });
-            }
-            if (!clubConflict) { bestPlacement = { si: si, ci: ci }; break outer; }
-            if (!fallbackPlacement) fallbackPlacement = { si: si, ci: ci };
-          }
-        }
-
-        // ── Resolve placement ─────────────────────────────────────────
-        var chosen = bestPlacement;
-        if (!chosen && fallbackPlacement) {
-          // Only reachable when rules.club is ON (otherwise clubConflict is never true)
-          scheduleWarnings.push('CLUB CONFLICT: ' + game.t1 + ' vs ' + game.t2
-            + ' (Day ' + (d + 1) + ') \u2014 same-club staff overlap unavoidable.');
-          chosen = fallbackPlacement;
-        }
-        if (!chosen) {
-          unscheduledGames.push({
-            div: game.name, group: game.group, t1: game.t1, t2: game.t2, lbl: null,
-            reason: isBlanesOnly
-              ? 'Blanes courts at capacity on Day ' + (d + 1) + '. This division can only use Blanes \u2014 add Blanes courts or move games to another day.'
-              : 'No available slot on Day ' + (d + 1) + '. Add more courts or extend that day\'s operating hours.'
-          });
-          return;
-        }
-
-        // ── Amber warnings for relaxed rules ─────────────────────────
-        var chosenTime = timeSlots[chosen.si];
-        // Warn if Blanes mandate was relaxed and the chosen court is non-Blanes
-        if (wasBlanesMandatory && !rules.blanes && !isBlanesCourt(crts[chosen.ci])) {
-          scheduleWarnings.push('VENUE RELAXED: ' + game.name + ' \u2014 '
-            + game.t1 + ' vs ' + game.t2 + ' placed at non-Blanes court on Day ' + (d + 1)
-            + ' (Blanes exclusivity rule is OFF).');
-        }
-        // Warn if back-to-back slots were allowed because rest rule is OFF
-        if (!rules.rest) {
-          var prevSi1 = teamLastSlotIdx[lk1], prevSi2 = teamLastSlotIdx[lk2];
-          if ((prevSi1 !== undefined && chosen.si < prevSi1 + 2) ||
-              (prevSi2 !== undefined && chosen.si < prevSi2 + 2)) {
-            scheduleWarnings.push('REST RELAXED: ' + game.t1 + ' vs ' + game.t2
-              + ' (Day ' + (d + 1) + ') \u2014 back-to-back slots allowed (90-min rest rule is OFF).');
-          }
-        }
-
-        gamesPlaced.push({
-          day: d, slotIdx: chosen.si, time: chosenTime,
-          court: crts[chosen.ci].court, courtIdx: chosen.ci,
-          t1: game.t1, t2: game.t2, name: game.name, color: game.color, group: game.group
-        });
-        courtSlotUsed[chosen.ci][chosen.si] = true;
-        teamLastSlotIdx[lk1] = chosen.si;
-        teamLastSlotIdx[lk2] = chosen.si;
-        var placed = { start: chosenTime, end: chosenTime + 90 };
-        if (club1) { if (!clubDaySchedule[club1]) clubDaySchedule[club1] = []; clubDaySchedule[club1].push(placed); }
-        if (club2) { if (!clubDaySchedule[club2]) clubDaySchedule[club2] = []; clubDaySchedule[club2].push(placed); }
-        // Track per-division last slot on this day (for early-playoff feasibility in Phase 4)
-        if (!divDayLastSlot[game.name]) divDayLastSlot[game.name] = {};
-        if (divDayLastSlot[game.name][d] === undefined || chosen.si > divDayLastSlot[game.name][d]) {
-          divDayLastSlot[game.name][d] = chosen.si;
-        }
-      });
-
-      // Save this day's slot occupancy so Phase 4 can place playoffs without collisions.
-      dayCourtSlotUsed[d] = courtSlotUsed;
+    // ── 3. Helpers ────────────────────────────────────────────────────────────
+    function teamCanPlay(key, day, si) {
+      var lp = teamLastPlacement[key];
+      if (lp && lp.day === day && si < lp.slotIdx + 2) return false; // same-day rest
+      if (((teamDayCount[key] || {})[day] || 0) >= maxGPD) return false; // daily quota
+      return true;
     }
 
-    // now convert gamesPlaced into gameDays grouped by day and division.
-    // Each entry gets a dayIndex so Phase 4 can locate it by day number.
+    function hasFreeCourtAt(day, si) {
+      if (!grid[day] || si >= grid[day].length) return false;
+      for (var c = 0; c < nCourts; c++) { if (!grid[day][si][c]) return true; }
+      return false;
+    }
+
+    function recordPlacement(item, day, si, ci) {
+      item.placed = true; item.day = day; item.slotIdx = si; item.court = crts[ci].court;
+      grid[day][si][ci] = true;
+      if (item.type === 'RR') {
+        var k1 = item.divName + '\x00' + item.t1, k2 = item.divName + '\x00' + item.t2;
+        [k1, k2].forEach(function(k) {
+          var lp = teamLastPlacement[k];
+          if (!lp || lp.day < day || (lp.day === day && lp.slotIdx < si))
+            teamLastPlacement[k] = { day: day, slotIdx: si };
+          teamDayCount[k] = teamDayCount[k] || {};
+          teamDayCount[k][day] = (teamDayCount[k][day] || 0) + 1;
+        });
+        divRRPlaced[item.divName] = (divRRPlaced[item.divName] || 0) + 1;
+      }
+      if (item.type === 'PO' && !item.isLate) {
+        var bk = item.divName + '\x00' + item.bracket;
+        var cur = sfBracketLastSlot[bk];
+        if (!cur || day > cur.day || (day === cur.day && si > cur.slotIdx))
+          sfBracketLastSlot[bk] = { day: day, slotIdx: si };
+      }
+    }
+
+    // ── 4. Main loop: Day → Slot → Court ─────────────────────────────────────
+    for (var day = 0; day < nDays; day++) {
+      var slots = dayTimeSlots[Math.min(day, dayTimeSlots.length - 1)];
+
+      for (var si = 0; si < slots.length; si++) {
+
+        // Build placeable queue for this (day, si).
+        // Games are re-verified in the court loop since state changes per court.
+        var queue = [];
+
+        rrItems.forEach(function(g) {
+          if (g.placed) return;
+          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+          if (teamCanPlay(k1, day, si) && teamCanPlay(k2, day, si)) queue.push(g);
+        });
+
+        poItems.forEach(function(g) {
+          if (g.placed) return;
+          // Causality: every RR game for this division must be placed first
+          if ((divRRPlaced[g.divName] || 0) < (divRRTotal[g.divName] || 0)) return;
+          if (g.isLate) {
+            // Final/3rd: bracket's SFs must be placed AND si ≥ sfLastSlot+2 (same day)
+            var bkL = g.divName + '\x00' + g.bracket;
+            var sfL = sfBracketLastSlot[bkL];
+            if (!sfL || sfL.day > day) return;
+            if (sfL.day === day && si < sfL.slotIdx + 2) return;
+          } else if (g.needsFinalSlot) {
+            // SF look-ahead: same-day Final slot at si+2 must exist and have a free court
+            if (si + 2 >= slots.length || !hasFreeCourtAt(day, si + 2)) return;
+          }
+          queue.push(g);
+        });
+
+        // Sort: RR by roundIdx (0→1→2…), then earlyPO (998), then latePO (999).
+        // Within same priority: alphabetical on divName, group, t1, t2 for determinism.
+        queue.sort(function(a, b) {
+          var ap = (a.type === 'RR') ? a.roundIdx : (a.isLate ? 999 : 998);
+          var bp = (b.type === 'RR') ? b.roundIdx : (b.isLate ? 999 : 998);
+          if (ap !== bp) return ap - bp;
+          if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
+          var ag = a.group || '', bg = b.group || '';
+          if (ag !== bg) return ag < bg ? -1 : 1;
+          var at1 = a.t1 || '', bt1 = b.t1 || '';
+          if (at1 !== bt1) return at1 < bt1 ? -1 : 1;
+          return (a.t2 || '') < (b.t2 || '') ? -1 : 1;
+        });
+
+        // Fill every free court this slot with the best available game
+        for (var ci = 0; ci < nCourts; ci++) {
+          if (grid[day][si][ci]) continue;
+
+          for (var qi = 0; qi < queue.length; qi++) {
+            var g = queue[qi];
+            if (g.placed) { queue.splice(qi--, 1); continue; }
+
+            // Re-verify (state evolves as earlier courts in this slot are filled)
+            if (g.type === 'RR') {
+              var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
+              if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) continue;
+            } else if (g.isLate) {
+              var bkR = g.divName + '\x00' + g.bracket;
+              var sfR = sfBracketLastSlot[bkR];
+              if (!sfR || sfR.day > day) continue;
+              if (sfR.day === day && si < sfR.slotIdx + 2) continue;
+            } else if (g.needsFinalSlot) {
+              if (si + 2 >= slots.length || !hasFreeCourtAt(day, si + 2)) continue;
+            }
+
+            recordPlacement(g, day, si, ci);
+            queue.splice(qi, 1);
+            break;
+          }
+        }
+      }
+    }
+
+    // ── 5. Collect unplaced games as failures ─────────────────────────────────
+    rrItems.forEach(function(g) {
+      if (!g.placed) unscheduledGames.push({
+        div: g.divName, group: g.group, t1: g.t1, t2: g.t2, lbl: null,
+        reason: 'No slot found. Add more courts or extend operating hours.'
+      });
+    });
+    poItems.forEach(function(g) {
+      if (!g.placed) unscheduledGames.push({
+        div: g.divName, group: g.group, t1: g.t1, t2: g.t2, lbl: g.lbl,
+        reason: 'No playoff slot found. Add more courts or extend operating hours.'
+      });
+    });
+
+    // ── 6. Assemble gameDays from placed items ────────────────────────────────
     var gameDays = [];
     var lastDayEntry = null;
-    for (var d = 0; d < rrDays; d++) {
-      var isLastDay = (d === nDays - 1);
-      var dayGameList = gamesPlaced.filter(function(g){ return g.day === d; });
-      if (!dayGameList.length) {
+
+    for (var day = 0; day < nDays; day++) {
+      var daySlots  = dayTimeSlots[Math.min(day, dayTimeSlots.length - 1)];
+      var isLastDay = (day === nDays - 1);
+      var dayRR = rrItems.filter(function(g) { return g.day === day; });
+      var dayPO = poItems.filter(function(g) { return g.day === day; });
+
+      if (!dayRR.length && !dayPO.length) {
         if (isLastDay) {
-          lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [], dayIndex: d };
+          lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [], dayIndex: day };
           gameDays.push(lastDayEntry);
         }
         continue;
       }
-      var byDiv = {};
-      dayGameList.forEach(function(g){
-        if (!byDiv[g.name]) byDiv[g.name] = { name: g.name, color: g.color, groups: {} };
-        var divEntry = byDiv[g.name];
-        if (!divEntry.groups[g.group]) divEntry.groups[g.group] = { group:g.group, games: [] };
-        divEntry.groups[g.group].games.push({ time: toT(g.time), t1: g.t1, t2: g.t2, court: g.court, score1:null, score2:null, locked:false });
-      });
-      var divs = Object.keys(byDiv).map(function(k){ return byDiv[k]; });
+
+      var hasRR = dayRR.length > 0, hasPO = dayPO.length > 0;
       var dayLabel = isLastDay
-        ? ('Day ' + nDays + ' \u2014 Round Robin & Playoffs')
-        : ('Day ' + (d + 1) + ' \u2014 Round Robin');
-      var dayEntry = { label: dayLabel, divs: divs, dayIndex: d };
-      if (isLastDay) lastDayEntry = dayEntry;
-      gameDays.push(dayEntry);
+        ? ('Day ' + nDays + ' \u2014 ' + (hasRR ? 'Round Robin & ' : '') + 'Playoffs')
+        : ('Day ' + (day + 1) + ' \u2014 Round Robin' + (hasPO ? ' & Playoffs' : ''));
+
+      var byDiv = {};
+      dayRR.forEach(function(g) {
+        if (!byDiv[g.divName]) byDiv[g.divName] = { name: g.divName, color: g.color, groups: {} };
+        var de = byDiv[g.divName];
+        if (!de.groups[g.group]) de.groups[g.group] = { group: g.group, games: [] };
+        de.groups[g.group].games.push({
+          time: toT(daySlots[g.slotIdx]), t1: g.t1, t2: g.t2,
+          court: g.court, score1: null, score2: null, locked: false
+        });
+      });
+      dayPO.forEach(function(g) {
+        if (!byDiv[g.divName]) byDiv[g.divName] = { name: g.divName, color: g.color, groups: {} };
+        var de = byDiv[g.divName];
+        var gk = PO_GK(g.divName);
+        if (!de.groups[gk]) de.groups[gk] = { group: gk, games: [] };
+        de.groups[gk].games.push({
+          time: toT(daySlots[g.slotIdx]), t1: g.t1, t2: g.t2,
+          lbl: g.lbl, bracket: g.bracket,
+          court: g.court, score1: null, score2: null, locked: false
+        });
+      });
+
+      var divs = Object.keys(byDiv).map(function(k) { return byDiv[k]; });
+      var entry = { label: dayLabel, divs: divs, dayIndex: day };
+      if (isLastDay) lastDayEntry = entry;
+      gameDays.push(entry);
     }
+
     if (!lastDayEntry) {
       lastDayEntry = { label: 'Day ' + nDays + ' \u2014 Playoffs', divs: [], dayIndex: nDays - 1 };
       gameDays.push(lastDayEntry);
     }
 
-    // ── Phase 4: Schedule playoff games ──────────────────────────────────────
-    // For each division, check whether an "early playoff" is feasible:
-    //   - All RR games finish before the last day  (divLastRRDay < nDays-1)
-    //   - There are enough remaining slots on that day for all playoff games
-    // If feasible, SFs + Finals all go on divLastRRDay; otherwise last day.
-    // SFs are placed first; Finals/3rd-Place must start ≥90 min after last SF ends.
-    // Court selection respects venue priority (Blanes rules apply to playoffs too).
-
-    var LATE_LBLS = { 'FINAL': 1, '3rd Place': 1 };
-    var PO_GK = function(n) { return n + ' \u2014 Playoffs'; };
-
-    divisions.forEach(function(div) {
-      var matchups = getBracketGames(div);
-      if (!matchups.length) return;
-      var earlyM = matchups.filter(function(m) { return !LATE_LBLS[m.lbl]; });
-      var lateM  = matchups.filter(function(m) { return  LATE_LBLS[m.lbl]; });
-      var sfLastSi = {}; // bracket → slot index of last SF placed
-
-      // ── Phase 4 venue constraint (rule-aware) ─────────────
-      var venuePref4         = getVenuePriority(div.name);
-      var wasBlanesMandatory4 = (venuePref4 === 'blanes-only');
-      var effectivePref4     = (!rules.blanes && wasBlanesMandatory4) ? 'blanes-pref-1' : venuePref4;
-      var isBlanesOnly       = (effectivePref4 === 'blanes-only');
-      var courtOrder         = courtPriorityOrder(div.name, crts, effectivePref4);
-
-      // Determine which day to host playoffs for this division.
-      var divLastRRDay = undefined;
-      Object.keys(divDayLastSlot[div.name] || {}).forEach(function(dd) {
-        dd = parseInt(dd);
-        if (divLastRRDay === undefined || dd > divLastRRDay) divLastRRDay = dd;
-      });
-
-      var playoffDayIdx, targetDayEntry;
-      if (divLastRRDay !== undefined && divLastRRDay < nDays - 1) {
-        // Check early-playoff feasibility on divLastRRDay.
-        var earlySlots  = dayTimeSlots[Math.min(divLastRRDay, dayTimeSlots.length - 1)];
-        var lastRRSi    = divDayLastSlot[div.name][divLastRRDay];
-        var minPOSi     = lastRRSi + 2; // 90-min rest after last RR game
-        var slotsLeft   = earlySlots.length - minPOSi;
-        var gamesNeeded = earlyM.length + lateM.length + 1; // +1 gap for SF→Final
-        var courtsAvail = courtOrder.length;
-        if (slotsLeft > 0 && slotsLeft * courtsAvail >= gamesNeeded) {
-          // Early playoff fits — reuse or update that day's entry.
-          playoffDayIdx   = divLastRRDay;
-          targetDayEntry  = gameDays.find(function(de) { return de.dayIndex === playoffDayIdx; });
-          if (targetDayEntry && targetDayEntry.label.indexOf('Playoff') === -1) {
-            targetDayEntry.label = targetDayEntry.label.replace('Round Robin', 'Round Robin & Playoffs');
-          }
-        }
-      }
-      if (!targetDayEntry) {
-        playoffDayIdx  = nDays - 1;
-        targetDayEntry = lastDayEntry;
-      }
-
-      // Time slots for the resolved playoff day.
-      var timeSlots = dayTimeSlots[Math.min(playoffDayIdx, dayTimeSlots.length - 1)];
-
-      // Ensure slot-occupancy map exists for the chosen playoff day.
-      if (!dayCourtSlotUsed[playoffDayIdx]) {
-        dayCourtSlotUsed[playoffDayIdx] = crts.map(function() { return {}; });
-      }
-      var pSlots = dayCourtSlotUsed[playoffDayIdx];
-
-      // minSi: for early playoffs, start after the RR rest gap; else slot 0.
-      var poStartSi = (playoffDayIdx < nDays - 1)
-        ? (divDayLastSlot[div.name][playoffDayIdx] + 2)
-        : 0;
-
-      var placePlayoff = function(m, minSi) {
-        var chosen = null;
-        for (var si = minSi; si < timeSlots.length && !chosen; si++) {
-          for (var cci = 0; cci < courtOrder.length && !chosen; cci++) {
-            var ci = courtOrder[cci];
-            if (!pSlots[ci][si]) chosen = { si: si, ci: ci };
-          }
-        }
-        if (!chosen) {
-          unscheduledGames.push({
-            div: div.name, group: PO_GK(div.name), t1: m.t1 || '', t2: m.t2 || '', lbl: m.lbl,
-            reason: isBlanesOnly
-              ? 'Blanes courts full on playoff day. Add a Blanes court or shift to a different day.'
-              : 'No available slot on playoff day. Add courts or extend operating hours.'
-          });
-          return;
-        }
-        pSlots[chosen.ci][chosen.si] = true;
-        // Amber warning when Blanes mandate was relaxed and non-Blanes court was used
-        if (wasBlanesMandatory4 && !rules.blanes && !isBlanesCourt(crts[chosen.ci])) {
-          scheduleWarnings.push('VENUE RELAXED: ' + div.name + ' \u2014 playoff ['
-            + m.lbl + '] placed at non-Blanes court (Blanes exclusivity rule is OFF).');
-        }
-        if (!LATE_LBLS[m.lbl]) {
-          if (sfLastSi[m.bracket] === undefined || chosen.si > sfLastSi[m.bracket]) {
-            sfLastSi[m.bracket] = chosen.si;
-          }
-        }
-        var divEntry = targetDayEntry.divs.find(function(dx) { return dx.name === div.name; });
-        if (!divEntry) {
-          divEntry = { name: div.name, color: div.color, groups: {} };
-          targetDayEntry.divs.push(divEntry);
-        }
-        var gk = PO_GK(div.name);
-        if (!divEntry.groups[gk]) divEntry.groups[gk] = { group: gk, games: [] };
-        divEntry.groups[gk].games.push({
-          time: toT(timeSlots[chosen.si]), t1: m.t1, t2: m.t2, lbl: m.lbl, bracket: m.bracket,
-          court: crts[chosen.ci].court, score1: null, score2: null, locked: false
-        });
-      };
-
-      earlyM.forEach(function(m) { placePlayoff(m, poStartSi); });
-      lateM.forEach(function(m) {
-        // Final must skip at least one full slot after the last SF (pure slot-based rest).
-        var sfSi = sfLastSi[m.bracket];
-        var minFinalSi = sfSi !== undefined ? sfSi + 2 : poStartSi;
-        placePlayoff(m, minFinalSi);
-      });
-    });
-
-    // bracketDays: merged view of all playoff game objects across ALL gameDays entries.
-    // Scanning all days handles early-playoff divisions (SFs on Day 2, Finals on Day 3).
-    // The game objects are SHARED references with gameDays, so scoring in either tab
-    // is instantly visible in both.
+    // ── 7. Assemble bracketDays (merged playoff view across all days) ─────────
+    // Game objects are shared references with gameDays so scoring updates both tabs.
     var bracketDivMap = {};
     gameDays.forEach(function(de) {
       de.divs.forEach(function(d) {
@@ -1377,8 +1217,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             bracketDivMap[d.name] = { name: d.name, color: d.color,
               teams: (divDef ? divDef.teams : []), games: d.groups[gk].games };
           } else {
-            // Division split across days (early SFs + later Finals) — merge arrays.
-            bracketDivMap[d.name].games = bracketDivMap[d.name].games.concat(d.groups[gk].games);
+            bracketDivMap[d.name].games =
+              bracketDivMap[d.name].games.concat(d.groups[gk].games);
           }
         }
       });
@@ -1388,7 +1228,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       ? [{ label: lastDayEntry.label, divs: bracketDivsList }]
       : [];
 
-    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: crts.length };
+    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: nCourts };
     renderSched();
     renderStandings();
     renderBrack();
@@ -1784,7 +1624,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   }
 
   function renderStandings() {
-    var st = computeStandings();
+    var grpSt = computeGroupStandings();
     var validation = validateRoundRobin();
     var h = '';
     if (Object.keys(validation).length > 0) {
@@ -1797,18 +1637,24 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       });
       h += '</div>';
     }
-    var divNames = Object.keys(st);
+    var divNames = Object.keys(grpSt);
     if (!divNames.length) {
       h += '<div class="empty"><div class="ico">&#128200;</div><p>No standings</p></div>';
     } else {
-      divNames.forEach(function(div){
-        h += '<div class="day-hdr">' + div + '</div>';
-        h += '<table class="standings-table"><thead><tr><th>Team</th><th>W</th><th>L</th><th>PF</th><th>PA</th></tr></thead><tbody>';
-        st[div].order.forEach(function(team){
-          var r = st[div].teams[team];
-          h += '<tr><td>' + team + '</td><td>' + r.W + '</td><td>' + r.L + '</td><td>' + r.PF + '</td><td>' + r.PA + '</td></tr>';
+      divNames.forEach(function(divName) {
+        var divGroups = grpSt[divName];
+        var groupLabels = Object.keys(divGroups);
+        groupLabels.forEach(function(grpLbl) {
+          var grp = divGroups[grpLbl];
+          h += '<div class="day-hdr">' + grpLbl + '</div>';
+          h += '<table class="standings-table"><thead><tr><th>Team</th><th>W</th><th>L</th><th>PF</th><th>PA</th><th>+/-</th></tr></thead><tbody>';
+          grp.order.forEach(function(team) {
+            var r = grp.teams[team];
+            var diff = r.PF - r.PA;
+            h += '<tr><td>' + team + '</td><td>' + r.W + '</td><td>' + r.L + '</td><td>' + r.PF + '</td><td>' + r.PA + '</td><td>' + (diff >= 0 ? '+' : '') + diff + '</td></tr>';
+          });
+          h += '</tbody></table>';
         });
-        h += '</tbody></table>';
       });
     }
     document.getElementById('standingsOut').innerHTML = h;
