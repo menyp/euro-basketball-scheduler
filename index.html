@@ -1017,18 +1017,32 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         grid[_d][_s] = _row;
       }
     }
-    var teamLastPlacement = {}; // divTeamKey → {day, slotIdx}
+    var teamLastPlacement = {}; // divTeamKey → {day, slotIdx}  (kept for legacy)
     var teamDayCount      = {}; // divTeamKey → {day: count}
     var divRRPlaced       = {}; // divName → count of RR games placed
     // sfBracketLastSlot[divName+'\0'+bracket] = {day,slotIdx} — max SF slot placed
     var sfBracketLastSlot = {};
+    // teamSlotBusy["key:day:si"] = true — exact slot occupancy for bidirectional rest checks.
+    // Prevents same-slot double-booking even when Phase D rescans earlier days/slots.
+    var teamSlotBusy = {};
 
     // ── 3. Helpers ────────────────────────────────────────────────────────────
+    // slotConflict: true if the team is already at slot si, si-1, or si+1 on this day.
+    // Checks bidirectionally so Phase D (which rescans earlier days) is safe.
+    function slotConflict(key, day, si) {
+      var pfx = key + ':' + day + ':';
+      return !!(teamSlotBusy[pfx + (si - 1)] || teamSlotBusy[pfx + si] || teamSlotBusy[pfx + (si + 1)]);
+    }
+
     function teamCanPlay(key, day, si) {
-      var lp = teamLastPlacement[key];
-      if (lp && lp.day === day && si < lp.slotIdx + 2) return false; // same-day rest
+      if (slotConflict(key, day, si)) return false;          // rest + exact-slot
       if (((teamDayCount[key] || {})[day] || 0) >= maxGPD) return false; // daily quota
       return true;
+    }
+
+    // Soft check: quota ignored, rest still enforced (used in fallback Phase D)
+    function teamCanPlaySoft(key, day, si) {
+      return !slotConflict(key, day, si);
     }
 
     function hasFreeCourtAt(day, si) {
@@ -1038,7 +1052,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     }
 
     function recordPlacement(item, day, si, ci) {
-      item.placed = true; item.day = day; item.slotIdx = si; item.court = crts[ci].court;
+      item.placed = true; item.day = day; item.slotIdx = si; item.courtIdx = ci; item.court = crts[ci].court;
       grid[day][si][ci] = true;
       if (item.type === 'RR') {
         var k1 = item.divName + '\x00' + item.t1, k2 = item.divName + '\x00' + item.t2;
@@ -1048,6 +1062,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             teamLastPlacement[k] = { day: day, slotIdx: si };
           teamDayCount[k] = teamDayCount[k] || {};
           teamDayCount[k][day] = (teamDayCount[k][day] || 0) + 1;
+          teamSlotBusy[k + ':' + day + ':' + si] = true; // exact slot occupancy
         });
         divRRPlaced[item.divName] = (divRRPlaced[item.divName] || 0) + 1;
       }
@@ -1059,74 +1074,122 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       }
     }
 
-    // ── 4. Main loop: Day → Slot → Court ─────────────────────────────────────
+    // ── 4. Anchor-First Playoff Placement ────────────────────────────────────
+    // Phase A: Place Finals & 3rd-Place as anchors (scan backwards from last slot).
+    // Phase B: Lock SFs exactly 2 slots before their bracket's anchor.
+    // Phase C: RR greedy fill — time-first in all remaining free slots.
+    //
+    // This guarantees SF+2=Final is always satisfiable: anchors claim the late
+    // slots before any RR game can occupy them.
+
+    // Group poItems by bracket key
+    var byBracket = {};
+    poItems.forEach(function(g) {
+      var bk = g.divName + '\x00' + g.bracket;
+      if (!byBracket[bk]) byBracket[bk] = { lates: [], sfs: [] };
+      if (g.isLate) byBracket[bk].lates.push(g);
+      else          byBracket[bk].sfs.push(g);
+    });
+
+    // Phase A — anchor Finals / 3rd-Place in the latest available slots
+    Object.keys(byBracket).forEach(function(bk) {
+      var b = byBracket[bk];
+      if (!b.lates.length) return;
+      var anchored = false;
+      for (var ad = nDays - 1; ad >= 0 && !anchored; ad--) {
+        var adSlots = dayTimeSlots[Math.min(ad, dayTimeSlots.length - 1)];
+        for (var alsi = adSlots.length - 1; alsi >= 2 && !anchored; alsi--) {
+          // Need alsi-2 free for SFs, so require at least slot index 2
+          var freeLate = [];
+          for (var aci = 0; aci < nCourts; aci++) {
+            if (!grid[ad][alsi][aci]) freeLate.push(aci);
+          }
+          if (freeLate.length < b.lates.length) continue;
+          for (var ali = 0; ali < b.lates.length; ali++) {
+            b.lates[ali].placed  = true;
+            b.lates[ali].day     = ad;
+            b.lates[ali].slotIdx = alsi;
+            b.lates[ali].court   = crts[freeLate[ali]].court;
+            grid[ad][alsi][freeLate[ali]] = true;
+          }
+          anchored = true;
+        }
+      }
+    });
+
+    // Phase B — place SFs exactly 2 slots before their anchored Finals
+    // Only handles brackets that have Finals anchored in Phase A.
+    Object.keys(byBracket).forEach(function(bk) {
+      var b = byBracket[bk];
+      if (!b.sfs.length) return;
+      if (!b.lates.length || b.lates[0].day < 0) return;
+      var lateDay = b.lates[0].day;
+      var lateSi  = b.lates[0].slotIdx;
+      var bsfSi   = lateSi - 2;
+      if (bsfSi < 0) return;
+      var freeSF = [];
+      for (var bci = 0; bci < nCourts; bci++) {
+        if (!grid[lateDay][bsfSi][bci]) freeSF.push(bci);
+      }
+      for (var bsfi = 0; bsfi < b.sfs.length && bsfi < freeSF.length; bsfi++) {
+        b.sfs[bsfi].placed   = true;
+        b.sfs[bsfi].day      = lateDay;
+        b.sfs[bsfi].slotIdx  = bsfSi;
+        b.sfs[bsfi].court    = crts[freeSF[bsfi]].court;
+        grid[lateDay][bsfSi][freeSF[bsfi]] = true;
+      }
+    });
+
+    // Phase B2 — greedy fallback for ALL remaining unplaced PO games.
+    // Handles: (a) consolation brackets that have no Finals (5th/6th, 7th/8th…),
+    //          (b) Championship SFs that overflowed Phase B's preferred slot when
+    //              14+ SFs competed for a 10-court slot.
+    // Scans backwards from the last slot of the last day so PO games cluster late.
+    poItems.forEach(function(g) {
+      if (g.placed) return;
+      for (var pd = nDays - 1; pd >= 0 && !g.placed; pd--) {
+        var pdSlots = dayTimeSlots[Math.min(pd, dayTimeSlots.length - 1)];
+        for (var psi = pdSlots.length - 1; psi >= 0 && !g.placed; psi--) {
+          for (var pci = 0; pci < nCourts && !g.placed; pci++) {
+            if (!grid[pd][psi][pci]) {
+              g.placed  = true;
+              g.day     = pd;
+              g.slotIdx = psi;
+              g.court   = crts[pci].court;
+              grid[pd][psi][pci] = true;
+            }
+          }
+        }
+      }
+    });
+
+    // Phase C — RR greedy fill in all remaining free slots (time-first)
     for (var day = 0; day < nDays; day++) {
       var slots = dayTimeSlots[Math.min(day, dayTimeSlots.length - 1)];
 
       for (var si = 0; si < slots.length; si++) {
-
-        // Build placeable queue for this (day, si).
-        // Games are re-verified in the court loop since state changes per court.
         var queue = [];
-
         rrItems.forEach(function(g) {
           if (g.placed) return;
           var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
           if (teamCanPlay(k1, day, si) && teamCanPlay(k2, day, si)) queue.push(g);
         });
 
-        poItems.forEach(function(g) {
-          if (g.placed) return;
-          // Causality: every RR game for this division must be placed first
-          if ((divRRPlaced[g.divName] || 0) < (divRRTotal[g.divName] || 0)) return;
-          if (g.isLate) {
-            // Final/3rd: bracket's SFs must be placed AND si ≥ sfLastSlot+2 (same day)
-            var bkL = g.divName + '\x00' + g.bracket;
-            var sfL = sfBracketLastSlot[bkL];
-            if (!sfL || sfL.day > day) return;
-            if (sfL.day === day && si < sfL.slotIdx + 2) return;
-          } else if (g.needsFinalSlot) {
-            // SF look-ahead: same-day Final slot at si+2 must exist and have a free court
-            if (si + 2 >= slots.length || !hasFreeCourtAt(day, si + 2)) return;
-          }
-          queue.push(g);
-        });
-
-        // Sort: RR by roundIdx (0→1→2…), then earlyPO (998), then latePO (999).
-        // Within same priority: alphabetical on divName, group, t1, t2 for determinism.
         queue.sort(function(a, b) {
-          var ap = (a.type === 'RR') ? a.roundIdx : (a.isLate ? 999 : 998);
-          var bp = (b.type === 'RR') ? b.roundIdx : (b.isLate ? 999 : 998);
-          if (ap !== bp) return ap - bp;
+          if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
           if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
           var ag = a.group || '', bg = b.group || '';
           if (ag !== bg) return ag < bg ? -1 : 1;
-          var at1 = a.t1 || '', bt1 = b.t1 || '';
-          if (at1 !== bt1) return at1 < bt1 ? -1 : 1;
-          return (a.t2 || '') < (b.t2 || '') ? -1 : 1;
+          return (a.t1 || '') < (b.t1 || '') ? -1 : 1;
         });
 
-        // Fill every free court this slot with the best available game
         for (var ci = 0; ci < nCourts; ci++) {
           if (grid[day][si][ci]) continue;
-
           for (var qi = 0; qi < queue.length; qi++) {
             var g = queue[qi];
             if (g.placed) { queue.splice(qi--, 1); continue; }
-
-            // Re-verify (state evolves as earlier courts in this slot are filled)
-            if (g.type === 'RR') {
-              var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
-              if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) continue;
-            } else if (g.isLate) {
-              var bkR = g.divName + '\x00' + g.bracket;
-              var sfR = sfBracketLastSlot[bkR];
-              if (!sfR || sfR.day > day) continue;
-              if (sfR.day === day && si < sfR.slotIdx + 2) continue;
-            } else if (g.needsFinalSlot) {
-              if (si + 2 >= slots.length || !hasFreeCourtAt(day, si + 2)) continue;
-            }
-
+            var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
+            if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) continue;
             recordPlacement(g, day, si, ci);
             queue.splice(qi, 1);
             break;
@@ -1134,6 +1197,136 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         }
       }
     }
+
+    // ── Phase D — Soft-quota fallback ────────────────────────────────────────
+    // Any RR game still unplaced gets a second pass where maxGPD is ignored.
+    // Rest (minGap=2 slots) is still enforced. Games placed here are tagged
+    // quotaViolation:true so the UI can flag them.
+    for (var dday = 0; dday < nDays; dday++) {
+      var dslots = dayTimeSlots[Math.min(dday, dayTimeSlots.length - 1)];
+      for (var dsi = 0; dsi < dslots.length; dsi++) {
+        var dqueue = [];
+        rrItems.forEach(function(g) {
+          if (g.placed) return;
+          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+          if (teamCanPlaySoft(k1, dday, dsi) && teamCanPlaySoft(k2, dday, dsi)) dqueue.push(g);
+        });
+        dqueue.sort(function(a, b) {
+          if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
+          if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
+          return (a.group || '') < (b.group || '') ? -1 : 1;
+        });
+        for (var dci = 0; dci < nCourts; dci++) {
+          if (grid[dday][dsi][dci]) continue;
+          for (var dqi = 0; dqi < dqueue.length; dqi++) {
+            var dg = dqueue[dqi];
+            if (dg.placed) { dqueue.splice(dqi--, 1); continue; }
+            var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
+            if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) continue;
+            dg.quotaViolation = true;
+            recordPlacement(dg, dday, dsi, dci);
+            dqueue.splice(dqi, 1);
+            break;
+          }
+        }
+      }
+    }
+
+    // ── Phase E — Rescue Shuffle ──────────────────────────────────────────────
+    // For each RR game still unplaced after Phase D, attempt a single-level swap:
+    // find a placed RR game (blocker) whose slot would be valid for the failed game,
+    // then relocate the blocker to any other free slot that respects its rest constraint.
+    // PO games (Phases A/B/B2) are immovable. Quota violations are tagged as usual.
+    // The gridGame reverse-lookup maps "day:si:ci" → rrItem for O(1) blocker detection.
+
+    var gridGame = {};
+    rrItems.forEach(function(g) {
+      if (g.placed) gridGame[g.day + ':' + g.slotIdx + ':' + g.courtIdx] = g;
+    });
+
+    rrItems.forEach(function(fg) {
+      if (fg.placed) return;
+      var fk1 = fg.divName + '\x00' + fg.t1, fk2 = fg.divName + '\x00' + fg.t2;
+
+      for (var efd = 0; efd < nDays && !fg.placed; efd++) {
+        var efSlots = dayTimeSlots[Math.min(efd, dayTimeSlots.length - 1)];
+
+        for (var efsi = 0; efsi < efSlots.length && !fg.placed; efsi++) {
+          if (slotConflict(fk1, efd, efsi) || slotConflict(fk2, efd, efsi)) continue;
+
+          for (var efci = 0; efci < nCourts && !fg.placed; efci++) {
+
+            if (!grid[efd][efsi][efci]) {
+              // Free court — place with quota violation if needed (Phase D safety net)
+              if (((teamDayCount[fk1]||{})[efd]||0) >= maxGPD ||
+                  ((teamDayCount[fk2]||{})[efd]||0) >= maxGPD) fg.quotaViolation = true;
+              recordPlacement(fg, efd, efsi, efci);
+              gridGame[efd+':'+efsi+':'+efci] = fg;
+
+            } else {
+              // Court occupied — try to relocate the blocker if it is an RR game
+              var bg = gridGame[efd+':'+efsi+':'+efci];
+              if (!bg) continue; // PO anchor — immovable
+
+              var bk1 = bg.divName+'\x00'+bg.t1, bk2 = bg.divName+'\x00'+bg.t2;
+
+              // Temporarily lift bg's rest-occupancy so swap-target checks are unbiased
+              var bgBk1 = bk1+':'+bg.day+':'+bg.slotIdx;
+              var bgBk2 = bk2+':'+bg.day+':'+bg.slotIdx;
+              delete teamSlotBusy[bgBk1];
+              delete teamSlotBusy[bgBk2];
+
+              var swapped = false;
+              for (var ebd = 0; ebd < nDays && !swapped; ebd++) {
+                var ebSlots = dayTimeSlots[Math.min(ebd, dayTimeSlots.length - 1)];
+                for (var ebsi = 0; ebsi < ebSlots.length && !swapped; ebsi++) {
+                  if (ebd === efd && ebsi === efsi) continue; // same slot as fg target
+                  if (slotConflict(bk1, ebd, ebsi) || slotConflict(bk2, ebd, ebsi)) continue;
+                  for (var ebci = 0; ebci < nCourts && !swapped; ebci++) {
+                    if (grid[ebd][ebsi][ebci]) continue; // court not free
+
+                    // Valid relocation found for bg — execute swap
+
+                    // Step 1: detach bg from old position
+                    var bgOldDay = bg.day, bgOldSi = bg.slotIdx, bgOldCi = bg.courtIdx;
+                    grid[bgOldDay][bgOldSi][bgOldCi] = false;
+                    delete gridGame[bgOldDay+':'+bgOldSi+':'+bgOldCi];
+                    if (teamDayCount[bk1] && teamDayCount[bk1][bgOldDay] > 0) teamDayCount[bk1][bgOldDay]--;
+                    if (teamDayCount[bk2] && teamDayCount[bk2][bgOldDay] > 0) teamDayCount[bk2][bgOldDay]--;
+                    // teamSlotBusy for bg's old slot is already deleted above
+
+                    // Step 2: attach bg to new position
+                    bg.day = ebd; bg.slotIdx = ebsi; bg.courtIdx = ebci; bg.court = crts[ebci].court;
+                    grid[ebd][ebsi][ebci] = true;
+                    gridGame[ebd+':'+ebsi+':'+ebci] = bg;
+                    teamSlotBusy[bk1+':'+ebd+':'+ebsi] = true;
+                    teamSlotBusy[bk2+':'+ebd+':'+ebsi] = true;
+                    teamDayCount[bk1] = teamDayCount[bk1] || {};
+                    teamDayCount[bk2] = teamDayCount[bk2] || {};
+                    teamDayCount[bk1][ebd] = (teamDayCount[bk1][ebd]||0) + 1;
+                    teamDayCount[bk2][ebd] = (teamDayCount[bk2][ebd]||0) + 1;
+                    if (teamDayCount[bk1][ebd] > maxGPD || teamDayCount[bk2][ebd] > maxGPD) bg.quotaViolation = true;
+
+                    // Step 3: place fg in the freed slot
+                    if (((teamDayCount[fk1]||{})[efd]||0) >= maxGPD ||
+                        ((teamDayCount[fk2]||{})[efd]||0) >= maxGPD) fg.quotaViolation = true;
+                    recordPlacement(fg, efd, efsi, efci);
+                    gridGame[efd+':'+efsi+':'+efci] = fg;
+                    swapped = true;
+                  }
+                }
+              }
+
+              if (!swapped) {
+                // Blocker couldn't be relocated — restore its rest-occupancy
+                teamSlotBusy[bgBk1] = true;
+                teamSlotBusy[bgBk2] = true;
+              }
+            }
+          }
+        }
+      }
+    });
 
     // ── 5. Collect unplaced games as failures ─────────────────────────────────
     rrItems.forEach(function(g) {
@@ -1179,7 +1372,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (!de.groups[g.group]) de.groups[g.group] = { group: g.group, games: [] };
         de.groups[g.group].games.push({
           time: toT(daySlots[g.slotIdx]), t1: g.t1, t2: g.t2,
-          court: g.court, score1: null, score2: null, locked: false
+          court: g.court, score1: null, score2: null, locked: false,
+          quotaViolation: g.quotaViolation || false
         });
       });
       dayPO.forEach(function(g) {
@@ -1304,12 +1498,19 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var lblBadge = g.lbl
         ? ('<span class="rb" style="border-color:' + item.color + '66;color:' + item.color + ';white-space:nowrap;flex-shrink:0">' + g.lbl + '</span>')
         : '';
-      h += '<div class="gc" style="border-left-color:' + item.color + '">'
+      var quotaStyle = g.quotaViolation
+        ? ';outline:1px dashed rgba(255,107,0,0.55);background:rgba(255,107,0,0.05)'
+        : '';
+      var quotaBadge = g.quotaViolation
+        ? '<div style="width:100%;font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;color:#FF6B00;margin-top:4px;padding-top:3px;border-top:1px dashed rgba(255,107,0,0.35)">\u26A0\uFE0F Exceeds Daily Limit</div>'
+        : '';
+      h += '<div class="gc" style="border-left-color:' + item.color + quotaStyle + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
         + lblBadge
         + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
         + '<div class="gm"><span>' + g.court + '</span></div></div>'
         + '<div style="margin-left:8px;">' + scoreHtml + '</div>'
+        + quotaBadge
         + '</div>';
     });
     return h;
@@ -1335,6 +1536,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     }, 0);
     var failedCount = unscheduledGames.length;
     var totalCount  = scheduledCount + failedCount;
+    var quotaViolationCount = 0;
+    sched.gameDays.forEach(function(de) {
+      de.divs.forEach(function(d) {
+        var games = d.games ? d.games : [];
+        if (d.groups) { Object.keys(d.groups).forEach(function(gk){ games = games.concat(d.groups[gk].games); }); }
+        games.forEach(function(g) { if (g.quotaViolation) quotaViolationCount++; });
+      });
+    });
     var clubWarns  = scheduleWarnings.filter(function(w){ return w.indexOf('CLUB CONFLICT:')  === 0; });
     var venueWarns = scheduleWarnings.filter(function(w){ return w.indexOf('VENUE RELAXED:')  === 0; });
     var restWarns  = scheduleWarnings.filter(function(w){ return w.indexOf('REST RELAXED:')   === 0; });
@@ -1353,6 +1562,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '<div><div style="font-family:Montserrat,sans-serif;font-size:26px;font-weight:900;line-height:1;color:' + (failedCount > 0 ? '#FF3030' : '#10B981') + '">'
       + (failedCount > 0 ? failedCount + ' \u274C' : '0 \u2705') + '</div>'
       + '<div style="font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-top:3px">Failed / Unscheduled</div></div>'
+      + '<div><div style="font-family:Montserrat,sans-serif;font-size:26px;font-weight:900;line-height:1;color:' + (quotaViolationCount > 0 ? '#FF6B00' : '#10B981') + '">'
+      + (quotaViolationCount > 0 ? quotaViolationCount + ' \u26A0\uFE0F' : '0 \u2705') + '</div>'
+      + '<div style="font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-top:3px">Quota Warnings</div></div>'
       + '</div>'
       + (failedCount > 0
           ? '<div style="font-size:11px;color:#ff8080;margin-top:10px;font-family:Montserrat,sans-serif;font-weight:600">'
