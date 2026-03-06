@@ -251,13 +251,51 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       <div id="dayHoursContainer"></div>
       <label style="margin-top:18px">Max games per team per day</label>
       <input type="number" id="maxGPD" value="2" min="1" max="10">
+      <label style="margin-top:18px">Finals Preferred Times <span style="font-weight:400;font-size:12px;opacity:.7">(order matters, comma-separated)</span></label>
+      <input type="text" id="finalTimes" value="16:00, 14:30, 17:30" placeholder="e.g. 16:00, 14:30, 17:30" style="width:220px">
+      <p class="help" style="margin-top:4px">FINAL games on the last day will be anchored to the closest available slot at these times (first match wins).</p>
     </div>
 
-    <!-- Restriction toggles disabled — all venue/club rules off, back-to-back always enforced -->
+    <!-- Hidden legacy toggles (not surfaced in UI) -->
     <div style="display:none">
       <input type="checkbox" id="ruleBlanes">
       <input type="checkbox" id="ruleClub">
-      <input type="checkbox" id="ruleRest" checked>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="stitle">Advanced Scheduling Rules</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <label class="rule-toggle" style="margin:0">
+            <input type="checkbox" id="ruleRest" checked>
+            <span class="rule-slider"></span>
+          </label>
+          <div class="rule-lbl">
+            <strong>Team Rest Between Games</strong>
+            <small>When ON, a minimum 90-minute gap (2 slots) is enforced between a team's games on the same day. Turn OFF to allow back-to-back scheduling when courts are limited.</small>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <label class="rule-toggle" style="margin:0">
+            <input type="checkbox" id="ruleVenueRest">
+            <span class="rule-slider"></span>
+          </label>
+          <div class="rule-lbl">
+            <strong>3-Hour Rest for Venue Change</strong>
+            <small>When ON, a team switching venues on the same day requires a 3-hour (4-slot) gap between games. Stricter than standard rest — may reduce scheduling density.</small>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="stitle">Venue Priority Rules</div>
+      <p class="help" style="margin-bottom:10px">Set Blanes court priority per category. Categories not listed are treated as <strong>Flexible</strong> (any court).</p>
+      <div id="venueRulesList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="add-btn" id="addVenueRuleBtn" style="margin-top:10px">+ Add Priority Rule</button>
     </div>
 
   </div>
@@ -381,6 +419,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           }).join('')
         + '</div></div>';
     }).join('');
+    applyDefaultVenueRules();
   }
 
   document.getElementById('divList').addEventListener('click', function (e) {
@@ -424,6 +463,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   document.getElementById('addSiteBtn').addEventListener('click', function () {
     sites.push({ name: '', numCourts: 1 }); renderSites();
   });
+  document.getElementById('addVenueRuleBtn').addEventListener('click', function () {
+    var firstDiv = divisions.length ? divisions[0].name : '';
+    venueRules.push({ divName: firstDiv, prio: 'blanes-only' });
+    renderVenueRules();
+  });
   function updateTotal() {
     var t = sites.reduce(function (s, x) { return s + (parseInt(x.numCourts) || 1); }, 0);
     document.getElementById('totalBadge').innerHTML = 'Total courts: <strong>' + t + '</strong>';
@@ -443,11 +487,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   // Called at the start of each schedule generation so settings persist across runs.
   function getRuleToggles() {
     return {
-      blanes: document.getElementById('ruleBlanes').checked,
-      club:   document.getElementById('ruleClub').checked,
-      rest:   document.getElementById('ruleRest').checked
+      blanes:     document.getElementById('ruleBlanes').checked,
+      club:       document.getElementById('ruleClub').checked,
+      rest:       document.getElementById('ruleRest').checked,
+      venueRest:  document.getElementById('ruleVenueRest').checked
     };
   }
+
+  // venueRules: per-category Blanes priority rules set by the admin.
+  // Each entry: { divName: string, prio: 'blanes-only' | 'blanes-pref-1' }
+  // Any division not listed is implicitly 'any' (Flexible).
+  var venueRules = [];
 
   // ── Per-day operating hours ────────────────────────────
   // Returns [{start:'09:00', end:'19:00'}, ...] for each tournament day.
@@ -534,6 +584,61 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return (m ? m[1] : teamName).trim().toUpperCase();
   }
 
+  // Extract 2-4 letter country code from "TEAM NAME (GER)" → "GER". Returns '' if not found.
+  function extractCountry(teamName) {
+    var m = (teamName || '').match(/\(([A-Z]{2,4})\)\s*$/);
+    return m ? m[1] : '';
+  }
+
+  // ── Venue Priority Rules UI ─────────────────────────────
+  function renderVenueRules() {
+    var el = document.getElementById('venueRulesList');
+    if (!el) return;
+    el.innerHTML = '';
+    venueRules.forEach(function(rule, idx) {
+      var catOpts = '';
+      if (divisions.length) {
+        divisions.forEach(function(d) {
+          catOpts += '<option value="' + d.name.replace(/"/g,'&quot;') + '"'
+            + (d.name === rule.divName ? ' selected' : '') + '>' + d.name + '</option>';
+        });
+      } else {
+        catOpts += '<option value="' + rule.divName.replace(/"/g,'&quot;') + '" selected>' + rule.divName + '</option>';
+      }
+      var prioOpts = '<option value="blanes-only"'  + (rule.prio==='blanes-only'  ? ' selected':'') + '>Mandatory (Blanes Only)</option>'
+                   + '<option value="blanes-pref-1"' + (rule.prio==='blanes-pref-1' ? ' selected':'') + '>High Priority</option>';
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+      row.innerHTML = '<select class="vr-cat" data-idx="' + idx + '" style="flex:1;min-width:140px">' + catOpts + '</select>'
+        + '<select class="vr-prio" data-idx="' + idx + '" style="min-width:180px">' + prioOpts + '</select>'
+        + '<button class="rm-btn vr-del" data-idx="' + idx + '">x</button>';
+      el.appendChild(row);
+    });
+    el.querySelectorAll('.vr-cat').forEach(function(s) {
+      s.onchange = function() { venueRules[+this.dataset.idx].divName = this.value; };
+    });
+    el.querySelectorAll('.vr-prio').forEach(function(s) {
+      s.onchange = function() { venueRules[+this.dataset.idx].prio = this.value; };
+    });
+    el.querySelectorAll('.vr-del').forEach(function(b) {
+      b.onclick = function() { venueRules.splice(+this.dataset.idx, 1); renderVenueRules(); };
+    });
+  }
+
+  // Apply sensible defaults for newly parsed divisions (never overwrites user edits).
+  function applyDefaultVenueRules() {
+    divisions.forEach(function(d) {
+      var already = venueRules.some(function(r) { return r.divName === d.name; });
+      if (already) return;
+      var n = d.name.toUpperCase(), isGirls = /GIRL|WOMEN/.test(n);
+      if (!isGirls && n.indexOf('18') !== -1) {
+        venueRules.push({ divName: d.name, prio: 'blanes-only' }); // Boys U18 → Mandatory
+      }
+      // All other categories start as Flexible (no rule entry)
+    });
+    renderVenueRules();
+  }
+
   // ── Fixed time-slot helpers ────────────────────────────
   // Returns valid game start times (minutes) at 90-min intervals, skipping lunch.
   // `et` is the latest ALLOWED start time (inclusive). Each slot occupies 90 min.
@@ -549,43 +654,86 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   }
 
   // ── Venue-priority helpers ─────────────────────────────
-  // Boys U16/U18 → Blanes only  (hard constraint)
-  // Girls U18    → Blanes first  (soft priority 1)
-  // Girls U16    → Blanes second (soft priority 2)
-  // All others   → non-Blanes first (leave Blanes for priority divs)
+  // Driven by venueRules[] — admin-configured per-category priorities.
+  // Any category not in venueRules defaults to 'any' (Flexible).
   function getVenuePriority(divName) {
-    var n = divName.toUpperCase();
-    var isGirls = /GIRL|WOMEN/.test(n);
-    var u18 = n.indexOf('18') !== -1, u16 = n.indexOf('16') !== -1;
-    if (!isGirls && u18) return 'blanes-only';
-    if (!isGirls && u16) return 'blanes-only';
-    if (isGirls  && u18) return 'blanes-pref-1';
-    if (isGirls  && u16) return 'blanes-pref-2';
+    for (var i = 0; i < venueRules.length; i++) {
+      if (venueRules[i].divName === divName) return venueRules[i].prio;
+    }
     return 'any';
   }
   function venueTierNum(divName) {
     var p = getVenuePriority(divName);
-    return p === 'blanes-only' ? 0 : p === 'blanes-pref-1' ? 1 : p === 'blanes-pref-2' ? 2 : 3;
+    return p === 'blanes-only' ? 0 : p === 'blanes-pref-1' ? 1 : 2;
   }
   function isBlanesCourt(crt) {
     return (crt.loc || '').toLowerCase().indexOf('blanes') !== -1;
   }
-  // Returns court indices in the preferred order for a given division.
-  // Pass overridePref to substitute a different priority (e.g. when a rule is toggled off).
-  function courtPriorityOrder(divName, crts, overridePref) {
-    var prio = (overridePref !== undefined) ? overridePref : getVenuePriority(divName);
+  // Returns court indices in the preferred order for a given game.
+  // lbl (optional): PO game label — takes full priority over division-based rules.
+  //   • 'FINAL' / '3rd Place'       → Blanes courts only  (matches courtAllowed hard gate)
+  //   • Boys U18 + any 'SF…' label  → Blanes first (U18B plays all games in Blanes)
+  //   • Any other PO label           → non-Blanes ONLY, no Blanes fallback (strict eviction)
+  //   • undefined (RR games)         → division-based priority via getVenuePriority
+  // overridePref: substitute a fixed priority string (used in legacy callers).
+  function courtPriorityOrder(divName, crts, overridePref, lbl) {
     var bIdx = [], oIdx = [];
     crts.forEach(function(c, i) { (isBlanesCourt(c) ? bIdx : oIdx).push(i); });
+    if (lbl !== undefined) {
+      if (lbl === 'FINAL' || lbl === '3rd Place') return bIdx;  // Blanes only (hard)
+      // Mandatory divisions: SFs stay in Blanes (same venue as their RR games)
+      if (getVenuePriority(divName) === 'blanes-only' && /^SF/.test(lbl)) {
+        return bIdx.concat(oIdx);                               // Blanes preferred for Mandatory SFs
+      }
+      return oIdx;                                              // strict: all other PO → non-Blanes only
+    }
+    var prio = (overridePref !== undefined) ? overridePref : getVenuePriority(divName);
     if (prio === 'blanes-only')   return bIdx;
-    if (prio === 'blanes-pref-1' || prio === 'blanes-pref-2') return bIdx.concat(oIdx);
-    return oIdx.concat(bIdx); // 'any': prefer non-Blanes to keep Blanes free
+    if (prio === 'blanes-pref-1') return bIdx.concat(oIdx);
+    return oIdx.concat(bIdx); // 'any' / flexible: prefer non-Blanes to keep Blanes free
   }
 
+
+  // ── National mixing helpers ──────────────────────────
+  function countCountry(group, c) {
+    return group.reduce(function(n, t) { return n + (extractCountry(t) === c ? 1 : 0); }, 0);
+  }
+
+  // Greedy swap to enforce max 2 same-country teams per group (best-effort, up to 50 passes).
+  function applyNationalMixing(groups) {
+    var MAX = 2, changed = true, pass = 0;
+    while (changed && pass++ < 50) {
+      changed = false;
+      for (var gi = 0; gi < groups.length; gi++) {
+        var counts = {};
+        groups[gi].forEach(function(t) { var c = extractCountry(t); if (c) counts[c] = (counts[c] || 0) + 1; });
+        for (var c in counts) {
+          if (counts[c] <= MAX) continue;
+          for (var ti = 0; ti < groups[gi].length && !changed; ti++) {
+            if (extractCountry(groups[gi][ti]) !== c) continue;
+            for (var gj = 0; gj < groups.length && !changed; gj++) {
+              if (gj === gi) continue;
+              if (countCountry(groups[gj], c) >= MAX) continue;
+              for (var tj = 0; tj < groups[gj].length && !changed; tj++) {
+                var sc = extractCountry(groups[gj][tj]);
+                if (sc === c) continue;
+                if (countCountry(groups[gi], sc) >= MAX) continue;
+                var tmp = groups[gi][ti]; groups[gi][ti] = groups[gj][tj]; groups[gj][tj] = tmp;
+                changed = true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return groups;
+  }
 
   // ── Groups editor ───────────────────────────────────
   function optimalChunkSize(n) {
     if (n <= 5)  return n;   // 1 group — everyone plays everyone
-    if (n <= 8)  return 4;   // 2 groups of 4
+    if (n === 6) return 3;   // 2 groups of 3 for 6-team divisions
+    if (n <= 8)  return 4;   // 2 groups of 4 for 7-8 teams
     if (n <= 12) return 3;   // 3–4 groups of 3
     return 4;                // 4 groups of 4
   }
@@ -593,7 +741,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   function ensureManualGroups() {
     divisions.forEach(function(d){
       if (!d.manualGroups || !Array.isArray(d.manualGroups)) {
-        d.manualGroups = chunk(d.teams, optimalChunkSize(d.teams.length));
+        var groups = chunk(d.teams, optimalChunkSize(d.teams.length));
+        d.manualGroups = applyNationalMixing(groups);
       }
     });
   }
@@ -613,8 +762,15 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         + '</div></div>';
       html += '<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
       d.manualGroups.forEach(function(g, gi){
+        // Check for same-country violations in this group
+        var gCountries = {};
+        g.forEach(function(t) { var c = extractCountry(t); if (c) gCountries[c] = (gCountries[c] || 0) + 1; });
+        var natViolation = Object.keys(gCountries).some(function(c) { return gCountries[c] > 2; });
+        var natBadge = natViolation
+          ? '<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px" title="3+ teams from the same country in this group">⚠ Same Country</span>'
+          : '';
         html += '<div class="group-box" data-di="' + di + '" data-gi="' + gi + '">'
-          + '<div style="font-weight:700;margin-bottom:6px">Group ' + String.fromCharCode(65 + gi) + '</div>'
+          + '<div style="font-weight:700;margin-bottom:6px">Group ' + String.fromCharCode(65 + gi) + natBadge + '</div>'
           + '<div class="chips" style="min-height:40px">';
         g.forEach(function(t, ti){
           html += '<span class="chip" data-di="' + di + '" data-gi="' + gi + '" data-ti="' + ti + '">' + t
@@ -640,7 +796,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (e.target.dataset && e.target.dataset.action) {
       var di = parseInt(e.target.dataset.di);
       if (e.target.dataset.action === 'auto') {
-        divisions[di].manualGroups = chunk(divisions[di].teams, optimalChunkSize(divisions[di].teams.length));
+        var autoGroups = chunk(divisions[di].teams, optimalChunkSize(divisions[di].teams.length));
+        divisions[di].manualGroups = applyNationalMixing(autoGroups);
         renderGroups();
       } else if (e.target.dataset.action === 'apply') {
         // apply manualGroups back to division teams preserving order
@@ -710,7 +867,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       matchups.push({ t1: '',            t2: '',            lbl: '3rd Place',  bracket: 'Championship' });
       matchups.push({ t1: '',            t2: '',            lbl: 'FINAL',      bracket: 'Championship' });
       matchups.push({ t1: '3rd Group A', t2: '3rd Group B', lbl: '5th Place', bracket: '5th Place' });
-      matchups.push({ t1: '4th Group A', t2: '4th Group B', lbl: '7th Place', bracket: '7th Place' });
+      if (maxGrpSize >= 4) { // 7th Place only when groups have 4+ teams (7-8 team divisions)
+        matchups.push({ t1: '4th Group A', t2: '4th Group B', lbl: '7th Place', bracket: '7th Place' });
+      }
     } else if (G === 4 && maxGrpSize <= 3) {
       // 12-team (4 groups of 3): Championship / Silver / Bronze
       var tiers = [
@@ -936,9 +1095,15 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var dayHours = getDayHours();
     scheduleWarnings = [];
     unscheduledGames = [];
+    var rules   = getRuleToggles();
     var nDays   = parseInt(document.getElementById('nDays').value);
     var maxGPD  = parseInt(document.getElementById('maxGPD').value) || 2;
     var nCourts = crts.length;
+    // Parse preferred Finals anchor times (comma-separated "HH:MM" strings).
+    var finalTimePrio = (document.getElementById('finalTimes').value || '')
+      .split(',').map(function(s) { return toM(s.trim()); })
+      .filter(function(m) { return m > 0; });
+    if (!finalTimePrio.length) finalTimePrio = [16*60, 14*60+30, 17*60+30];
 
     // Per-day time-slot arrays (minute values). Derived from setup — never hardcoded.
     var dayTimeSlots = dayHours.map(function(h) {
@@ -1025,13 +1190,33 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // teamSlotBusy["key:day:si"] = true — exact slot occupancy for bidirectional rest checks.
     // Prevents same-slot double-booking even when Phase D rescans earlier days/slots.
     var teamSlotBusy = {};
+    // teamVenueBySlot["key:day:si"] = loc — tracks which venue a team played at per slot.
+    // Used by venueChangeConflict() to enforce 180-min gap when switching venues.
+    var teamVenueBySlot = {};
 
     // ── 3. Helpers ────────────────────────────────────────────────────────────
     // slotConflict: true if the team is already at slot si, si-1, or si+1 on this day.
     // Checks bidirectionally so Phase D (which rescans earlier days) is safe.
+    // When ruleRest is OFF the gap constraint is waived — only exact double-booking is blocked.
     function slotConflict(key, day, si) {
       var pfx = key + ':' + day + ':';
+      if (!rules.rest) {
+        // Rest OFF: only block exact same-slot double-booking
+        return !!teamSlotBusy[pfx + si];
+      }
       return !!(teamSlotBusy[pfx + (si - 1)] || teamSlotBusy[pfx + si] || teamSlotBusy[pfx + (si + 1)]);
+    }
+
+    // venueChangeConflict: returns true if the team played at a DIFFERENT venue within ±3 slots
+    // on the same day (= 135-min window each side, enforcing a 4-slot / 180-min gap).
+    // Only active when ruleVenueRest is ON.
+    function venueChangeConflict(key, day, si, proposedLoc) {
+      if (!rules.venueRest) return false;
+      for (var vd = -3; vd <= 3; vd++) {
+        var loc = teamVenueBySlot[key + ':' + day + ':' + (si + vd)];
+        if (loc && loc !== proposedLoc) return true;
+      }
+      return false;
     }
 
     function teamCanPlay(key, day, si) {
@@ -1051,6 +1236,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       return false;
     }
 
+    // courtAllowed: hard venue constraint gate.
+    // lbl is optional — pass g.lbl for PO games, omit for RR games.
+    //  • Finals & 3rd Place              → Blanes only (always)
+    //  • Mandatory (blanes-only) division → Blanes only (per venueRules)
+    // Returning false means the engine will not place this game on court ci.
+    function courtAllowed(divName, ci, lbl) {
+      if (lbl === 'FINAL' || lbl === '3rd Place') return isBlanesCourt(crts[ci]);
+      if (getVenuePriority(divName) === 'blanes-only') return isBlanesCourt(crts[ci]);
+      return true;
+    }
+
     function recordPlacement(item, day, si, ci) {
       item.placed = true; item.day = day; item.slotIdx = si; item.courtIdx = ci; item.court = crts[ci].court;
       grid[day][si][ci] = true;
@@ -1063,6 +1259,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           teamDayCount[k] = teamDayCount[k] || {};
           teamDayCount[k][day] = (teamDayCount[k][day] || 0) + 1;
           teamSlotBusy[k + ':' + day + ':' + si] = true; // exact slot occupancy
+          teamVenueBySlot[k + ':' + day + ':' + si] = crts[ci].loc; // venue tracking
         });
         divRRPlaced[item.divName] = (divRRPlaced[item.divName] || 0) + 1;
       }
@@ -1091,29 +1288,48 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       else          byBracket[bk].sfs.push(g);
     });
 
-    // Phase A — anchor Finals / 3rd-Place in the latest available slots
+    // Phase A — anchor Finals / 3rd-Place on the LAST DAY ONLY in Blanes courts.
+    // Slots are tried in user-configured time priority order (finalTimePrio), then
+    // remaining slots in reverse order as fallback. This allows all FINAL games to
+    // cluster at the preferred time before spilling to adjacent slots.
     Object.keys(byBracket).forEach(function(bk) {
       var b = byBracket[bk];
       if (!b.lates.length) return;
+      var ad = nDays - 1; // last day only — no backward fallback
+      var adSlots = dayTimeSlots[Math.min(ad, dayTimeSlots.length - 1)];
+
+      // Build priority-ordered slot index list: preferred times first, then reverse fill.
+      var triedSlots = [];
+      finalTimePrio.forEach(function(tm) {
+        var best = -1, bestDist = Infinity;
+        adSlots.forEach(function(s, idx) {
+          if (idx < 2) return; // index ≥ 2 needed so SFs fit at idx-2
+          var dist = Math.abs(s - tm);
+          if (dist < bestDist) { bestDist = dist; best = idx; }
+        });
+        if (best >= 2 && triedSlots.indexOf(best) === -1) triedSlots.push(best);
+      });
+      for (var tfb = adSlots.length - 1; tfb >= 2; tfb--) {
+        if (triedSlots.indexOf(tfb) === -1) triedSlots.push(tfb);
+      }
+
       var anchored = false;
-      for (var ad = nDays - 1; ad >= 0 && !anchored; ad--) {
-        var adSlots = dayTimeSlots[Math.min(ad, dayTimeSlots.length - 1)];
-        for (var alsi = adSlots.length - 1; alsi >= 2 && !anchored; alsi--) {
-          // Need alsi-2 free for SFs, so require at least slot index 2
-          var freeLate = [];
-          for (var aci = 0; aci < nCourts; aci++) {
-            if (!grid[ad][alsi][aci]) freeLate.push(aci);
-          }
-          if (freeLate.length < b.lates.length) continue;
-          for (var ali = 0; ali < b.lates.length; ali++) {
-            b.lates[ali].placed  = true;
-            b.lates[ali].day     = ad;
-            b.lates[ali].slotIdx = alsi;
-            b.lates[ali].court   = crts[freeLate[ali]].court;
-            grid[ad][alsi][freeLate[ali]] = true;
-          }
-          anchored = true;
+      for (var tsi = 0; tsi < triedSlots.length && !anchored; tsi++) {
+        var alsi = triedSlots[tsi];
+        var freeLate = [];
+        for (var aci = 0; aci < nCourts; aci++) {
+          // Finals & 3rd Place must be in Blanes (hard constraint)
+          if (!grid[ad][alsi][aci] && isBlanesCourt(crts[aci])) freeLate.push(aci);
         }
+        if (freeLate.length < b.lates.length) continue;
+        for (var ali = 0; ali < b.lates.length; ali++) {
+          b.lates[ali].placed  = true;
+          b.lates[ali].day     = ad;
+          b.lates[ali].slotIdx = alsi;
+          b.lates[ali].court   = crts[freeLate[ali]].court;
+          grid[ad][alsi][freeLate[ali]] = true;
+        }
+        anchored = true;
       }
     });
 
@@ -1131,6 +1347,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       for (var bci = 0; bci < nCourts; bci++) {
         if (!grid[lateDay][bsfSi][bci]) freeSF.push(bci);
       }
+      // Route SFs by division: Mandatory divisions use Blanes; all others must use non-Blanes
+      // to keep Blanes free for Finals. Fall back to any court only if the preferred set is empty.
+      var sfDivName = b.sfs.length ? b.sfs[0].divName : '';
+      var isMandatorySF = getVenuePriority(sfDivName) === 'blanes-only';
+      var filteredSF = freeSF.filter(function(ci) {
+        return isMandatorySF ? isBlanesCourt(crts[ci]) : !isBlanesCourt(crts[ci]);
+      });
+      if (filteredSF.length) freeSF = filteredSF;
       for (var bsfi = 0; bsfi < b.sfs.length && bsfi < freeSF.length; bsfi++) {
         b.sfs[bsfi].placed   = true;
         b.sfs[bsfi].day      = lateDay;
@@ -1145,13 +1369,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     //          (b) Championship SFs that overflowed Phase B's preferred slot when
     //              14+ SFs competed for a 10-court slot.
     // Scans backwards from the last slot of the last day so PO games cluster late.
+    // FINAL & 3rd Place: day scan is clamped to nDays-1 so they never leave the last day.
     poItems.forEach(function(g) {
       if (g.placed) return;
-      for (var pd = nDays - 1; pd >= 0 && !g.placed; pd--) {
+      var pdMin = (LATE_LBLS[g.lbl]) ? nDays - 1 : 0; // Finals must stay on last day
+      for (var pd = nDays - 1; pd >= pdMin && !g.placed; pd--) {
         var pdSlots = dayTimeSlots[Math.min(pd, dayTimeSlots.length - 1)];
+        var pcOrder = courtPriorityOrder(g.divName, crts, undefined, g.lbl);
         for (var psi = pdSlots.length - 1; psi >= 0 && !g.placed; psi--) {
-          for (var pci = 0; pci < nCourts && !g.placed; pci++) {
-            if (!grid[pd][psi][pci]) {
+          for (var pco = 0; pco < pcOrder.length && !g.placed; pco++) {
+            var pci = pcOrder[pco];
+            if (!grid[pd][psi][pci] && courtAllowed(g.divName, pci, g.lbl)) {
               g.placed  = true;
               g.day     = pd;
               g.slotIdx = psi;
@@ -1196,6 +1424,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         });
 
         queue.sort(function(a, b) {
+          // Venue-constrained divisions first: lower tier = harder venue requirement
+          var at = venueTierNum(a.divName), bt = venueTierNum(b.divName);
+          if (at !== bt) return at - bt;
           if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
           // Within same round: larger group (harder to schedule) first
           var asz = Math.max(teamGroupSz[a.divName+'\x00'+a.t1]||0, teamGroupSz[a.divName+'\x00'+a.t2]||0);
@@ -1207,17 +1438,27 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           return (a.t1 || '') < (b.t1 || '') ? -1 : 1;
         });
 
-        for (var ci = 0; ci < nCourts; ci++) {
-          if (grid[day][si][ci]) continue;
-          for (var qi = 0; qi < queue.length; qi++) {
-            var g = queue[qi];
-            if (g.placed) { queue.splice(qi--, 1); continue; }
-            var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
-            if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) continue;
+        // Game-first loop: each game tries courts in its venue-priority order.
+        // Higher-priority divisions (lower venueTierNum) claim preferred courts first.
+        for (var qi = 0; qi < queue.length; ) {
+          var g = queue[qi];
+          if (g.placed) { queue.splice(qi, 1); continue; }
+          var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
+          if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) { qi++; continue; }
+          var cOrder = courtPriorityOrder(g.divName, crts);
+          var gPlaced = false;
+          for (var coi = 0; coi < cOrder.length; coi++) {
+            var ci = cOrder[coi];
+            if (grid[day][si][ci]) continue;
+            if (!courtAllowed(g.divName, ci)) continue;
+            if (venueChangeConflict(rk1, day, si, crts[ci].loc)) continue;
+            if (venueChangeConflict(rk2, day, si, crts[ci].loc)) continue;
             recordPlacement(g, day, si, ci);
             queue.splice(qi, 1);
+            gPlaced = true;
             break;
           }
+          if (!gPlaced) qi++;
         }
       }
     }
@@ -1240,18 +1481,26 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
           return (a.group || '') < (b.group || '') ? -1 : 1;
         });
-        for (var dci = 0; dci < nCourts; dci++) {
-          if (grid[dday][dsi][dci]) continue;
-          for (var dqi = 0; dqi < dqueue.length; dqi++) {
-            var dg = dqueue[dqi];
-            if (dg.placed) { dqueue.splice(dqi--, 1); continue; }
-            var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
-            if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) continue;
+        for (var dqi = 0; dqi < dqueue.length; ) {
+          var dg = dqueue[dqi];
+          if (dg.placed) { dqueue.splice(dqi, 1); continue; }
+          var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
+          if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) { dqi++; continue; }
+          var dcOrder = courtPriorityOrder(dg.divName, crts);
+          var dgPlaced = false;
+          for (var dcoi = 0; dcoi < dcOrder.length; dcoi++) {
+            var dci = dcOrder[dcoi];
+            if (grid[dday][dsi][dci]) continue;
+            if (!courtAllowed(dg.divName, dci)) continue;
+            if (venueChangeConflict(drk1, dday, dsi, crts[dci].loc)) continue;
+            if (venueChangeConflict(drk2, dday, dsi, crts[dci].loc)) continue;
             dg.quotaViolation = true;
             recordPlacement(dg, dday, dsi, dci);
             dqueue.splice(dqi, 1);
+            dgPlaced = true;
             break;
           }
+          if (!dgPlaced) dqi++;
         }
       }
     }
@@ -1286,8 +1535,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         var ds = dayTimeSlots[Math.min(d, dayTimeSlots.length - 1)];
         for (var si = 0; si < ds.length; si++) {
           if (slotConflict(k1, d, si) || slotConflict(k2, d, si)) continue;
-          for (var ci = 0; ci < nCourts; ci++) {
+          // Venue guard: eOrder gives division-preferred courts (e.g. Blanes-only for U18B).
+          // courtAllowed enforces the hard gate — non-U18B RR games cannot be placed on
+          // Blanes courts that are reserved via the hard constraint.  PO games (Finals,
+          // consolation) are completely immovable: they have no gridGame entry (see below).
+          var eOrder = courtPriorityOrder(game.divName, crts);
+          for (var ecoi = 0; ecoi < eOrder.length; ecoi++) {
+            var ci = eOrder[ecoi];
+            if (!courtAllowed(game.divName, ci)) continue; // hard venue constraint
             if (!grid[d][si][ci]) {
+              if (venueChangeConflict(k1, d, si, crts[ci].loc)) continue;
+              if (venueChangeConflict(k2, d, si, crts[ci].loc)) continue;
               return [{ game: game, day: d, si: si, ci: ci }]; // free slot found
             }
             if (depth <= 0) continue;
@@ -1295,13 +1553,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             if (!bl) continue; // PO anchor — immovable
             var blId = bl.divName + '\x00' + bl.t1 + '\x00' + bl.t2;
             if (visited[blId]) continue; // cycle guard
-            // Temporarily lift blocker's rest-occupancy
+            // Temporarily lift blocker's rest-occupancy (and venue tracking)
             var bk1 = bl.divName + '\x00' + bl.t1;
             var bk2 = bl.divName + '\x00' + bl.t2;
             var bKey1 = bk1 + ':' + bl.day + ':' + bl.slotIdx;
             var bKey2 = bk2 + ':' + bl.day + ':' + bl.slotIdx;
+            var bVenue1 = teamVenueBySlot[bKey1];
+            var bVenue2 = teamVenueBySlot[bKey2];
             delete teamSlotBusy[bKey1];
             delete teamSlotBusy[bKey2];
+            delete teamVenueBySlot[bKey1];
+            delete teamVenueBySlot[bKey2];
             visited[blId] = true;
             var sub = buildChain(bl, depth - 1, visited);
             delete visited[blId];
@@ -1311,6 +1573,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             // Sub-path failed — restore blocker's entries
             teamSlotBusy[bKey1] = true;
             teamSlotBusy[bKey2] = true;
+            if (bVenue1) teamVenueBySlot[bKey1] = bVenue1;
+            if (bVenue2) teamVenueBySlot[bKey2] = bVenue2;
           }
         }
       }
@@ -1335,6 +1599,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         gridGame[mv.day + ':' + mv.si + ':' + mv.ci] = g;
         teamSlotBusy[gk1 + ':' + mv.day + ':' + mv.si] = true;
         teamSlotBusy[gk2 + ':' + mv.day + ':' + mv.si] = true;
+        teamVenueBySlot[gk1 + ':' + mv.day + ':' + mv.si] = crts[mv.ci].loc;
+        teamVenueBySlot[gk2 + ':' + mv.day + ':' + mv.si] = crts[mv.ci].loc;
         teamDayCount[gk1] = teamDayCount[gk1] || {};
         teamDayCount[gk2] = teamDayCount[gk2] || {};
         teamDayCount[gk1][mv.day] = (teamDayCount[gk1][mv.day] || 0) + 1;
