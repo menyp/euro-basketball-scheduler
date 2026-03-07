@@ -82,6 +82,7 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .div-hdr{font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#fff;padding:8px 14px;border-radius:6px;margin:12px 0 8px;display:flex;align-items:center;gap:10px}
 .gc{background:var(--c);border:1px solid var(--b);border-left:4px solid var(--o);border-radius:8px;padding:11px 14px;margin-bottom:6px;display:flex;align-items:center;gap:14px;transition:background .2s}
 .gc:hover{background:rgba(255,107,0,.06)}
+.gc.admin-focus-row{background-color:#ff9800!important;color:#000!important;font-weight:bold;border:3px solid #000!important;transition:all 0.3s ease}
 .gt{font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--o);min-width:60px;line-height:1}
 .ga{font-size:10px;font-weight:600;color:var(--g);letter-spacing:1px}
 .gi{flex:1}
@@ -129,8 +130,7 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .rule-toggle input:checked+.rule-slider{background:var(--o)}
 .rule-toggle input:checked+.rule-slider::before{transform:translateX(18px)}
 .rule-lbl strong{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:#fff;display:block;margin-bottom:3px}
-.rule-lbl small{font-size:11px;color:var(--g);line-height:1.55}
-.settings-wrap{position:relative;display:flex;align-items:center;padding:0 6px;flex-shrink:0}
+.rule-lbl small{font-size:11px;color:var(--g);line-height:1.55}.settings-wrap{position:relative;display:flex;align-items:center;padding:0 6px;flex-shrink:0}
 .settings-btn{background:none;border:none;color:var(--g);cursor:pointer;width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
 .settings-btn:hover{color:#fff;background:rgba(255,255,255,.1)}
 .settings-btn svg{width:18px;height:18px;fill:currentColor}
@@ -283,8 +283,44 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             <span class="rule-slider"></span>
           </label>
           <div class="rule-lbl">
-            <strong>3-Hour Rest for Venue Change</strong>
+            <strong>Enforce 180-min Venue Change Rest</strong>
             <small>When ON, a team switching venues on the same day requires a 3-hour (4-slot) gap between games. Stricter than standard rest — may reduce scheduling density.</small>
+          </div>
+        </div>
+
+        <!-- Venue Exclusivity -->
+        <div style="padding-top:14px;border-top:1px solid var(--b)">
+          <div class="stitle" style="margin-bottom:12px">Venue Exclusivity</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap">Main Venue</span>
+            <input type="text" id="mainVenue" value="Blanes" placeholder="e.g. Blanes" style="width:130px;margin:0">
+          </div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-bottom:10px">Mandatory at Main Venue</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <label class="rule-toggle" style="margin:0">
+                <input type="checkbox" id="mainVenueFinal" checked>
+                <span class="rule-slider"></span>
+              </label>
+              <span style="font-size:13px;font-weight:600">Final</span>
+              <span style="font-size:11px;color:var(--g)">Championship Final must be held at main venue</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <label class="rule-toggle" style="margin:0">
+                <input type="checkbox" id="mainVenue3rd" checked>
+                <span class="rule-slider"></span>
+              </label>
+              <span style="font-size:13px;font-weight:600">3rd Place</span>
+              <span style="font-size:11px;color:var(--g)">3rd Place game must be held at main venue</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <label class="rule-toggle" style="margin:0">
+                <input type="checkbox" id="mainVenueSF">
+                <span class="rule-slider"></span>
+              </label>
+              <span style="font-size:13px;font-weight:600">Semifinals</span>
+              <span style="font-size:11px;color:var(--g)">When OFF, SFs prefer external venues to keep main venue free for medal games</span>
+            </div>
           </div>
         </div>
 
@@ -310,6 +346,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   </div>
 
   <div class="page" id="page-schedule">
+    <div id="schedFilterBar" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:10px 14px;margin-bottom:16px">
+      <label style="font-family:Montserrat,sans-serif;font-weight:700;font-size:12px;color:#94a3b8;white-space:nowrap">Category:</label>
+      <select id="schedFilterSel" style="background:#0f2542;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;font-family:Montserrat,sans-serif;font-size:12px;cursor:pointer;min-width:160px">
+        <option value="">All Categories</option>
+      </select>
+      <label style="font-family:Montserrat,sans-serif;font-weight:700;font-size:12px;color:#94a3b8;white-space:nowrap">Venue:</label>
+      <select id="schedVenueSel" style="background:#0f2542;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;font-family:Montserrat,sans-serif;font-size:12px;cursor:pointer;min-width:140px">
+        <option value="">All Venues</option>
+      </select>
+      <button id="schedFilterClear" style="background:rgba(255,107,0,.15);border:1px solid rgba(255,107,0,.4);color:#FF6B00;border-radius:6px;padding:5px 12px;font-family:Montserrat,sans-serif;font-weight:700;font-size:11px;cursor:pointer">&times; Clear Filters</button>
+    </div>
     <div id="schedOut"><div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div></div>
   </div>
 
@@ -377,6 +424,82 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   document.getElementById('tab-schedule').addEventListener('click', function () { switchTab('schedule'); });
   document.getElementById('tab-standings').addEventListener('click', function () { switchTab('standings'); });
   document.getElementById('tab-bracket').addEventListener('click', function () { switchTab('bracket'); });
+
+  function makeGameId(divName, lbl) {
+    return 'game-' + divName.replace(/\s+/g, '-') + '-' + lbl.replace(/\s+/g, '-');
+  }
+  window.jumpToGame = function(divName, lbl) {
+    switchTab('schedule');
+    applySchedFilter(divName);
+    setTimeout(function() {
+      var el = document.getElementById(makeGameId(divName, lbl));
+      if (!el) return;
+      document.querySelectorAll('.gc.admin-focus-row').forEach(function(r) {
+        r.classList.remove('admin-focus-row');
+      });
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('admin-focus-row');
+    }, 150);
+  };
+
+  function applySchedFilters() {
+    var catSel = document.getElementById('schedFilterSel');
+    var venSel = document.getElementById('schedVenueSel');
+    var cat = catSel ? catSel.value : '';
+    var ven = venSel ? venSel.value : '';
+
+    // Show/hide individual game rows
+    var venLower = ven.trim().toLowerCase();
+    document.querySelectorAll('#schedOut .gc').forEach(function(el) {
+      var matchCat = !cat || el.getAttribute('data-div') === cat;
+      var matchVen = !ven || (el.getAttribute('data-venue') || '').trim().toLowerCase() === venLower;
+      el.style.display = (matchCat && matchVen) ? '' : 'none';
+    });
+
+    // Hide div-hdr if all its following .gc (until next div-hdr) are hidden
+    var schedOut = document.getElementById('schedOut');
+    if (!schedOut) return;
+    var allDivHdrs = schedOut.querySelectorAll('.div-hdr');
+    allDivHdrs.forEach(function(hdr) {
+      var divName = hdr.getAttribute('data-div');
+      // Find all .gc and .grp-lbl that follow this hdr and belong to this div
+      var el = hdr.nextElementSibling;
+      var hasVisible = false;
+      while (el && !el.classList.contains('div-hdr') && !el.classList.contains('day-hdr')) {
+        if (el.classList.contains('gc') && el.style.display !== 'none') hasVisible = true;
+        el = el.nextElementSibling;
+      }
+      hdr.style.display = hasVisible ? '' : 'none';
+    });
+
+    // Hide grp-lbl if all its following .gc (until next grp-lbl/div-hdr) are hidden
+    schedOut.querySelectorAll('.grp-lbl').forEach(function(lbl) {
+      var el = lbl.nextElementSibling;
+      var hasVisible = false;
+      while (el && !el.classList.contains('grp-lbl') && !el.classList.contains('div-hdr') && !el.classList.contains('day-hdr')) {
+        if (el.classList.contains('gc') && el.style.display !== 'none') hasVisible = true;
+        el = el.nextElementSibling;
+      }
+      lbl.style.display = hasVisible ? '' : 'none';
+    });
+
+    // Hide day-hdr if all games in that day block are hidden
+    schedOut.querySelectorAll('.day-hdr').forEach(function(dayHdr) {
+      var el = dayHdr.nextElementSibling;
+      var hasVisible = false;
+      while (el && !el.classList.contains('day-hdr')) {
+        if (el.classList.contains('gc') && el.style.display !== 'none') hasVisible = true;
+        el = el.nextElementSibling;
+      }
+      dayHdr.style.display = hasVisible ? '' : 'none';
+    });
+  }
+
+  function applySchedFilter(sel) {
+    var filterSel = document.getElementById('schedFilterSel');
+    if (filterSel && filterSel.value !== sel) filterSel.value = sel;
+    applySchedFilters();
+  }
 
   // ── Parse teams ────────────────────────────────────────
   function parseTeams() {
@@ -487,10 +610,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   // Called at the start of each schedule generation so settings persist across runs.
   function getRuleToggles() {
     return {
-      blanes:     document.getElementById('ruleBlanes').checked,
-      club:       document.getElementById('ruleClub').checked,
-      rest:       document.getElementById('ruleRest').checked,
-      venueRest:  document.getElementById('ruleVenueRest').checked
+      blanes:          document.getElementById('ruleBlanes').checked,
+      club:            document.getElementById('ruleClub').checked,
+      rest:            document.getElementById('ruleRest').checked,
+      venueRest:       document.getElementById('ruleVenueRest').checked,
+      mainVenue:       (document.getElementById('mainVenue').value || '').trim() || 'Blanes',
+      mainVenueFinal:  document.getElementById('mainVenueFinal').checked,
+      mainVenue3rd:    document.getElementById('mainVenue3rd').checked,
+      mainVenueSF:     document.getElementById('mainVenueSF').checked
     };
   }
 
@@ -670,27 +797,26 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return (crt.loc || '').toLowerCase().indexOf('blanes') !== -1;
   }
   // Returns court indices in the preferred order for a given game.
-  // lbl (optional): PO game label — takes full priority over division-based rules.
-  //   • 'FINAL' / '3rd Place'       → Blanes courts only  (matches courtAllowed hard gate)
-  //   • Boys U18 + any 'SF…' label  → Blanes first (U18B plays all games in Blanes)
-  //   • Any other PO label           → non-Blanes ONLY, no Blanes fallback (strict eviction)
-  //   • undefined (RR games)         → division-based priority via getVenuePriority
+  // mainVenueName: the configured main venue (e.g. 'Blanes'). Courts matching this loc go into bIdx.
+  // lbl (optional): PO game label — drives routing:
+  //   • 'FINAL' / '3rd Place'  → main venue first, external as fallback (courtAllowed enforces hard gate)
+  //   • Mandatory div + PO     → main venue ONLY
+  //   • Any other PO (SFs…)   → external preferred, main venue as fallback (courtAllowed enforces if SF checkbox on)
+  //   • undefined (RR games)  → division-based priority via getVenuePriority
   // overridePref: substitute a fixed priority string (used in legacy callers).
-  function courtPriorityOrder(divName, crts, overridePref, lbl) {
+  function courtPriorityOrder(divName, crts, overridePref, lbl, mainVenueName) {
+    var mv = (mainVenueName || 'Blanes').toLowerCase();
     var bIdx = [], oIdx = [];
-    crts.forEach(function(c, i) { (isBlanesCourt(c) ? bIdx : oIdx).push(i); });
+    crts.forEach(function(c, i) { ((c.loc || '').toLowerCase().indexOf(mv) !== -1 ? bIdx : oIdx).push(i); });
     if (lbl !== undefined) {
-      if (lbl === 'FINAL' || lbl === '3rd Place') return bIdx;  // Blanes only (hard)
-      // Mandatory divisions: SFs stay in Blanes (same venue as their RR games)
-      if (getVenuePriority(divName) === 'blanes-only' && /^SF/.test(lbl)) {
-        return bIdx.concat(oIdx);                               // Blanes preferred for Mandatory SFs
-      }
-      return oIdx;                                              // strict: all other PO → non-Blanes only
+      if (lbl === 'FINAL' || lbl === '3rd Place') return bIdx.concat(oIdx); // main venue first
+      if (getVenuePriority(divName) === 'blanes-only') return bIdx;          // Mandatory: main venue only
+      return oIdx.concat(bIdx); // SFs / consolation: external preferred, main as fallback
     }
     var prio = (overridePref !== undefined) ? overridePref : getVenuePriority(divName);
     if (prio === 'blanes-only')   return bIdx;
     if (prio === 'blanes-pref-1') return bIdx.concat(oIdx);
-    return oIdx.concat(bIdx); // 'any' / flexible: prefer non-Blanes to keep Blanes free
+    return oIdx.concat(bIdx); // 'any' / flexible: prefer non-main to keep main venue free
   }
 
 
@@ -1096,14 +1222,19 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     scheduleWarnings = [];
     unscheduledGames = [];
     var rules   = getRuleToggles();
+    // isMainVenue: returns true if the court's location matches the configured main venue.
+    // Used throughout the engine wherever venue-type decisions are needed.
+    var _mvLower = rules.mainVenue.toLowerCase();
+    function isMainVenue(crt) { return (crt.loc || '').toLowerCase().indexOf(_mvLower) !== -1; }
     var nDays   = parseInt(document.getElementById('nDays').value);
     var maxGPD  = parseInt(document.getElementById('maxGPD').value) || 2;
     var nCourts = crts.length;
     // Parse preferred Finals anchor times (comma-separated "HH:MM" strings).
     var finalTimePrio = (document.getElementById('finalTimes').value || '')
-      .split(',').map(function(s) { return toM(s.trim()); })
-      .filter(function(m) { return m > 0; });
-    if (!finalTimePrio.length) finalTimePrio = [16*60, 14*60+30, 17*60+30];
+      .split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+      .map(function(s) { return toM(s); }).filter(function(m) { return !isNaN(m) && m > 0; });
+    // Empty input → flexible: engine scans entire day's slots in preferred order.
+    var isFlexibleFinals = finalTimePrio.length === 0;
 
     // Per-day time-slot arrays (minute values). Derived from setup — never hardcoded.
     var dayTimeSlots = dayHours.map(function(h) {
@@ -1185,14 +1316,19 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var teamLastPlacement = {}; // divTeamKey → {day, slotIdx}  (kept for legacy)
     var teamDayCount      = {}; // divTeamKey → {day: count}
     var divRRPlaced       = {}; // divName → count of RR games placed
-    // sfBracketLastSlot[divName+'\0'+bracket] = {day,slotIdx} — max SF slot placed
+    // sfBracketLastSlot[divName+'\0'+bracket] = {day,slotIdx} — latest SF slot placed
     var sfBracketLastSlot = {};
+    // finalBracketSlot[divName+'\0'+bracket] = {day,slotIdx} — FINAL/3rd-Place anchor slot
+    var finalBracketSlot = {};
     // teamSlotBusy["key:day:si"] = true — exact slot occupancy for bidirectional rest checks.
     // Prevents same-slot double-booking even when Phase D rescans earlier days/slots.
     var teamSlotBusy = {};
     // teamVenueBySlot["key:day:si"] = loc — tracks which venue a team played at per slot.
     // Used by venueChangeConflict() to enforce 180-min gap when switching venues.
     var teamVenueBySlot = {};
+    // poGridGame["day:slot:courtIdx"] = poItem — tracks placed PO games so the eviction
+    // pass can identify and displace lower-priority games from Blanes slots.
+    var poGridGame = {};
 
     // ── 3. Helpers ────────────────────────────────────────────────────────────
     // slotConflict: true if the team is already at slot si, si-1, or si+1 on this day.
@@ -1207,12 +1343,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       return !!(teamSlotBusy[pfx + (si - 1)] || teamSlotBusy[pfx + si] || teamSlotBusy[pfx + (si + 1)]);
     }
 
-    // venueChangeConflict: returns true if the team played at a DIFFERENT venue within ±3 slots
-    // on the same day (= 135-min window each side, enforcing a 4-slot / 180-min gap).
+    // venueChangeConflict: returns true if the team played at a DIFFERENT venue within ±slack slots
+    // on the same day. Default slack=3 → 180-min gap; slack=1 → 90-min gap (relaxed).
     // Only active when ruleVenueRest is ON.
-    function venueChangeConflict(key, day, si, proposedLoc) {
+    function venueChangeConflict(key, day, si, proposedLoc, slack) {
       if (!rules.venueRest) return false;
-      for (var vd = -3; vd <= 3; vd++) {
+      var s = (slack !== undefined) ? slack : 3;
+      for (var vd = -s; vd <= s; vd++) {
         var loc = teamVenueBySlot[key + ':' + day + ':' + (si + vd)];
         if (loc && loc !== proposedLoc) return true;
       }
@@ -1238,17 +1375,70 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
     // courtAllowed: hard venue constraint gate.
     // lbl is optional — pass g.lbl for PO games, omit for RR games.
-    //  • Finals & 3rd Place              → Blanes only (always)
-    //  • Mandatory (blanes-only) division → Blanes only (per venueRules)
-    // Returning false means the engine will not place this game on court ci.
+    // Venue exclusivity is driven by the Admin checkboxes (mainVenueFinal / mainVenue3rd / mainVenueSF).
+    // When a checkbox is OFF the engine may place that game type anywhere;
+    // courtPriorityOrder still guides preference toward the main venue first.
     function courtAllowed(divName, ci, lbl) {
-      if (lbl === 'FINAL' || lbl === '3rd Place') return isBlanesCourt(crts[ci]);
-      if (getVenuePriority(divName) === 'blanes-only') return isBlanesCourt(crts[ci]);
-      return true;
+      var isMain = isMainVenue(crts[ci]);
+      if (lbl === 'FINAL')     return rules.mainVenueFinal ? isMain : true;
+      if (lbl === '3rd Place') return rules.mainVenue3rd   ? isMain : true;
+      if (getVenuePriority(divName) === 'blanes-only') return isMain; // Mandatory div → main venue only
+      if (lbl !== undefined)   return rules.mainVenueSF    ? isMain : true; // SFs: honor checkbox
+      return true; // RR games → any court
+    }
+
+    // poPriority: numeric scheduling priority for a playoff game.
+    // Higher score = eviction-immune. Lower = displaceable by higher-priority games.
+    //  150+ : Mandatory FINAL/3rd Place (hardest constraint: Blanes + championship)
+    //  100  : FINAL / 3rd Place (championship climax)
+    //   75  : Mandatory SF (Blanes + has downstream Final)
+    //   25  : Championship SF (has downstream Final, but not Mandatory)
+    //    0  : consolation games (5th, 7th, …) — freely displaceable
+    function poPriority(g) {
+      var score = 0;
+      if (g.isLate) score += 100;
+      if (getVenuePriority(g.divName) === 'blanes-only') score += 50;
+      if (!g.isLate && g.needsFinalSlot) score += 25;
+      return score;
+    }
+
+    // tryEvictPO: attempt to displace a low-priority PO game from its grid slot
+    // so a higher-priority game can claim that slot.
+    // Safety constraint: never evict isLate games (Finals/3rd Place) as that risks
+    // breaking bracket integrity. Only consolation games are safe to displace.
+    // Returns true on success (victim re-placed elsewhere); false restores original.
+    function tryEvictPO(victim, requesterPriority) {
+      if (poPriority(victim) >= requesterPriority) return false;
+      if (victim.isLate) return false; // Finals/3rd Place are always eviction-immune
+      var savedDay = victim.day, savedSlot = victim.slotIdx;
+      var savedCi  = victim.courtIdx, savedCourt = victim.court;
+      // Un-place victim
+      victim.placed = false; victim.day = -1; victim.slotIdx = -1;
+      victim.courtIdx = -1; victim.court = null;
+      grid[savedDay][savedSlot][savedCi] = false;
+      delete poGridGame[savedDay + ':' + savedSlot + ':' + savedCi];
+      // Try to re-place victim at a new slot (consolation games can use any day)
+      tryPlacePO(victim, 3);
+      if (!victim.placed) tryPlacePO(victim, 1);
+      if (!victim.placed) tryPlacePO(victim, null);
+      if (victim.placed) {
+        // Guard: if victim re-claimed the exact same slot we just freed, the slot wasn't
+        // actually freed for the requester — treat this as a failed eviction.
+        if (victim.day === savedDay && victim.slotIdx === savedSlot && victim.courtIdx === savedCi) {
+          return false; // slot still occupied by victim; requester must look elsewhere
+        }
+        return true; // eviction succeeded; original slot is now free
+      }
+      // Could not find a new home — restore original placement
+      victim.placed = true; victim.day = savedDay; victim.slotIdx = savedSlot;
+      victim.courtIdx = savedCi; victim.court = savedCourt;
+      grid[savedDay][savedSlot][savedCi] = true;
+      poGridGame[savedDay + ':' + savedSlot + ':' + savedCi] = victim;
+      return false;
     }
 
     function recordPlacement(item, day, si, ci) {
-      item.placed = true; item.day = day; item.slotIdx = si; item.courtIdx = ci; item.court = crts[ci].court;
+      item.placed = true; item.day = day; item.slotIdx = si; item.courtIdx = ci; item.court = crts[ci].court; item.loc = crts[ci].loc;
       grid[day][si][ci] = true;
       if (item.type === 'RR') {
         var k1 = item.divName + '\x00' + item.t1, k2 = item.divName + '\x00' + item.t2;
@@ -1288,79 +1478,168 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       else          byBracket[bk].sfs.push(g);
     });
 
-    // Phase A — anchor Finals / 3rd-Place on the LAST DAY ONLY in Blanes courts.
-    // Slots are tried in user-configured time priority order (finalTimePrio), then
-    // remaining slots in reverse order as fallback. This allows all FINAL games to
-    // cluster at the preferred time before spilling to adjacent slots.
-    Object.keys(byBracket).forEach(function(bk) {
+    // ── Phases A+B: Atomic Bracket Placement ─────────────────────────────────
+    // ARCHITECTURAL CHANGE: Replaces the previous two-pass (Phase A then Phase B)
+    // approach with a single globally-aware pass that treats each bracket's entire
+    // playoff chain (SFs + Finals + 3rd Place) as one atomic unit.
+    //
+    // Design principles:
+    //  1. Resource Scarcity Pre-Calc — sort brackets by constraint hardness so the
+    //     most constrained (Mandatory + most SFs) claim Blanes slots first.
+    //  2. Bracket-Path Atomicity — for each candidate finalSlot, check that the
+    //     matching sfSlot ALSO has the required courts before committing either.
+    //     Partially-satisfiable slot-pairs are rejected entirely; the next pair is tried.
+    //  3. Mandatory Strictness — Mandatory divisions require ALL SFs in Blanes at
+    //     sfSlotIdx; if unavailable the whole (sfSlot, finalSlot) pair is skipped.
+    //  4. poGridGame population — every placed PO game is tracked by grid position
+    //     so the eviction pass in Phase B2 can identify and displace lower-priority
+    //     games when a Final or Mandatory SF needs a Blanes slot.
+
+    // Hardness score: Mandatory brackets with many SF courts to claim → serve first.
+    var bkArray = Object.keys(byBracket);
+    bkArray.sort(function(bkA, bkB) {
+      var bA = byBracket[bkA], bB = byBracket[bkB];
+      var dA = bA.lates.length ? bA.lates[0].divName : (bA.sfs.length ? bA.sfs[0].divName : '');
+      var dB = bB.lates.length ? bB.lates[0].divName : (bB.sfs.length ? bB.sfs[0].divName : '');
+      var mA = getVenuePriority(dA) === 'blanes-only' ? 1 : 0;
+      var mB = getVenuePriority(dB) === 'blanes-only' ? 1 : 0;
+      if (mA !== mB) return mB - mA; // Mandatory first
+      // Secondary key: total Blanes-court demand (Finals always need Blanes; SFs only if Mandatory)
+      var demA = bA.lates.length + (mA ? bA.sfs.length : 0);
+      var demB = bB.lates.length + (mB ? bB.sfs.length : 0);
+      return demB - demA;
+    });
+
+    bkArray.forEach(function(bk) {
       var b = byBracket[bk];
       if (!b.lates.length) return;
-      var ad = nDays - 1; // last day only — no backward fallback
+      var ad = nDays - 1;
       var adSlots = dayTimeSlots[Math.min(ad, dayTimeSlots.length - 1)];
+      var divName = b.lates[0].divName;
+      var isMandatory = getVenuePriority(divName) === 'blanes-only';
+      // 2-slot gap = 180 min start-to-start (SF ends at +90 min, Final has 90 min to prepare).
+      // Adequate for both same-venue (Mandatory) and cross-venue (non-Mandatory) brackets.
+      // The "time travel" bug is prevented by the SF pre-pass below, not by a larger gap.
+      var sfToFinalGap = 2;
+      var sfFloor = 0; // Finals can start at any Day N-1 slot; SFs may anchor on Day N-2 (Option C)
 
-      // Build priority-ordered slot index list: preferred times first, then reverse fill.
+      // Build priority-ordered final-slot candidate list (priority times + reverse fallback)
       var triedSlots = [];
-      finalTimePrio.forEach(function(tm) {
-        var best = -1, bestDist = Infinity;
-        adSlots.forEach(function(s, idx) {
-          if (idx < 2) return; // index ≥ 2 needed so SFs fit at idx-2
-          var dist = Math.abs(s - tm);
-          if (dist < bestDist) { bestDist = dist; best = idx; }
+      if (!isFlexibleFinals) {
+        finalTimePrio.forEach(function(tm) {
+          var best = -1, bestDist = Infinity;
+          adSlots.forEach(function(s, idx) {
+            if (idx < sfFloor) return;
+            var dist = Math.abs(s - tm);
+            if (dist < bestDist) { bestDist = dist; best = idx; }
+          });
+          if (best >= sfFloor && triedSlots.indexOf(best) === -1) triedSlots.push(best);
         });
-        if (best >= 2 && triedSlots.indexOf(best) === -1) triedSlots.push(best);
-      });
-      for (var tfb = adSlots.length - 1; tfb >= 2; tfb--) {
+      }
+      for (var tfb = adSlots.length - 1; tfb >= sfFloor; tfb--) {
         if (triedSlots.indexOf(tfb) === -1) triedSlots.push(tfb);
       }
 
       var anchored = false;
       for (var tsi = 0; tsi < triedSlots.length && !anchored; tsi++) {
-        var alsi = triedSlots[tsi];
+        var finalSlotIdx = triedSlots[tsi];
+
+        // ── Finals capacity check (main venue only when checkbox on) ──────────
         var freeLate = [];
         for (var aci = 0; aci < nCourts; aci++) {
-          // Finals & 3rd Place must be in Blanes (hard constraint)
-          if (!grid[ad][alsi][aci] && isBlanesCourt(crts[aci])) freeLate.push(aci);
+          if (!grid[ad][finalSlotIdx][aci] && courtAllowed(b.lates[0].divName, aci, b.lates[0].lbl)) freeLate.push(aci);
         }
         if (freeLate.length < b.lates.length) continue;
-        for (var ali = 0; ali < b.lates.length; ali++) {
-          b.lates[ali].placed  = true;
-          b.lates[ali].day     = ad;
-          b.lates[ali].slotIdx = alsi;
-          b.lates[ali].court   = crts[freeLate[ali]].court;
-          grid[ad][alsi][freeLate[ali]] = true;
-        }
-        anchored = true;
-      }
-    });
 
-    // Phase B — place SFs exactly 2 slots before their anchored Finals
-    // Only handles brackets that have Finals anchored in Phase A.
-    Object.keys(byBracket).forEach(function(bk) {
-      var b = byBracket[bk];
-      if (!b.sfs.length) return;
-      if (!b.lates.length || b.lates[0].day < 0) return;
-      var lateDay = b.lates[0].day;
-      var lateSi  = b.lates[0].slotIdx;
-      var bsfSi   = lateSi - 2;
-      if (bsfSi < 0) return;
-      var freeSF = [];
-      for (var bci = 0; bci < nCourts; bci++) {
-        if (!grid[lateDay][bsfSi][bci]) freeSF.push(bci);
-      }
-      // Route SFs by division: Mandatory divisions use Blanes; all others must use non-Blanes
-      // to keep Blanes free for Finals. Fall back to any court only if the preferred set is empty.
-      var sfDivName = b.sfs.length ? b.sfs[0].divName : '';
-      var isMandatorySF = getVenuePriority(sfDivName) === 'blanes-only';
-      var filteredSF = freeSF.filter(function(ci) {
-        return isMandatorySF ? isBlanesCourt(crts[ci]) : !isBlanesCourt(crts[ci]);
-      });
-      if (filteredSF.length) freeSF = filteredSF;
-      for (var bsfi = 0; bsfi < b.sfs.length && bsfi < freeSF.length; bsfi++) {
-        b.sfs[bsfi].placed   = true;
-        b.sfs[bsfi].day      = lateDay;
-        b.sfs[bsfi].slotIdx  = bsfSi;
-        b.sfs[bsfi].court    = crts[freeSF[bsfi]].court;
-        grid[lateDay][bsfSi][freeSF[bsfi]] = true;
+        // ── SF capacity check — triple-option atomic validation ───────────────
+        // Option A (preferred): SFs on Day N-1 at gap=2 slots (180-min rest for cross-venue)
+        //   Mandatory → main venue; non-Mandatory → external (SFs free the main venue for Finals)
+        // Option B (fallback, non-mandatory): SFs on Day N-1 at gap=1 slot (90-min same-venue rest)
+        // Option C (last resort): SFs on Day N-2 evening — when SF day ≠ Final day the
+        //   SF→Final chronology check is skipped, enabling Finals at any Day N-1 slot (e.g. 09:00)
+        var sfCourtList = [], sfSlotActual = -1, sfDayActual = ad, sfUseBlanes = false;
+        if (b.sfs.length > 0) {
+          var sfSlotA = finalSlotIdx - 2;
+          var sfSlotB = finalSlotIdx - 1;
+
+          // Option A
+          if (sfSlotA >= 0) {
+            var listA = [];
+            for (var bci = 0; bci < nCourts; bci++) {
+              if (!grid[ad][sfSlotA][bci]) {
+                var wantA = isMandatory ? isMainVenue(crts[bci]) : !isMainVenue(crts[bci]);
+                if (wantA) listA.push(bci);
+              }
+            }
+            if (listA.length >= b.sfs.length) { sfCourtList = listA; sfSlotActual = sfSlotA; sfUseBlanes = isMandatory; }
+          }
+
+          // Option B — non-mandatory only; SFs at main venue, 1-slot gap (90-min same-venue rest)
+          if (!sfCourtList.length && !isMandatory && sfSlotB >= 0) {
+            var listB = [];
+            for (var bci2 = 0; bci2 < nCourts; bci2++) {
+              if (!grid[ad][sfSlotB][bci2] && isMainVenue(crts[bci2])) listB.push(bci2);
+            }
+            if (listB.length >= b.sfs.length) {
+              sfCourtList = listB; sfSlotActual = sfSlotB; sfUseBlanes = true;
+            }
+          }
+
+          // Option C — SFs on Day N-2 evening; Finals unrestricted on Day N-1
+          if (!sfCourtList.length && ad >= 1) {
+            var sfDayC = ad - 1;
+            var dcSlots = dayTimeSlots[Math.min(sfDayC, dayTimeSlots.length - 1)];
+            for (var _dcsi = dcSlots.length - 1; _dcsi >= Math.max(0, dcSlots.length - 3) && !sfCourtList.length; _dcsi--) {
+              var listC = [];
+              for (var bci3 = 0; bci3 < nCourts; bci3++) {
+                if (!grid[sfDayC][_dcsi][bci3]) {
+                  var wantC = isMandatory ? isMainVenue(crts[bci3]) : !isMainVenue(crts[bci3]);
+                  if (wantC) listC.push(bci3);
+                }
+              }
+              if (listC.length >= b.sfs.length) {
+                sfCourtList = listC; sfSlotActual = _dcsi; sfDayActual = sfDayC; sfUseBlanes = isMandatory;
+              }
+            }
+          }
+
+          if (!sfCourtList.length) continue; // no valid SF slot across all options
+        }
+
+        // ── Both slot-pairs validated — commit atomically ─────────────────────
+        // SFs committed first so sfBracketLastSlot is set before finalBracketSlot
+        if (b.sfs.length > 0) {
+          var bsfPlaced = 0;
+          for (var bsfi = 0; bsfi < b.sfs.length && bsfi < sfCourtList.length; bsfi++) {
+            b.sfs[bsfi].placed   = true;
+            b.sfs[bsfi].day      = sfDayActual;
+            b.sfs[bsfi].slotIdx  = sfSlotActual;
+            b.sfs[bsfi].courtIdx = sfCourtList[bsfi];
+            b.sfs[bsfi].court    = crts[sfCourtList[bsfi]].court;
+            b.sfs[bsfi].loc      = crts[sfCourtList[bsfi]].loc;
+            grid[sfDayActual][sfSlotActual][sfCourtList[bsfi]] = true;
+            poGridGame[sfDayActual + ':' + sfSlotActual + ':' + sfCourtList[bsfi]] = b.sfs[bsfi];
+            bsfPlaced++;
+          }
+          if (bsfPlaced > 0) {
+            var sfCur = sfBracketLastSlot[bk];
+            if (!sfCur || sfDayActual > sfCur.day || (sfDayActual === sfCur.day && sfSlotActual > sfCur.slotIdx))
+              sfBracketLastSlot[bk] = { day: sfDayActual, slotIdx: sfSlotActual };
+          }
+        }
+        // Finals & 3rd Place
+        for (var ali = 0; ali < b.lates.length; ali++) {
+          b.lates[ali].placed   = true;
+          b.lates[ali].day      = ad;
+          b.lates[ali].slotIdx  = finalSlotIdx;
+          b.lates[ali].courtIdx = freeLate[ali];
+          b.lates[ali].court    = crts[freeLate[ali]].court;
+          b.lates[ali].loc      = crts[freeLate[ali]].loc;
+          grid[ad][finalSlotIdx][freeLate[ali]] = true;
+          poGridGame[ad + ':' + finalSlotIdx + ':' + freeLate[ali]] = b.lates[ali];
+        }
+        finalBracketSlot[bk] = { day: ad, slotIdx: finalSlotIdx };
+        anchored = true;
       }
     });
 
@@ -1370,26 +1649,204 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     //              14+ SFs competed for a 10-court slot.
     // Scans backwards from the last slot of the last day so PO games cluster late.
     // FINAL & 3rd Place: day scan is clamped to nDays-1 so they never leave the last day.
-    poItems.forEach(function(g) {
-      if (g.placed) return;
-      var pdMin = (LATE_LBLS[g.lbl]) ? nDays - 1 : 0; // Finals must stay on last day
-      for (var pd = nDays - 1; pd >= pdMin && !g.placed; pd--) {
+    //
+    // Venue-rest relaxation for Finals:
+    //  Pass 1 — full 180-min venue change constraint (slack=3).
+    //  Pass 2 — if still unplaced, retry with relaxed 90-min constraint (slack=1) and log warning.
+    //  Pass 3 — if still unplaced, ignore venue rest entirely (guarantee placement).
+    function tryPlacePO(g, venueSlack, lastDaySlotOrder) {
+      var pdMin = (LATE_LBLS[g.lbl]) ? nDays - 1 : 0;
+      var poChronKey = g.divName + '\x00' + g.bracket;
+      // Consolation games (no downstream Medal Final) prefer earlier days first so Day 3
+      // Blanes slots stay available for Championship Finals and 3rd Place games.
+      // Championship SFs (needsFinalSlot) and Medal games always prioritise the last day.
+      var _dayOrder = [];
+      if (!g.isLate && !g.needsFinalSlot && nDays >= 3) {
+        for (var _dp = nDays - 2; _dp >= pdMin; _dp--) _dayOrder.push(_dp);
+        _dayOrder.push(nDays - 1); // Day N-1 is last resort for consolation
+      } else {
+        for (var _dp = nDays - 1; _dp >= pdMin; _dp--) _dayOrder.push(_dp);
+      }
+      for (var _doi = 0; _doi < _dayOrder.length && !g.placed; _doi++) {
+        var pd = _dayOrder[_doi];
         var pdSlots = dayTimeSlots[Math.min(pd, dayTimeSlots.length - 1)];
-        var pcOrder = courtPriorityOrder(g.divName, crts, undefined, g.lbl);
-        for (var psi = pdSlots.length - 1; psi >= 0 && !g.placed; psi--) {
+        var pcOrder = courtPriorityOrder(g.divName, crts, undefined, g.lbl, rules.mainVenue);
+        // Use caller-supplied slot order on last day (Tier 1 or Tier 2 pass);
+        // default: reverse chronological (latest slot first) on all other days.
+        var _slotSeq;
+        if (lastDaySlotOrder && pd === nDays - 1) {
+          _slotSeq = lastDaySlotOrder;
+        } else {
+          _slotSeq = [];
+          for (var _ri = pdSlots.length - 1; _ri >= 0; _ri--) _slotSeq.push(_ri);
+        }
+        for (var _soo = 0; _soo < _slotSeq.length && !g.placed; _soo++) {
+          var psi = _slotSeq[_soo];
+          // 2-slot minimum between SF start and Final start (180 min).
+          // The pre-pass ensures SFs are always placed before Finals, so this guard fires correctly.
+          var _sfGap = 2;
+          if (g.isLate) {
+            var sfLast = sfBracketLastSlot[poChronKey];
+            if (sfLast && sfLast.day === pd && psi < sfLast.slotIdx + _sfGap) continue;
+          }
+          if (!g.isLate) {
+            var fSlot = finalBracketSlot[poChronKey];
+            if (fSlot && fSlot.day === pd && psi > fSlot.slotIdx - _sfGap) continue;
+          }
           for (var pco = 0; pco < pcOrder.length && !g.placed; pco++) {
             var pci = pcOrder[pco];
             if (!grid[pd][psi][pci] && courtAllowed(g.divName, pci, g.lbl)) {
-              g.placed  = true;
-              g.day     = pd;
-              g.slotIdx = psi;
-              g.court   = crts[pci].court;
+              var vk1 = g.divName + '\x00' + g.t1, vk2 = g.divName + '\x00' + g.t2;
+              if (venueSlack !== null) {
+                if (venueChangeConflict(vk1, pd, psi, crts[pci].loc, venueSlack)) continue;
+                if (venueChangeConflict(vk2, pd, psi, crts[pci].loc, venueSlack)) continue;
+              }
+              g.placed = true; g.day = pd; g.slotIdx = psi;
+              g.courtIdx = pci; g.court = crts[pci].court; g.loc = crts[pci].loc;
               grid[pd][psi][pci] = true;
+              poGridGame[pd + ':' + psi + ':' + pci] = g;
+              // Update tracking maps so subsequent games in the same bracket respect chronology
+              if (g.isLate) {
+                var curF = finalBracketSlot[poChronKey];
+                if (!curF || pd > curF.day || (pd === curF.day && psi > curF.slotIdx))
+                  finalBracketSlot[poChronKey] = { day: pd, slotIdx: psi };
+              } else {
+                var curSF = sfBracketLastSlot[poChronKey];
+                if (!curSF || pd > curSF.day || (pd === curSF.day && psi > curSF.slotIdx))
+                  sfBracketLastSlot[poChronKey] = { day: pd, slotIdx: psi };
+              }
             }
           }
         }
       }
+    }
+    // Build Tier 1 / Tier 2 slot-index arrays for the Finals time-priority cascade.
+    // Tier 1 = slots closest to user-preferred times (finalTimePrio).
+    // Tier 2 = all remaining last-day slots in reverse order.
+    // Both tiers are tried with strict 180-min rest before any relaxation occurs.
+    var _ldSlots = dayTimeSlots[Math.min(nDays - 1, dayTimeSlots.length - 1)];
+    var tier1Indices = [];
+    finalTimePrio.forEach(function(tm) {
+      var best = -1, bestDist = Infinity;
+      _ldSlots.forEach(function(s, i) {
+        var dist = Math.abs(s - tm);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      });
+      if (best >= 0 && tier1Indices.indexOf(best) === -1) tier1Indices.push(best);
     });
+    var tier2Indices = [];
+    for (var _t2i = _ldSlots.length - 1; _t2i >= 0; _t2i--) {
+      if (tier1Indices.indexOf(_t2i) === -1) tier2Indices.push(_t2i);
+    }
+
+    // Championship SF Pre-Pass: FORWARD slot order (earliest slots first).
+    // SFs must be placed BEFORE Finals (to populate sfBracketLastSlot so the
+    // SF→Final chronology check fires correctly). They must also land at EARLY slots
+    // so Finals — which need sfSlot + 2 — still have room on a 6-slot day.
+    // Root cause of 10-Final deadlock: old reverse order placed SFs at slot 5,
+    // requiring Finals at slot 7+, which doesn't exist.
+    var _sfFwdOrder = [];
+    for (var _spi = 0; _spi < _ldSlots.length; _spi++) _sfFwdOrder.push(_spi);
+    poItems.forEach(function(g) {
+      if (g.placed || g.isLate || !g.needsFinalSlot) return;
+      tryPlacePO(g, 3, _sfFwdOrder);
+    });
+
+    // Phase B2 — Sequential fallback for remaining unplaced PO games.
+    // Medal games (FINAL/3rd Place): 4-pass cascade on last-day Blanes slots.
+    // All others (SFs, consolation): single pass; consolation prefers Day N-2 (see
+    //   tryPlacePO _dayOrder) to free Day N-1 for medal games.
+    poItems.forEach(function(g) {
+      if (g.placed) return;
+      if (LATE_LBLS[g.lbl]) {
+        // Medal games: clean cascade — SFs are already placed (pre-pass ensures chronology).
+        // Pass 1: Tier 1 preferred times + strict venue rest
+        if (tier1Indices.length) tryPlacePO(g, 3, tier1Indices);
+        // Pass 2: Tier 2 remaining times + strict venue rest
+        if (!g.placed) tryPlacePO(g, 3, tier2Indices.length ? tier2Indices : null);
+        var strictPlaced = g.placed;
+        // Pass 3: Relaxed venue-change rest (90-min)
+        if (!g.placed) tryPlacePO(g, 1);
+        // Pass 4: No venue-change rest constraint
+        if (!g.placed) tryPlacePO(g, null);
+        // Pass 5: Priority eviction — displace lower-priority games to free a slot
+        if (!g.placed) {
+          var myPrio = poPriority(g);
+          var adE = nDays - 1;
+          var ckE = g.divName + '\x00' + g.bracket;
+          var sfLE = sfBracketLastSlot[ckE];
+          var adESlots = dayTimeSlots[Math.min(adE, dayTimeSlots.length - 1)];
+          for (var esi = adESlots.length - 1; esi >= 0 && !g.placed; esi--) {
+            if (sfLE && sfLE.day === adE && esi < sfLE.slotIdx + 2) continue;
+            for (var eci = 0; eci < nCourts && !g.placed; eci++) {
+              if (!courtAllowed(g.divName, eci, g.lbl)) continue;
+              if (!grid[adE][esi][eci]) continue;
+              var victim = poGridGame[adE + ':' + esi + ':' + eci];
+              if (!victim || !tryEvictPO(victim, myPrio)) continue;
+              g.placed = true; g.day = adE; g.slotIdx = esi; g.courtIdx = eci; g.court = crts[eci].court; g.loc = crts[eci].loc;
+              grid[adE][esi][eci] = true;
+              poGridGame[adE + ':' + esi + ':' + eci] = g;
+              var fE2 = finalBracketSlot[ckE];
+              if (!fE2 || adE > fE2.day || (adE === fE2.day && esi > fE2.slotIdx))
+                finalBracketSlot[ckE] = { day: adE, slotIdx: esi };
+            }
+          }
+        }
+        // Pass 6: Venue constraint override — absolute last resort; bypasses courtAllowed
+        if (!g.placed) {
+          var adF6 = nDays - 1;
+          var ckF6 = g.divName + '\x00' + g.bracket;
+          var sfLF6 = sfBracketLastSlot[ckF6];
+          var adF6Slots = dayTimeSlots[Math.min(adF6, dayTimeSlots.length - 1)];
+          for (var f6si = adF6Slots.length - 1; f6si >= 0 && !g.placed; f6si--) {
+            if (sfLF6 && sfLF6.day === adF6 && f6si < sfLF6.slotIdx + 2) continue;
+            for (var f6ci = 0; f6ci < nCourts && !g.placed; f6ci++) {
+              if (grid[adF6][f6si][f6ci]) continue;
+              g.placed = true; g.day = adF6; g.slotIdx = f6si; g.courtIdx = f6ci; g.court = crts[f6ci].court; g.loc = crts[f6ci].loc;
+              grid[adF6][f6si][f6ci] = true;
+              poGridGame[adF6 + ':' + f6si + ':' + f6ci] = g;
+              var fF6 = finalBracketSlot[ckF6];
+              if (!fF6 || adF6 > fF6.day || (adF6 === fF6.day && f6si > fF6.slotIdx))
+                finalBracketSlot[ckF6] = { day: adF6, slotIdx: f6si };
+              scheduleWarnings.push('VENUE CONSTRAINT OVERRIDE: ' + g.lbl + ' (' + g.divName + ') placed at ' + crts[f6ci].court + ' — no main-venue slot available on Day ' + (adF6 + 1) + '.');
+            }
+          }
+        }
+        // Warn if venue-change rest was relaxed (Passes 3/4/5)
+        if (g.placed && !strictPlaced && rules.venueRest) {
+          var _wSlots = dayTimeSlots[Math.min(g.day, dayTimeSlots.length - 1)];
+          var _wTime = (_wSlots && g.slotIdx < _wSlots.length) ? toT(_wSlots[g.slotIdx]) : '?';
+          scheduleWarnings.push('VENUE RELAXED: ' + g.lbl + ' (' + g.divName + ') — venue 3-hour rest reduced to ensure placement at ' + _wTime + ' on Day ' + (g.day + 1) + '.');
+        }
+      } else {
+        // SFs, consolation (5th/7th/…): single strict pass.
+        // tryPlacePO _dayOrder sends consolation to Day N-2 first (Day 2 pressure release).
+        tryPlacePO(g, 3);
+        if (!g.placed) tryPlacePO(g, null); // fallback: ignore venue rest
+      }
+    });
+
+    // ── Chronological Integrity Map ───────────────────────────────────────────
+    // For each division, record the earliest (day, slotIdx) of any placed PO game.
+    // RR games must be placed STRICTLY BEFORE this point — and never on Day N-1.
+    var divEarliestPO = {};
+    poItems.forEach(function(g) {
+      if (!g.placed) return;
+      var cur = divEarliestPO[g.divName];
+      if (!cur || g.day < cur.day || (g.day === cur.day && g.slotIdx < cur.slotIdx))
+        divEarliestPO[g.divName] = { day: g.day, slotIdx: g.slotIdx };
+    });
+    // rrSlotOK: returns false if placing an RR game at (day, si) would
+    // violate the Group-before-Playoff ordering for that division.
+    // Day N-1 (the playoff day) is always forbidden for RR games.
+    function rrSlotOK(divName, day, si) {
+      if (day >= nDays - 1) return false;
+      var ep = divEarliestPO[divName];
+      if (!ep) return true;
+      if (day > ep.day) return false;
+      if (day === ep.day && si >= ep.slotIdx) return false;
+      return true;
+    }
 
     // ── Pre-Phase-C: Global sort by Team Difficulty ───────────────────────────
     // Teams in larger groups play more games and produce tighter constraint chains.
@@ -1419,6 +1876,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         var queue = [];
         rrItems.forEach(function(g) {
           if (g.placed) return;
+          if (!rrSlotOK(g.divName, day, si)) return; // must precede division's earliest PO game
           var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
           if (teamCanPlay(k1, day, si) && teamCanPlay(k2, day, si)) queue.push(g);
         });
@@ -1445,7 +1903,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           if (g.placed) { queue.splice(qi, 1); continue; }
           var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
           if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) { qi++; continue; }
-          var cOrder = courtPriorityOrder(g.divName, crts);
+          var cOrder = courtPriorityOrder(g.divName, crts, undefined, undefined, rules.mainVenue);
           var gPlaced = false;
           for (var coi = 0; coi < cOrder.length; coi++) {
             var ci = cOrder[coi];
@@ -1473,6 +1931,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         var dqueue = [];
         rrItems.forEach(function(g) {
           if (g.placed) return;
+          if (!rrSlotOK(g.divName, dday, dsi)) return; // must precede division's earliest PO game
           var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
           if (teamCanPlaySoft(k1, dday, dsi) && teamCanPlaySoft(k2, dday, dsi)) dqueue.push(g);
         });
@@ -1486,7 +1945,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           if (dg.placed) { dqueue.splice(dqi, 1); continue; }
           var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
           if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) { dqi++; continue; }
-          var dcOrder = courtPriorityOrder(dg.divName, crts);
+          var dcOrder = courtPriorityOrder(dg.divName, crts, undefined, undefined, rules.mainVenue);
           var dgPlaced = false;
           for (var dcoi = 0; dcoi < dcOrder.length; dcoi++) {
             var dci = dcOrder[dcoi];
@@ -1532,14 +1991,16 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var k1 = game.divName + '\x00' + game.t1;
       var k2 = game.divName + '\x00' + game.t2;
       for (var d = 0; d < nDays; d++) {
+        if (!rrSlotOK(game.divName, d, 0)) continue; // skip days that are at/after PO start for this div
         var ds = dayTimeSlots[Math.min(d, dayTimeSlots.length - 1)];
         for (var si = 0; si < ds.length; si++) {
+          if (!rrSlotOK(game.divName, d, si)) break; // once slot exceeds PO start on this day, stop
           if (slotConflict(k1, d, si) || slotConflict(k2, d, si)) continue;
           // Venue guard: eOrder gives division-preferred courts (e.g. Blanes-only for U18B).
           // courtAllowed enforces the hard gate — non-U18B RR games cannot be placed on
           // Blanes courts that are reserved via the hard constraint.  PO games (Finals,
           // consolation) are completely immovable: they have no gridGame entry (see below).
-          var eOrder = courtPriorityOrder(game.divName, crts);
+          var eOrder = courtPriorityOrder(game.divName, crts, undefined, undefined, rules.mainVenue);
           for (var ecoi = 0; ecoi < eOrder.length; ecoi++) {
             var ci = eOrder[ecoi];
             if (!courtAllowed(game.divName, ci)) continue; // hard venue constraint
@@ -1594,7 +2055,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (teamDayCount[gk1] && teamDayCount[gk1][g.day] > 0) teamDayCount[gk1][g.day]--;
         if (teamDayCount[gk2] && teamDayCount[gk2][g.day] > 0) teamDayCount[gk2][g.day]--;
         // Attach to new position
-        g.day = mv.day; g.slotIdx = mv.si; g.courtIdx = mv.ci; g.court = crts[mv.ci].court;
+        g.day = mv.day; g.slotIdx = mv.si; g.courtIdx = mv.ci; g.court = crts[mv.ci].court; g.loc = crts[mv.ci].loc;
         grid[mv.day][mv.si][mv.ci] = true;
         gridGame[mv.day + ':' + mv.si + ':' + mv.ci] = g;
         teamSlotBusy[gk1 + ':' + mv.day + ':' + mv.si] = true;
@@ -1675,7 +2136,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (!de.groups[g.group]) de.groups[g.group] = { group: g.group, games: [] };
         de.groups[g.group].games.push({
           time: toT(daySlots[g.slotIdx]), t1: g.t1, t2: g.t2,
-          court: g.court, score1: null, score2: null, locked: false,
+          court: g.court, loc: g.loc || '', score1: null, score2: null, locked: false,
           quotaViolation: g.quotaViolation || false
         });
       });
@@ -1687,7 +2148,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         de.groups[gk].games.push({
           time: toT(daySlots[g.slotIdx]), t1: g.t1, t2: g.t2,
           lbl: g.lbl, bracket: g.bracket,
-          court: g.court, score1: null, score2: null, locked: false
+          court: g.court, loc: g.loc || '', score1: null, score2: null, locked: false
         });
       });
 
@@ -1759,7 +2220,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var g = item.g;
       if (!lunchShown && toM(g.time) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
       if (item.name !== lastDiv) {
-        h += '<div class="div-hdr" style="background:linear-gradient(135deg,' + item.color + '22,' + item.color + '0a);border-left:4px solid ' + item.color + '">'
+        h += '<div class="div-hdr" data-div="' + item.name + '" style="background:linear-gradient(135deg,' + item.color + '22,' + item.color + '0a);border-left:4px solid ' + item.color + '">'
           + '<div style="width:10px;height:10px;border-radius:50%;background:' + item.color + ';flex-shrink:0"></div>'
           + item.name + '</div>';
         lastDiv = item.name;
@@ -1782,7 +2243,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (grpSize > 0 && grpSize < 4) {
           addBtn = ' <button class="add-team-btn" data-div="' + item.name + '" data-gk="' + (item.gk || '') + '" data-day="' + dayIdx + '" style="margin-left:8px;background:transparent;border:1px solid ' + item.color + ';color:' + item.color + ';border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px">+ add</button>';
         }
-        h += '<div style="font-size:11px;font-weight:700;color:' + item.color + ';margin-left:12px;">' + item.group + addBtn + '</div>';
+        h += '<div class="grp-lbl" data-div="' + item.name + '" style="font-size:11px;font-weight:700;color:' + item.color + ';margin-left:12px;">' + item.group + addBtn + '</div>';
         lastGroup = item.group;
       }
       var p = fmt(g.time).split(' ');
@@ -1807,7 +2268,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var quotaBadge = g.quotaViolation
         ? '<div style="width:100%;font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;color:#FF6B00;margin-top:4px;padding-top:3px;border-top:1px dashed rgba(255,107,0,0.35)">\u26A0\uFE0F Exceeds Daily Limit</div>'
         : '';
-      h += '<div class="gc" style="border-left-color:' + item.color + quotaStyle + '">'
+      var gcId = makeGameId(item.name, g.lbl || (g.t1 + ' vs ' + g.t2));
+      h += '<div class="gc" id="' + gcId + '" data-div="' + item.name + '" data-venue="' + (g.loc || '') + '" title="Venue: ' + (g.loc || 'unknown') + '" style="border-left-color:' + item.color + quotaStyle + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
         + lblBadge
         + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
@@ -1914,7 +2376,12 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         + '\u26a0\ufe0f Scheduling Warnings \u2014 all games below were placed</div>';
       if (venueWarns.length) {
         h += '<div style="color:#fde68a;font-size:11px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">Venue Rule Relaxed (Blanes exclusivity OFF)</div>'
-          + venueWarns.map(function(w){ return '<div style="color:#fde68a;font-size:12px;margin-top:3px">' + w.replace('VENUE RELAXED: ', '') + '</div>'; }).join('');
+          + venueWarns.map(function(w){
+            var body = w.replace('VENUE RELAXED: ', '');
+            var m = w.match(/^VENUE RELAXED: (.+?) \((.+?)\)/);
+            var btn = m ? ' <button onclick="jumpToGame(' + JSON.stringify(m[2]) + ',' + JSON.stringify(m[1]) + ')" style="background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.5);color:#fde68a;font-size:10px;padding:1px 7px;border-radius:4px;cursor:pointer;margin-left:6px;font-family:Montserrat,sans-serif;font-weight:700">\u2192 View</button>' : '';
+            return '<div style="color:#fde68a;font-size:12px;margin-top:3px">' + body + btn + '</div>';
+          }).join('');
       }
       if (restWarns.length) {
         h += '<div style="color:#fde68a;font-size:11px;font-family:Montserrat,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin:' + (venueWarns.length ? '10px' : '0') + ' 0 4px">Rest Rule Relaxed (90-min rest OFF)</div>'
@@ -1936,11 +2403,144 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '<div class="stat"><div class="stn">' + sched.totalCourts + '</div><div class="stl">Courts</div></div>'
       + '</div>';
 
+    // ── Export buttons ────────────────────────────────────
+    h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
+      + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
+      + '<button id="exportPrintBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Print / PDF</button>'
+      + '</div>';
+
     sched.gameDays.forEach(function(day, dIdx) {
       h += '<div class="day-hdr">' + day.label + '</div>';
       h += renderDayBlock(day.divs, lS, lE, dIdx);
     });
     document.getElementById('schedOut').innerHTML = h;
+
+    // ── Filter bar ────────────────────────────────────────
+    var filterBar = document.getElementById('schedFilterBar');
+    var filterSel = document.getElementById('schedFilterSel');
+    var venueSel  = document.getElementById('schedVenueSel');
+    var filterClear = document.getElementById('schedFilterClear');
+    if (filterBar && filterSel) {
+      filterBar.style.display = 'flex';
+
+      // Rebuild category options (preserve current selection if still valid)
+      var curCat = filterSel.value;
+      filterSel.innerHTML = '<option value="">All Categories</option>'
+        + divisions.map(function(d) {
+            return '<option value="' + d.name + '"' + (d.name === curCat ? ' selected' : '') + '>'
+                 + d.name + '</option>';
+          }).join('');
+      filterSel.onchange = function() { applySchedFilters(); };
+
+      // Rebuild venue options from sites array
+      if (venueSel) {
+        var curVen = venueSel.value;
+        var venueNames = sites.map(function(s) { return s.name || ''; }).filter(Boolean);
+        // deduplicate
+        var seen = {};
+        venueNames = venueNames.filter(function(v) { if (seen[v]) return false; seen[v] = true; return true; });
+        venueSel.innerHTML = '<option value="">All Venues</option>'
+          + venueNames.map(function(v) {
+              return '<option value="' + v + '"' + (v === curVen ? ' selected' : '') + '>' + v + '</option>';
+            }).join('');
+        venueSel.onchange = function() { applySchedFilters(); };
+      }
+
+      if (filterClear) filterClear.onclick = function() {
+        if (filterSel) filterSel.value = '';
+        if (venueSel)  venueSel.value  = '';
+        applySchedFilters();
+      };
+
+      // Re-apply filters if previously set
+      if ((curCat && divisions.some(function(d) { return d.name === curCat; })) ||
+          (venueSel && venueSel.value)) {
+        applySchedFilters();
+      }
+    }
+
+    var csvBtn   = document.getElementById('exportCSVBtn');
+    var printBtn = document.getElementById('exportPrintBtn');
+    if (csvBtn)   csvBtn.onclick   = exportScheduleToCSV;
+    if (printBtn) printBtn.onclick = exportScheduleToPrint;
+  }
+
+  // ── Export: CSV ───────────────────────────────────────
+  function exportScheduleToCSV() {
+    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    var rows = [['Day', 'Time', 'Division', 'Group / Bracket', 'Home', 'Away', 'Court', 'Type']];
+    sched.gameDays.forEach(function(day) {
+      day.divs.forEach(function(d) {
+        if (d.games) {
+          d.games.forEach(function(g) {
+            rows.push([day.label, g.time || '', d.name, g.bracket || '', g.t1 || '', g.t2 || '', g.court || '', g.lbl || 'RR']);
+          });
+        } else if (d.groups) {
+          Object.keys(d.groups).forEach(function(gk) {
+            d.groups[gk].games.forEach(function(g) {
+              rows.push([day.label, g.time || '', d.name, gk, g.t1 || '', g.t2 || '', g.court || '', g.lbl || 'RR']);
+            });
+          });
+        }
+      });
+    });
+    var csv = rows.map(function(r) {
+      return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = 'tournament_schedule.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Export: Print window (PDF-ready) ─────────────────
+  function exportScheduleToPrint() {
+    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    var rows = '';
+    sched.gameDays.forEach(function(day) {
+      rows += '<h2>' + day.label + '</h2>';
+      day.divs.forEach(function(d) {
+        rows += '<h3>' + d.name + '</h3>';
+        var games = [];
+        if (d.games) {
+          games = d.games;
+        } else if (d.groups) {
+          Object.keys(d.groups).sort().forEach(function(gk) {
+            d.groups[gk].games.forEach(function(g) { games.push(g); });
+          });
+        }
+        games.sort(function(a, b) { return (a.time || '') < (b.time || '') ? -1 : 1; });
+        rows += '<table><thead><tr><th>Time</th><th>Home</th><th>Away</th><th>Court</th><th>Type</th></tr></thead><tbody>';
+        games.forEach(function(g) {
+          rows += '<tr><td>' + (g.time || '') + '</td><td>' + (g.t1 || '') + '</td><td>'
+            + (g.t2 || '') + '</td><td>' + (g.court || '') + '</td><td>' + (g.lbl || 'RR') + '</td></tr>';
+        });
+        rows += '</tbody></table>';
+      });
+    });
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tournament Schedule</title>'
+      + '<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}'
+      + 'h1{font-size:20px;margin:0 0 4px}p.sub{font-size:11px;color:#666;margin:0 0 20px}'
+      + 'h2{font-size:14px;margin:22px 0 6px;border-bottom:3px solid #FF6B00;padding-bottom:4px;color:#FF6B00}'
+      + 'h3{font-size:12px;margin:12px 0 4px;color:#333;font-weight:700}'
+      + 'table{width:100%;border-collapse:collapse;margin-bottom:14px}'
+      + 'th{background:#FF6B00;color:#fff;padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}'
+      + 'td{padding:4px 8px;border-bottom:1px solid #e5e5e5;font-size:11px}'
+      + 'tr:nth-child(even)td{background:#f9f9f9}'
+      + '.no-print{display:none}'
+      + '@media print{.no-print{display:none}table{page-break-inside:avoid}h2{page-break-before:auto}}'
+      + '</style></head><body>'
+      + '<h1>Euro Youth Basketball Cup — Tournament Schedule</h1>'
+      + '<p class="sub">Generated ' + new Date().toLocaleString() + '</p>'
+      + rows
+      + '<button class="no-print" onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#FF6B00;color:#fff;border:none;padding:10px 20px;font-size:13px;font-weight:700;border-radius:6px;cursor:pointer">Print / Save PDF</button>'
+      + '</body></html>';
+    var w = window.open('', '_blank');
+    if (!w) { alert('Pop-up blocked. Allow pop-ups for this page and try again.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
   }
 
   // Allow admin to add a team into a group to fill to 4 teams.
