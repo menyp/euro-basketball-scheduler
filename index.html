@@ -169,6 +169,16 @@ footer span{color:var(--o)}
 .chip.chip-dup .chip-rm,.chip.chip-dup .chip-left,.chip.chip-dup .chip-right{color:#fca5a5}
 @keyframes toastIn{from{opacity:0;transform:translateY(-14px) scale(.97)}to{opacity:1;transform:none}}
 @keyframes toastOut{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-8px) scale(.97)}}
+/* Ghost cards — empty court slots */
+.ghost-card{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:6px;border:1.5px dashed rgba(255,255,255,0.15);background:rgba(255,255,255,0.03);cursor:pointer;opacity:.6;transition:opacity .15s,border-color .15s}
+.ghost-card:hover{opacity:1;border-color:rgba(255,107,0,0.5)}
+.ghost-section{margin-top:12px}
+.ghost-section-hdr{font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,0.3);margin-bottom:6px;text-transform:uppercase}
+.manual-badge{font-size:10px;font-weight:700;color:#e53e3e;border:1px solid rgba(229,62,62,0.5);border-radius:3px;padding:1px 5px;margin-left:6px;white-space:nowrap}
+.conflict-box{background:rgba(229,62,62,0.08);border:1px solid rgba(229,62,62,0.35);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px}
+.picker-item{padding:8px 10px;border-radius:6px;margin-bottom:4px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);transition:background .1s}
+.picker-item:hover,.picker-item.selected{background:rgba(255,107,0,0.15);border-color:rgba(255,107,0,0.5)}
+#schedOut.empty-only .gc{display:none!important}
 </style>
 </head>
 <body>
@@ -231,11 +241,11 @@ footer span{color:var(--o)}
       <div class="stitle">Teams and Divisions</div>
       <label>Paste your full team list</label>
       <textarea id="pasteBox">U12 MIXED: VKKM (LIT), GLOUCESTER SAXONS (ENG), PARIS SW (FRA), DEREE C. ATHLETIC (GRE), LIMERICK CELTICS (IRE), LIMITLESS HOOPS (USA), MANCHESTER GIANTS 1 (ENG), St. Josephs Basketball Club (IRE), PORTLAOISE PANTHERS (IRE), MANCHESTER GIANTS 2 (ENG), MANCHESTER GIANTS 3 (ENG), TIGERS (CZE)
-U14 BOYS: KILKENNY STARS (IRE), ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), CORK (IRE), CORK (IRE), KCB JALANDHAR (IND), GLOUCESTER SAXONS (ENG), SILVA BACKS (USA), PHD HOOPS (USA), DEREE C. ATHLETIC (GRE), St. Josephs Basketball Club (IRE), LIMERICK CELTICS (IRE), BASKETBALL WALES (WAL), SURREY RAMS (ENG), LEEDS BASKETBALL (ENG)
+U14 BOYS: KILKENNY STARS (IRE), ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), CORK (IRE), CORK (IRE)1, KCB JALANDHAR (IND), GLOUCESTER SAXONS (ENG), SILVA BACKS (USA), PHD HOOPS (USA), DEREE C. ATHLETIC (GRE), St. Josephs Basketball Club (IRE), LIMERICK CELTICS (IRE), BASKETBALL WALES (WAL), SURREY RAMS (ENG), LEEDS BASKETBALL (ENG)
 U16 BOYS: UMF SINDRI (ICE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), KCB JALANDHAR (IND), Kaiserslautern Thunder (GER), PHD HOOPS (USA), LEEDS BASKETBALL (ENG), SMOOTHHANDLES (GER), KINGS COURT CANADA (CAD), SURREY RAMS (ENG), ALTE KANTI (SWI), MVP (USA), LIMITLESS HOOPS (USA), TIGERS (CZE), FLAMES VIENNA (AUT), MADELENA (COL)
-U18 BOYS: BANTRY BC (IRE), Mhaigh Cuilinn U17 (IRE), Mhaigh Cuilinn U17 (IRE), SOLLENTUNA (SWE), SOLLENTUNA (SWE), KCB JALANDHAR (IND), PHD HOOPS (USA), FORTROSE ACADEMY (SCO), TINDASTOLL (ICE), BC ALTE KANTI (SWI), LNCA (MEX), SURREY RAMS (ENG)
-U14 GIRLS: KILKENNY STARS (IRE), ST. BRIDGET'S CURROW (IRE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), LIMERICK CELTICKS (IRE), BASKETBALL WALES (WAL), BASKETBALL WALES (WAL), LNCA (MEX), Eagles (SLK), Madelena (COL), Team11, Team12
-U16 GIRLS: ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), GLANMIRE BASKETBALL (IRE), GLANMIRE BASKETBALL (IRE), LOBAS (SWE), PHD HOOPS (USA), GRASSHOPPER ZURICH (SWI), GRASSHOPPER ZURICH (SWI), BASKET CHILE (CHI), LIMERICK CELTICS (IRE), IBAS (SLK)
+U18 BOYS: BANTRY BC (IRE), Mhaigh Cuilinn U17 (IRE), Mhaigh Cuilinn U17 (IRE)1, SOLLENTUNA (SWE), SOLLENTUNA (SWE)1, KCB JALANDHAR (IND), PHD HOOPS (USA), FORTROSE ACADEMY (SCO), TINDASTOLL (ICE), BC ALTE KANTI (SWI), LNCA (MEX), SURREY RAMS (ENG)
+U14 GIRLS: KILKENNY STARS (IRE), ST. BRIDGET'S CURROW (IRE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), LIMERICK CELTICKS (IRE), BASKETBALL WALES (WAL), BASKETBALL WALES (WAL)1, LNCA (MEX), Eagles (SLK), Madelena (COL), Team11, Team12
+U16 GIRLS: ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), GLANMIRE BASKETBALL (IRE), GLANMIRE BASKETBALL (IRE)1, LOBAS (SWE), PHD HOOPS (USA), GRASSHOPPER ZURICH (SWI), GRASSHOPPER ZURICH (SWI)1, BASKET CHILE (CHI), LIMERICK CELTICS (IRE), IBAS (SLK)
 U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), Team 5, FALCONS (SWI), MADELENA (COL), LNCA 2 (MEX)</textarea>
       <p class="paste-hint">Format: <code>Division Name: Team1, Team2, Team3</code> &mdash; one division per line</p>
       <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
@@ -409,6 +419,21 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   </div>
 </div>
 
+<div id="addGameModal" class="modal-overlay">
+  <div class="modal-card modal-wide" style="max-width:520px">
+    <h3>+ Place Game Manually</h3>
+    <div id="agContext" style="font-size:12px;opacity:.7;margin-bottom:10px"></div>
+    <div id="agWarnings"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px;opacity:.7">SELECT GAME TO PLACE</div>
+    <div id="agPicker" style="max-height:260px;overflow-y:auto;margin-bottom:12px"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="agCancel">Cancel</button>
+      <button class="modal-btn confirm" id="agPlace" disabled>Place Game</button>
+      <button class="modal-btn" id="agOverride" style="display:none;background:#c53030;color:#fff">&#9888; Override &amp; Place</button>
+    </div>
+  </div>
+</div>
+
 <footer><span>Euro Youth Basketball Cup</span> &middot; Tournament Scheduler &middot; Barcelona, Spain</footer>
 
 <script>
@@ -423,6 +448,67 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   var sched = {};
   var scheduleWarnings = [];  // amber / soft warnings (club conflicts etc.)
   var unscheduledGames = []; // structured list of games that failed to place
+  var _agPending = null; // { dayIdx, time, court, loc }
+  var _agSelected = null; // selected game from picker
+  var WarningService = {
+    _buildTeamMap: function() {
+      var map = {};
+      function addEntry(team, day, time, loc) {
+        if (!team) return;
+        var key = team.trim().toLowerCase();
+        if (!map[key]) map[key] = [];
+        map[key].push({ day: day, time: time, loc: loc });
+      }
+      (sched.gameDays || []).forEach(function(dayObj, di) {
+        dayObj.divs.forEach(function(d) {
+          if (d.games) {
+            d.games.forEach(function(g) { addEntry(g.t1, di, g.time, g.loc); addEntry(g.t2, di, g.time, g.loc); });
+          } else if (d.groups) {
+            Object.keys(d.groups).forEach(function(gk) {
+              d.groups[gk].games.forEach(function(g) { addEntry(g.t1, di, g.time, g.loc); addEntry(g.t2, di, g.time, g.loc); });
+            });
+          }
+        });
+      });
+      (sched.bracketDays || []).forEach(function(dayObj, di) {
+        var bdi = (sched.gameDays || []).length + di;
+        dayObj.divs.forEach(function(d) {
+          if (d.games) {
+            d.games.forEach(function(g) { addEntry(g.t1, bdi, g.time, g.loc); addEntry(g.t2, bdi, g.time, g.loc); });
+          }
+        });
+      });
+      return map;
+    },
+    check: function(t1, t2, dayIdx, time, loc) {
+      var warnings = [];
+      var map = this._buildTeamMap();
+      var newMin = toM(time);
+      [t1, t2].forEach(function(team) {
+        if (!team) return;
+        var key = team.trim().toLowerCase();
+        var entries = map[key] || [];
+        entries.forEach(function(e) {
+          if (e.day !== dayIdx) return;
+          var diff = Math.abs(toM(e.time) - newMin);
+          if (diff === 0) {
+            warnings.push({ type: 'double', msg: team + ' already has a game at ' + e.time });
+          } else if (diff < 90) {
+            warnings.push({ type: 'rest', msg: team + ' plays at ' + e.time + ' \u2014 only ' + diff + ' min gap (need 90+)' });
+          } else if (diff < 180 && e.loc && loc && e.loc !== loc) {
+            warnings.push({ type: 'venue', msg: team + ' plays at ' + e.loc + ' (' + e.time + ') \u2014 venue change with only ' + diff + ' min gap' });
+          }
+        });
+      });
+      return warnings;
+    },
+    formatHTML: function(warnings) {
+      if (!warnings.length) return '';
+      return '<div class="conflict-box"><strong>\u26a0 Conflicts detected:</strong><ul style="margin:4px 0 0 16px;padding:0">'
+        + warnings.map(function(w) { return '<li>' + w.msg + '</li>'; }).join('')
+        + '</ul></div>';
+    }
+  };
   var DIV_COLORS = [
     '#FF6B00','#3B82F6','#10B981','#8B5CF6',
     '#F59E0B','#EF4444','#06B6D4','#EC4899',
@@ -461,11 +547,46 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     }, 150);
   };
 
+  function updateEmptySlotCount() {
+    var el = document.getElementById('emptySlotCount');
+    if (!el) return;
+    var count = 0;
+    document.querySelectorAll('#schedOut .ghost-card').forEach(function(card) {
+      if (card.style.display !== 'none') count++;
+    });
+    el.textContent = count;
+  }
+
   function applySchedFilters() {
     var catSel = document.getElementById('schedFilterSel');
     var venSel = document.getElementById('schedVenueSel');
     var cat = catSel ? catSel.value : '';
     var ven = venSel ? venSel.value : '';
+    var schedOut = document.getElementById('schedOut');
+
+    // Empty-only mode: hide all game cards + division/group headers, show only ghost cards under day headers
+    if (ven === '__empty__') {
+      if (schedOut) schedOut.classList.add('empty-only');
+      // Reset any venue-filter inline styles on ghost cards so all are visible
+      document.querySelectorAll('#schedOut .ghost-card').forEach(function(el) {
+        el.style.display = '';
+      });
+      // Hide division and group headers — ghost cards are not division-specific
+      document.querySelectorAll('#schedOut .div-hdr, #schedOut .grp-lbl').forEach(function(el) {
+        el.style.display = 'none';
+      });
+      // Keep day headers visible
+      document.querySelectorAll('#schedOut .day-hdr').forEach(function(el) {
+        el.style.display = '';
+      });
+      updateEmptySlotCount();
+      return;
+    }
+    if (schedOut) schedOut.classList.remove('empty-only');
+    // Restore div-hdr and grp-lbl visibility (will be re-evaluated below)
+    document.querySelectorAll('#schedOut .div-hdr, #schedOut .grp-lbl').forEach(function(el) {
+      el.style.display = '';
+    });
 
     // Show/hide individual game rows
     var venLower = ven.trim().toLowerCase();
@@ -474,9 +595,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var matchVen = !ven || (el.getAttribute('data-venue') || '').trim().toLowerCase() === venLower;
       el.style.display = (matchCat && matchVen) ? '' : 'none';
     });
+    // Filter ghost cards by venue (data-loc)
+    document.querySelectorAll('#schedOut .ghost-card').forEach(function(el) {
+      var matchVen = !ven || (el.getAttribute('data-loc') || '').trim().toLowerCase() === venLower;
+      el.style.display = matchVen ? '' : 'none';
+    });
 
     // Hide div-hdr if all its following .gc (until next div-hdr) are hidden
-    var schedOut = document.getElementById('schedOut');
     if (!schedOut) return;
     var allDivHdrs = schedOut.querySelectorAll('.div-hdr');
     allDivHdrs.forEach(function(hdr) {
@@ -502,16 +627,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       lbl.style.display = hasVisible ? '' : 'none';
     });
 
-    // Hide day-hdr if all games in that day block are hidden
+    // Hide day-hdr if all games AND ghost cards in that day block are hidden
     schedOut.querySelectorAll('.day-hdr').forEach(function(dayHdr) {
       var el = dayHdr.nextElementSibling;
       var hasVisible = false;
       while (el && !el.classList.contains('day-hdr')) {
-        if (el.classList.contains('gc') && el.style.display !== 'none') hasVisible = true;
+        if ((el.classList.contains('gc') || el.classList.contains('ghost-card')) && el.style.display !== 'none') hasVisible = true;
         el = el.nextElementSibling;
       }
       dayHdr.style.display = hasVisible ? '' : 'none';
     });
+    updateEmptySlotCount();
   }
 
   function applySchedFilter(sel) {
@@ -1340,6 +1466,110 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   document.getElementById('algoModal').addEventListener('click', function (e) {
     if (e.target === this) this.classList.remove('active');
   });
+
+  // ── Manual Game Placement ───────────────────────────────
+  document.getElementById('schedOut').addEventListener('click', function(e) {
+    var card = e.target.closest('.ghost-card');
+    if (!card) return;
+    showAddGameModal({
+      dayIdx: +card.dataset.day,
+      time:   card.dataset.time,
+      court:  card.dataset.court,
+      loc:    card.dataset.loc
+    });
+  });
+
+  function showAddGameModal(ctx) {
+    _agPending = ctx;
+    _agSelected = null;
+    document.getElementById('agContext').textContent =
+      'Day ' + (ctx.dayIdx + 1) + '  \u2022  ' + ctx.time + '  \u2022  ' + ctx.court;
+    var picker = document.getElementById('agPicker');
+    picker.innerHTML = '';
+    if (!unscheduledGames.length) {
+      picker.innerHTML = '<div style="opacity:.5;font-size:12px">No unscheduled games available.</div>';
+    } else {
+      unscheduledGames.forEach(function(g) {
+        var row = document.createElement('div');
+        row.className = 'picker-item';
+        row.textContent = (g.divName || g.div || '') + ' \u2014 ' + (g.t1 || '?') + ' vs ' + (g.t2 || '?') + (g.lbl ? ' [' + g.lbl + ']' : '');
+        row.onclick = function() {
+          picker.querySelectorAll('.picker-item').forEach(function(r) { r.classList.remove('selected'); });
+          row.classList.add('selected');
+          _agSelected = g;
+          updateAgWarnings();
+        };
+        picker.appendChild(row);
+      });
+    }
+    document.getElementById('agWarnings').innerHTML = '';
+    document.getElementById('agPlace').disabled = true;
+    document.getElementById('agOverride').style.display = 'none';
+    document.getElementById('addGameModal').classList.add('active');
+  }
+
+  function updateAgWarnings() {
+    if (!_agSelected || !_agPending) return;
+    var warnings = WarningService.check(
+      _agSelected.t1, _agSelected.t2,
+      _agPending.dayIdx, _agPending.time, _agPending.loc
+    );
+    document.getElementById('agWarnings').innerHTML = WarningService.formatHTML(warnings);
+    var hasConflict = warnings.length > 0;
+    document.getElementById('agPlace').disabled = hasConflict;
+    document.getElementById('agOverride').style.display = hasConflict ? '' : 'none';
+  }
+
+  function placeManualGame(override) {
+    if (!_agSelected || !_agPending) return;
+    var g = _agSelected;
+    var ctx = _agPending;
+    var placed = {
+      time: ctx.time, court: ctx.court, loc: ctx.loc,
+      t1: g.t1, t2: g.t2, lbl: g.lbl || '',
+      score1: null, score2: null, locked: false,
+      manualOverride: true
+    };
+    if (override) placed.manualConflictOverride = true;
+    var lastDayIdx = (sched.gameDays || []).length;
+    var target = null;
+    if (ctx.dayIdx < lastDayIdx) {
+      target = (sched.gameDays || [])[ctx.dayIdx];
+    } else if ((sched.bracketDays || []).length) {
+      target = sched.bracketDays[0];
+    }
+    if (target) {
+      var divName = g.divName || g.div || 'Manual';
+      var divColor = '#888888';
+      var divDef = divisions.find(function(d) { return d.name === divName; });
+      if (divDef) divColor = divDef.color;
+      var divEntry = (target.divs || []).find(function(d) { return d.name === divName; });
+      // If the existing entry uses groups (RR day), don't corrupt it —
+      // create a sibling entry with the same name that carries only `games`.
+      if (divEntry && divEntry.groups && !divEntry.games) divEntry = null;
+      if (!divEntry) {
+        divEntry = { name: divName, color: divColor, games: [] };
+        if (!target.divs) target.divs = [];
+        target.divs.push(divEntry);
+      }
+      if (!divEntry.games) divEntry.games = [];
+      divEntry.games.push(placed);
+    }
+    var idx = unscheduledGames.indexOf(g);
+    if (idx !== -1) unscheduledGames.splice(idx, 1);
+    document.getElementById('addGameModal').classList.remove('active');
+    _agPending = null; _agSelected = null;
+    renderSched();
+  }
+
+  document.getElementById('agCancel').onclick = function() {
+    document.getElementById('addGameModal').classList.remove('active');
+  };
+  document.getElementById('addGameModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+  document.getElementById('agPlace').onclick = function() { placeManualGame(false); };
+  document.getElementById('agOverride').onclick = function() { placeManualGame(true); };
 
   // ── Generate ───────────────────────────────────────────
   document.getElementById('genBtn').addEventListener('click', function () {
@@ -2378,7 +2608,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       ? [{ label: lastDayEntry.label, divs: bracketDivsList }]
       : [];
 
-    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: nCourts };
+    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: nCourts, courts: crts };
     renderSched();
     renderStandings();
     renderBrack();
@@ -2391,6 +2621,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return '<div class="lunch">Lunch Break <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">'
       + fmt(lS) + ' - ' + fmt(lE) + '</span></div>';
   }
+
 
   function renderDayBlock(divs, lS, lE, dayIdx) {
     var all = [];
@@ -2407,10 +2638,36 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       }
     });
     all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
-    var h = '', lunchShown = false, lastDiv = '', lastGroup = '';
+
+    // Build occupied map for ghost cards: "time|court" → true
+    var ghostCrts = (sched.courts || []);
+    var occupied = {};
+    all.forEach(function(item) { if (item.g.time && item.g.court) occupied[item.g.time + '|' + item.g.court] = true; });
+    function ghostsForTime(t) {
+      var gh = '';
+      ghostCrts.forEach(function(crt) {
+        if (!occupied[t + '|' + crt.court]) {
+          var tp = t.split(':');
+          gh += '<div class="ghost-card" data-day="' + dayIdx + '" data-time="' + t + '" data-court="' + crt.court + '" data-loc="' + crt.loc + '">'
+            + '<div class="gt" style="opacity:.5">' + tp[0] + '<br><span class="ga">' + tp[1] + '</span></div>'
+            + '<div class="gi" style="opacity:.5"><div class="gteams">Empty Slot</div>'
+            + '<div class="gm"><span>' + crt.court + '</span></div></div>'
+            + '<button style="margin-left:auto;padding:4px 10px;background:rgba(255,107,0,0.15);border:1px solid rgba(255,107,0,0.4);color:#FF6B00;border-radius:5px;cursor:pointer;font-size:11px">+ Add Game</button>'
+            + '</div>';
+        }
+      });
+      return gh;
+    }
+
+    var h = '', lunchShown = false, lastDiv = '', lastGroup = '', lastTime = null;
     all.forEach(function (item) {
       var g = item.g;
+      // When time slot changes, emit ghost cards for the just-completed slot
+      if (lastTime !== null && lastTime !== g.time) {
+        h += ghostsForTime(lastTime);
+      }
       if (!lunchShown && toM(g.time) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
+      lastTime = g.time;
       if (item.name !== lastDiv) {
         h += '<div class="div-hdr" data-div="' + item.name + '" style="background:linear-gradient(135deg,' + item.color + '22,' + item.color + '0a);border-left:4px solid ' + item.color + '">'
           + '<div style="width:10px;height:10px;border-radius:50%;background:' + item.color + ';flex-shrink:0"></div>'
@@ -2463,6 +2720,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var overrideBadge = g.venueOverride
         ? '<div style="width:100%;font-size:10px;font-family:Montserrat,sans-serif;font-weight:700;color:#e53e3e;margin-top:4px;padding-top:3px;border-top:1px dashed rgba(229,62,62,0.35)">\u26A0\uFE0F Venue Override \u2014 no main-venue slot available</div>'
         : '';
+      var manualBadge = g.manualOverride
+        ? '<div style="width:100%;margin-top:4px;padding-top:3px;border-top:1px dashed rgba(229,62,62,0.35)"><span class="manual-badge">\u270E Manually Placed</span></div>'
+        : '';
       var gcId = makeGameId(item.name, g.lbl || (g.t1 + ' vs ' + g.t2));
       h += '<div class="gc" id="' + gcId + '" data-div="' + item.name + '" data-venue="' + (g.loc || '') + '" title="Venue: ' + (g.loc || 'unknown') + '" style="border-left-color:' + item.color + quotaStyle + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
@@ -2472,8 +2732,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         + '<div style="margin-left:8px;">' + scoreHtml + '</div>'
         + quotaBadge
         + overrideBadge
+        + manualBadge
         + '</div>';
     });
+    // Emit ghost cards for the final time slot
+    if (lastTime) h += ghostsForTime(lastTime);
     return h;
   }
 
@@ -2597,6 +2860,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '<div class="stat"><div class="stn">' + totTeams + '</div><div class="stl">Teams</div></div>'
       + '<div class="stat"><div class="stn">' + scheduledCount + '</div><div class="stl">Games</div></div>'
       + '<div class="stat"><div class="stn">' + sched.totalCourts + '</div><div class="stl">Courts</div></div>'
+      + '<div class="stat"><div class="stn" id="emptySlotCount">0</div><div class="stl">Empty Slots</div></div>'
       + '</div>';
 
     // ── Export buttons ────────────────────────────────────
@@ -2638,13 +2902,16 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         venueSel.innerHTML = '<option value="">All Venues</option>'
           + venueNames.map(function(v) {
               return '<option value="' + v + '"' + (v === curVen ? ' selected' : '') + '>' + v + '</option>';
-            }).join('');
+            }).join('')
+          + '<option value="__empty__"' + (curVen === '__empty__' ? ' selected' : '') + '>Show Empty Slots Only</option>';
         venueSel.onchange = function() { applySchedFilters(); };
       }
 
       if (filterClear) filterClear.onclick = function() {
         if (filterSel) filterSel.value = '';
         if (venueSel)  venueSel.value  = '';
+        var so = document.getElementById('schedOut');
+        if (so) so.classList.remove('empty-only');
         applySchedFilters();
       };
 
@@ -2652,6 +2919,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       if ((curCat && divisions.some(function(d) { return d.name === curCat; })) ||
           (venueSel && venueSel.value)) {
         applySchedFilters();
+      } else {
+        updateEmptySlotCount();
       }
     }
 
@@ -2847,7 +3116,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var field   = e.target.dataset.field;
     if (!sched.bracketDays || !sched.bracketDays[dIdx]) return;
     var divObj = sched.bracketDays[dIdx].divs.find(function(d) { return d.name === divName; });
-    if (divObj && divObj.games[gi]) divObj.games[gi][field] = e.target.value;
+    if (divObj && divObj.games && divObj.games[gi]) divObj.games[gi][field] = e.target.value;
   });
 
   // ── Standings / seeding helpers ─────────────────────────
