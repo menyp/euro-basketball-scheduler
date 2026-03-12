@@ -210,6 +210,7 @@ footer span{color:var(--o)}
     </button>
     <div class="settings-dropdown" id="settingsDropdown">
       <button class="settings-item" id="algoBtn"><span class="settings-item-icon">&#x1F4CB;</span>Scheduling Logic &amp; Rules</button>
+      <button class="settings-item" id="jsonImportMenuBtn"><span class="settings-item-icon">&#128194;</span>Load JSON Snapshot</button>
     </div>
   </div>
   </div>
@@ -396,6 +397,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       <select id="schedVenueSel" style="background:#0f2542;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;font-family:Montserrat,sans-serif;font-size:12px;cursor:pointer;min-width:140px">
         <option value="">All Venues</option>
       </select>
+      <label style="font-family:Montserrat,sans-serif;font-weight:700;font-size:12px;color:#94a3b8;white-space:nowrap">Team:</label>
+      <input type="text" id="teamSearch" list="teamSearchList" placeholder="Search team..." style="background:#0f2542;color:#e2e8f0;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:5px 10px;font-family:Montserrat,sans-serif;font-size:12px;width:160px">
+      <datalist id="teamSearchList"></datalist>
       <button id="schedFilterClear" style="background:rgba(255,107,0,.15);border:1px solid rgba(255,107,0,.4);color:#FF6B00;border-radius:6px;padding:5px 12px;font-family:Montserrat,sans-serif;font-weight:700;font-size:11px;cursor:pointer">&times; Clear Filters</button>
     </div>
     <div id="schedOut"><div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div></div>
@@ -409,6 +413,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     <div id="brackOut"><div class="empty"><div class="ico">&#127942;</div><p>Generate your schedule first</p></div></div>
   </div>
 </div>
+
+<input type="file" id="jsonImportInput" accept=".json" style="display:none">
 
 <div id="scoreModal" class="modal-overlay">
   <div class="modal-card">
@@ -584,6 +590,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var venSel = document.getElementById('schedVenueSel');
     var cat = catSel ? catSel.value : '';
     var ven = venSel ? venSel.value : '';
+    var teamSearchEl = document.getElementById('teamSearch');
+    var teamQ = teamSearchEl ? teamSearchEl.value.trim().toLowerCase() : '';
     var schedOut = document.getElementById('schedOut');
 
     // Empty-only mode: hide all game cards + division/group headers, show only ghost cards under day headers
@@ -613,12 +621,15 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // Show/hide individual game rows
     var venLower = ven.trim().toLowerCase();
     document.querySelectorAll('#schedOut .gc').forEach(function(el) {
-      var matchCat = !cat || el.getAttribute('data-div') === cat;
-      var matchVen = !ven || (el.getAttribute('data-venue') || '').trim().toLowerCase() === venLower;
-      el.style.display = (matchCat && matchVen) ? '' : 'none';
+      var matchCat  = !cat   || el.getAttribute('data-div') === cat;
+      var matchVen  = !ven   || (el.getAttribute('data-venue') || '').trim().toLowerCase() === venLower;
+      var matchTeam = !teamQ || (el.getAttribute('data-t1') || '').toLowerCase().indexOf(teamQ) !== -1
+                              || (el.getAttribute('data-t2') || '').toLowerCase().indexOf(teamQ) !== -1;
+      el.style.display = (matchCat && matchVen && matchTeam) ? '' : 'none';
     });
-    // Filter ghost cards by venue (data-loc)
+    // Filter ghost cards by venue (data-loc); hide entirely when team filter is active
     document.querySelectorAll('#schedOut .ghost-card').forEach(function(el) {
+      if (teamQ) { el.style.display = 'none'; return; }
       var matchVen = !ven || (el.getAttribute('data-loc') || '').trim().toLowerCase() === venLower;
       el.style.display = matchVen ? '' : 'none';
     });
@@ -1579,6 +1590,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     settingsDropdown.classList.remove('open');
     document.getElementById('algoModalBody').innerHTML = getAlgorithmSummary();
     document.getElementById('algoModal').classList.add('active');
+  });
+  document.getElementById('jsonImportMenuBtn').addEventListener('click', function () {
+    settingsDropdown.classList.remove('open');
+    document.getElementById('jsonImportInput').click();
   });
   document.getElementById('algoModalClose').addEventListener('click', function () {
     document.getElementById('algoModal').classList.remove('active');
@@ -3181,7 +3196,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         ? '<div style="width:100%;margin-top:4px;padding-top:3px;border-top:1px dashed rgba(229,62,62,0.35)"><span class="manual-badge">\u270E Manually Placed</span></div>'
         : '';
       var gcId = makeGameId(item.name, g.lbl || (g.t1 + ' vs ' + g.t2));
-      h += '<div class="gc" id="' + gcId + '" data-div="' + item.name + '" data-venue="' + (g.loc || '') + '" title="Venue: ' + (g.loc || 'unknown') + '" style="border-left-color:' + item.color + quotaStyle + '">'
+      h += '<div class="gc" id="' + gcId + '" data-div="' + item.name + '" data-venue="' + (g.loc || '') + '" data-t1="' + (g.t1 || '').replace(/"/g, '&quot;') + '" data-t2="' + (g.t2 || '').replace(/"/g, '&quot;') + '" title="Venue: ' + (g.loc || 'unknown') + '" style="border-left-color:' + item.color + quotaStyle + '">'
         + '<div class="gt">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
         + lblBadge
         + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
@@ -3316,6 +3331,38 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       h += '</div>';
     }
 
+    // ── Court Utilization ─────────────────────────────────
+    var courtCount = {};
+    function walkCU(g) { if (g.court) courtCount[g.court] = (courtCount[g.court] || 0) + 1; }
+    sched.gameDays.forEach(function(d) {
+      d.divs.forEach(function(dv) {
+        if (dv.games) dv.games.forEach(walkCU);
+        else if (dv.groups) Object.keys(dv.groups).forEach(function(gk) { dv.groups[gk].games.forEach(walkCU); });
+      });
+    });
+    (sched.bracketDays || []).forEach(function(d) {
+      d.divs.forEach(function(dv) { if (dv.games) dv.games.forEach(walkCU); });
+    });
+    var courtNames = Object.keys(courtCount).sort();
+    if (courtNames.length) {
+      var maxC = Math.max.apply(null, courtNames.map(function(c){ return courtCount[c]; }));
+      h += '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:14px 18px;margin-bottom:14px">'
+        + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);margin-bottom:10px">Court Utilization</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:14px">';
+      courtNames.forEach(function(c) {
+        var n   = courtCount[c];
+        var pct = Math.round(n / maxC * 100);
+        h += '<div style="min-width:110px">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px;font-family:Montserrat,sans-serif;font-size:11px;margin-bottom:4px">'
+          + '<span style="color:#e2e8f0;font-weight:600">' + c.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>'
+          + '<span style="color:#FF6B00;font-weight:800">' + n + '</span></div>'
+          + '<div style="height:5px;border-radius:3px;background:rgba(255,255,255,.1)">'
+          + '<div style="width:' + pct + '%;height:100%;border-radius:3px;background:#FF6B00"></div>'
+          + '</div></div>';
+      });
+      h += '</div></div>';
+    }
+
     // ── Stats row ─────────────────────────────────────────
     h += '<div class="stats-row">'
       + '<div class="stat"><div class="stn">' + divisions.length + '</div><div class="stl">Divisions</div></div>'
@@ -3329,6 +3376,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
       + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
       + '<button id="exportPrintBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Print / PDF</button>'
+      + '<button id="jsonExportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128190; Save JSON</button>'
+      + '<button id="jsonImportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128194; Load JSON</button>'
       + '</div>';
 
     sched.gameDays.forEach(function(day, dIdx) {
@@ -3336,6 +3385,31 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       h += renderDayBlock(day.divs, lS, lE, dIdx);
     });
     document.getElementById('schedOut').innerHTML = h;
+
+    // ── Populate team autocomplete ────────────────────────
+    var teamNames = {};
+    (sched.gameDays || []).forEach(function(day) {
+      day.divs.forEach(function(d) {
+        function addTeam(g) {
+          if (g.t1 && g.t1.trim()) teamNames[g.t1.trim()] = true;
+          if (g.t2 && g.t2.trim()) teamNames[g.t2.trim()] = true;
+        }
+        if (d.games) d.games.forEach(addTeam);
+        else if (d.groups) Object.keys(d.groups).forEach(function(gk) { d.groups[gk].games.forEach(addTeam); });
+      });
+    });
+    (sched.bracketDays || []).forEach(function(day) {
+      day.divs.forEach(function(d) { if (d.games) d.games.forEach(function(g) {
+        if (g.t1 && g.t1.trim()) teamNames[g.t1.trim()] = true;
+        if (g.t2 && g.t2.trim()) teamNames[g.t2.trim()] = true;
+      }); });
+    });
+    var dl = document.getElementById('teamSearchList');
+    if (dl) {
+      dl.innerHTML = Object.keys(teamNames).sort().map(function(n) {
+        return '<option value="' + n.replace(/"/g, '&quot;') + '">';
+      }).join('');
+    }
 
     // ── Filter bar ────────────────────────────────────────
     var filterBar = document.getElementById('schedFilterBar');
@@ -3369,9 +3443,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         venueSel.onchange = function() { applySchedFilters(); };
       }
 
+      var teamSearchInp = document.getElementById('teamSearch');
+      if (teamSearchInp) { teamSearchInp.oninput = applySchedFilters; teamSearchInp.onchange = applySchedFilters; }
+
       if (filterClear) filterClear.onclick = function() {
-        if (filterSel) filterSel.value = '';
-        if (venueSel)  venueSel.value  = '';
+        if (filterSel)    filterSel.value    = '';
+        if (venueSel)     venueSel.value     = '';
+        if (teamSearchInp) teamSearchInp.value = '';
         var so = document.getElementById('schedOut');
         if (so) so.classList.remove('empty-only');
         applySchedFilters();
@@ -3386,10 +3464,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       }
     }
 
-    var csvBtn   = document.getElementById('exportCSVBtn');
-    var printBtn = document.getElementById('exportPrintBtn');
-    if (csvBtn)   csvBtn.onclick   = exportScheduleToCSV;
-    if (printBtn) printBtn.onclick = exportScheduleToPrint;
+    var csvBtn      = document.getElementById('exportCSVBtn');
+    var printBtn    = document.getElementById('exportPrintBtn');
+    var jsonExpBtn  = document.getElementById('jsonExportBtn');
+    var jsonImpBtn  = document.getElementById('jsonImportBtn');
+    if (csvBtn)     csvBtn.onclick     = exportScheduleToCSV;
+    if (printBtn)   printBtn.onclick   = exportScheduleToPrint;
+    if (jsonExpBtn) jsonExpBtn.onclick = exportScheduleToJSON;
+    if (jsonImpBtn) jsonImpBtn.onclick = function() { document.getElementById('jsonImportInput').click(); };
   }
 
   // ── Export: CSV ───────────────────────────────────────
@@ -3469,6 +3551,100 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     w.document.close();
     w.focus();
   }
+
+  // ── Export: JSON snapshot ─────────────────────────────
+  function getFieldVal(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  function getFieldChecked(id) { var el = document.getElementById(id); return el ? el.checked : false; }
+  function exportScheduleToJSON() {
+    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    var payload = JSON.stringify({
+      sched: sched,
+      divisions: divisions,
+      venueRules: venueRules,
+      unscheduledGames: unscheduledGames,
+      sites: sites,
+      setupFields: {
+        tName:                 getFieldVal('tName'),
+        sDate:                 getFieldVal('sDate'),
+        nDays:                 getFieldVal('nDays'),
+        maxGPD:                getFieldVal('maxGPD'),
+        lS:                    getFieldVal('lS'),
+        lE:                    getFieldVal('lE'),
+        finalTimes:            getFieldVal('finalTimes'),
+        mainVenue:             getFieldVal('mainVenue'),
+        ruleRest:              getFieldChecked('ruleRest'),
+        ruleVenueRest:         getFieldChecked('ruleVenueRest'),
+        venueRestModeMandatory:getFieldChecked('venueRestModeMandatory'),
+        mainVenueFinal:        getFieldChecked('mainVenueFinal'),
+        mainVenue3rd:          getFieldChecked('mainVenue3rd'),
+        mainVenueSF:           getFieldChecked('mainVenueSF'),
+        dayHours:              getDayHours()
+      }
+    }, null, 2);
+    var blob = new Blob([payload], { type: 'application/json;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url;
+    a.download = 'tournament_schedule_' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Import: restore from JSON snapshot ───────────────
+  function setField(id, val) { var el = document.getElementById(id); if (el && val !== undefined) el.value = val; }
+  function setChecked(id, val) { var el = document.getElementById(id); if (el && val !== undefined) el.checked = !!val; }
+  function importScheduleFromJSON(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        if (!data.sched || !data.sched.gameDays) { alert('Invalid schedule file.'); return; }
+        sched            = data.sched;
+        divisions        = data.divisions        || divisions;
+        venueRules       = data.venueRules       || [];
+        unscheduledGames = data.unscheduledGames || [];
+        if (data.sites && data.sites.length) {
+          sites = data.sites;
+          renderSites();
+        }
+        var sf = data.setupFields || {};
+        setField('tName',   sf.tName);
+        setField('sDate',   sf.sDate);
+        setField('maxGPD',  sf.maxGPD);
+        setField('lS',      sf.lS);
+        setField('lE',      sf.lE);
+        setField('finalTimes', sf.finalTimes);
+        setField('mainVenue',  sf.mainVenue);
+        setChecked('ruleRest',              sf.ruleRest);
+        setChecked('ruleVenueRest',         sf.ruleVenueRest);
+        setChecked('venueRestModeMandatory',sf.venueRestModeMandatory);
+        setChecked('venueRestModePriority', sf.venueRestModeMandatory === false);
+        setChecked('mainVenueFinal',        sf.mainVenueFinal);
+        setChecked('mainVenue3rd',          sf.mainVenue3rd);
+        setChecked('mainVenueSF',           sf.mainVenueSF);
+        // Restore nDays first, then rebuild day-hours grid, then fill saved values
+        if (sf.nDays !== undefined) {
+          setField('nDays', sf.nDays);
+          renderDayHours(); // rebuilds inputs based on nDays
+          if (sf.dayHours && sf.dayHours.length) {
+            sf.dayHours.forEach(function(dh, i) {
+              setField('dayStart_' + i, dh.start);
+              setField('dayEnd_'   + i, dh.end);
+            });
+          }
+        }
+        renderVenueRules();
+        renderSched();
+        switchTab('schedule');
+      } catch(ex) { alert('Could not parse file: ' + ex.message); }
+    };
+    reader.readAsText(file);
+  }
+
+  document.getElementById('jsonImportInput').onchange = function(e) {
+    if (e.target.files[0]) importScheduleFromJSON(e.target.files[0]);
+    e.target.value = '';
+  };
 
   // Allow admin to add a team into a group to fill to 4 teams.
   function addTeamToGroup(divName, gk) {
