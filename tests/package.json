@@ -1,0 +1,12 @@
+{
+  "name": "euro-basketball-scheduler-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated smoke tests for the scheduler (test infrastructure only — not part of the app)",
+  "scripts": {
+    "test": "node smoke-test.js"
+  },
+  "dependencies": {
+    "jsdom": "^25.0.0"
+  }
+}
