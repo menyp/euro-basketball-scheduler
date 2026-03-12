@@ -179,6 +179,9 @@ footer span{color:var(--o)}
 .picker-item{padding:8px 10px;border-radius:6px;margin-bottom:4px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);transition:background .1s}
 .picker-item:hover,.picker-item.selected{background:rgba(255,107,0,0.15);border-color:rgba(255,107,0,0.5)}
 #schedOut.empty-only .gc{display:none!important}
+.settings-divider{height:1px;background:rgba(255,255,255,.08);margin:4px 0}
+.settings-item-danger{color:#fc8181!important}
+.settings-item-danger:hover{background:rgba(229,62,62,.12)!important}
 </style>
 </head>
 <body>
@@ -211,6 +214,9 @@ footer span{color:var(--o)}
     <div class="settings-dropdown" id="settingsDropdown">
       <button class="settings-item" id="algoBtn"><span class="settings-item-icon">&#x1F4CB;</span>Scheduling Logic &amp; Rules</button>
       <button class="settings-item" id="jsonImportMenuBtn"><span class="settings-item-icon">&#128194;</span>Load JSON Snapshot</button>
+      <div class="settings-divider"></div>
+      <button class="settings-item" id="resetSchedBtn"><span class="settings-item-icon">&#x1F504;</span>Reset Schedule</button>
+      <button class="settings-item settings-item-danger" id="resetFullBtn"><span class="settings-item-icon">&#x26A0;&#xFE0F;</span>Full Reset</button>
     </div>
   </div>
   </div>
@@ -448,6 +454,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       <button class="modal-btn cancel" id="agCancel">Cancel</button>
       <button class="modal-btn confirm" id="agPlace" disabled>Place Game</button>
       <button class="modal-btn" id="agOverride" style="display:none;background:#c53030;color:#fff">&#9888; Override &amp; Place</button>
+    </div>
+  </div>
+</div>
+
+<div id="resetModal" class="modal-overlay">
+  <div class="modal-card" style="max-width:420px">
+    <h3 id="resetModalTitle">Reset</h3>
+    <p id="resetModalBody" style="font-size:13px;opacity:.8;margin:10px 0 20px;line-height:1.6"></p>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="resetModalCancel">Cancel</button>
+      <button class="modal-btn confirm" id="resetModalConfirm" style="background:#c53030">Reset</button>
     </div>
   </div>
 </div>
@@ -1106,32 +1123,73 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
   // Greedy swap to enforce max 2 same-country teams per group (best-effort, up to 50 passes).
   function applyNationalMixing(groups) {
-    var MAX = 2, changed = true, pass = 0;
-    while (changed && pass++ < 50) {
-      changed = false;
-      for (var gi = 0; gi < groups.length; gi++) {
-        var counts = {};
-        groups[gi].forEach(function(t) { var c = extractCountry(t); if (c) counts[c] = (counts[c] || 0) + 1; });
-        for (var c in counts) {
-          if (counts[c] <= MAX) continue;
-          for (var ti = 0; ti < groups[gi].length && !changed; ti++) {
-            if (extractCountry(groups[gi][ti]) !== c) continue;
-            for (var gj = 0; gj < groups.length && !changed; gj++) {
-              if (gj === gi) continue;
-              if (countCountry(groups[gj], c) >= MAX) continue;
-              for (var tj = 0; tj < groups[gj].length && !changed; tj++) {
-                var sc = extractCountry(groups[gj][tj]);
-                if (sc === c) continue;
-                if (countCountry(groups[gi], sc) >= MAX) continue;
-                var tmp = groups[gi][ti]; groups[gi][ti] = groups[gj][tj]; groups[gj][tj] = tmp;
-                changed = true;
-              }
+    if (!groups || !groups.length) return groups;
+    var nGroups = groups.length;
+
+    // Flatten all teams
+    var allTeams = [];
+    groups.forEach(function(g) { g.forEach(function(t) { allTeams.push(t); }); });
+
+    // Count country frequencies
+    var freq = {};
+    allTeams.forEach(function(t) {
+      var c = extractCountry(t);
+      if (c) freq[c] = (freq[c] || 0) + 1;
+    });
+
+    // Sort: most-frequent country first, then country name, then team name
+    // This clusters same-country teams together so the serpentine spreads them maximally
+    allTeams.sort(function(a, b) {
+      var ca = extractCountry(a), cb = extractCountry(b);
+      var fa = freq[ca] || 0, fb = freq[cb] || 0;
+      if (fb !== fa) return fb - fa;          // most frequent country first
+      if (ca !== cb) return ca < cb ? -1 : 1; // then alphabetical country
+      return a < b ? -1 : 1;                  // then alphabetical team name
+    });
+
+    // Serpentine (snake draft) distribution across groups:
+    // round 0 (even): 0 → 1 → 2 → … → nGroups-1
+    // round 1 (odd):  nGroups-1 → … → 1 → 0
+    // This guarantees the most frequent countries are spread one-per-group
+    var result = [];
+    for (var i = 0; i < nGroups; i++) result.push([]);
+    allTeams.forEach(function(team, idx) {
+      var round = Math.floor(idx / nGroups);
+      var pos   = idx % nGroups;
+      var gi    = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
+      result[gi].push(team);
+    });
+
+    // Greedy swap pass: catch any remaining violations (e.g. when a country has
+    // more teams than groups, some duplication is unavoidable, but we still
+    // minimise it by trying pairwise swaps that reduce the total clash count)
+    function clashCount(grps) {
+      var n = 0;
+      grps.forEach(function(g) {
+        var cnt = {};
+        g.forEach(function(t) { var c = extractCountry(t); if (c) cnt[c] = (cnt[c] || 0) + 1; });
+        for (var c in cnt) if (cnt[c] > 1) n += cnt[c] - 1;
+      });
+      return n;
+    }
+    var improved = true;
+    while (improved) {
+      improved = false;
+      for (var gi = 0; gi < nGroups && !improved; gi++) {
+        for (var ti = 0; ti < result[gi].length && !improved; ti++) {
+          for (var gj = gi + 1; gj < nGroups && !improved; gj++) {
+            for (var tj = 0; tj < result[gj].length && !improved; tj++) {
+              var before = clashCount(result);
+              var tmp = result[gi][ti]; result[gi][ti] = result[gj][tj]; result[gj][tj] = tmp;
+              if (clashCount(result) < before) { improved = true; }
+              else { tmp = result[gi][ti]; result[gi][ti] = result[gj][tj]; result[gj][tj] = tmp; } // revert
             }
           }
         }
       }
     }
-    return groups;
+
+    return result;
   }
 
   // ── Groups editor ───────────────────────────────────
@@ -1594,6 +1652,34 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   document.getElementById('jsonImportMenuBtn').addEventListener('click', function () {
     settingsDropdown.classList.remove('open');
     document.getElementById('jsonImportInput').click();
+  });
+  document.getElementById('resetSchedBtn').addEventListener('click', function () {
+    settingsDropdown.classList.remove('open');
+    document.getElementById('resetModalTitle').textContent = 'Reset Schedule';
+    document.getElementById('resetModalBody').textContent =
+      'This will clear the generated schedule, scores, and warnings. Your team list, venues, and group setup will be preserved.';
+    document.getElementById('resetModalConfirm').dataset.mode = 'sched';
+    document.getElementById('resetModal').classList.add('active');
+  });
+  document.getElementById('resetFullBtn').addEventListener('click', function () {
+    settingsDropdown.classList.remove('open');
+    document.getElementById('resetModalTitle').textContent = 'Full Reset';
+    document.getElementById('resetModalBody').textContent =
+      'This will clear everything — teams, schedule, venues, groups, and all settings — and restore factory defaults. This cannot be undone.';
+    document.getElementById('resetModalConfirm').dataset.mode = 'full';
+    document.getElementById('resetModal').classList.add('active');
+  });
+  document.getElementById('resetModalConfirm').addEventListener('click', function () {
+    var mode = this.dataset.mode;
+    document.getElementById('resetModal').classList.remove('active');
+    if (mode === 'sched') resetSchedule();
+    else if (mode === 'full') resetFull();
+  });
+  document.getElementById('resetModalCancel').addEventListener('click', function () {
+    document.getElementById('resetModal').classList.remove('active');
+  });
+  document.getElementById('resetModal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('active');
   });
   document.getElementById('algoModalClose').addEventListener('click', function () {
     document.getElementById('algoModal').classList.remove('active');
@@ -3645,6 +3731,61 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (e.target.files[0]) importScheduleFromJSON(e.target.files[0]);
     e.target.value = '';
   };
+
+  // ── Reset: schedule only ──────────────────────────────
+  function resetSchedule() {
+    sched            = {};
+    scheduleWarnings = [];
+    unscheduledGames = [];
+    _agPending       = null;
+    _agSelected      = null;
+    var so = document.getElementById('schedOut');
+    if (so) so.innerHTML = '<div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div>';
+    var fb = document.getElementById('schedFilterBar');
+    if (fb) fb.style.display = 'none';
+    switchTab('setup');
+  }
+
+  // ── Reset: full factory defaults ─────────────────────
+  function resetFull() {
+    divisions        = [];
+    sched            = {};
+    scheduleWarnings = [];
+    unscheduledGames = [];
+    venueRules       = [];
+    _agPending       = null;
+    _agSelected      = null;
+    sites = [
+      { name: 'Blanes',       numCourts: 6 },
+      { name: 'Santa Suzana', numCourts: 2 },
+      { name: 'Palafolls',    numCourts: 2 }
+    ];
+    renderSites();
+    setField('tName',      'Euro Youth Basketball Cup 2026');
+    setField('sDate',      '2026-06-19');
+    setField('maxGPD',     '2');
+    setField('lS',         '13:30');
+    setField('lE',         '14:30');
+    setField('finalTimes', '16:00, 14:30, 17:30');
+    setField('mainVenue',  'Blanes');
+    setChecked('ruleRest',               true);
+    setChecked('ruleVenueRest',          true);
+    setChecked('venueRestModeMandatory', true);
+    setChecked('venueRestModePriority',  false);
+    setChecked('mainVenueFinal',         true);
+    setChecked('mainVenue3rd',           true);
+    setChecked('mainVenueSF',            false);
+    setField('nDays', '3');
+    renderDayHours();
+    renderVenueRules();
+    var dl = document.getElementById('divList');
+    if (dl) dl.innerHTML = '';
+    var so = document.getElementById('schedOut');
+    if (so) so.innerHTML = '<div class="empty"><div class="ico">&#128203;</div><p>Set up your tournament and generate a schedule</p></div>';
+    var fb = document.getElementById('schedFilterBar');
+    if (fb) fb.style.display = 'none';
+    switchTab('setup');
+  }
 
   // Allow admin to add a team into a group to fill to 4 teams.
   function addTeamToGroup(divName, gk) {
