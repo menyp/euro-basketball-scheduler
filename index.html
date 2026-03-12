@@ -1413,13 +1413,27 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   // getAlgorithmSummary() describes the scheduler in plain language for organisers.
   // UPDATE THIS FUNCTION whenever the scheduling algorithm changes.
   function getAlgorithmSummary() {
-    var lS     = document.getElementById('lS').value   || '13:30';
-    var lE     = document.getElementById('lE').value   || '14:30';
-    var nDays  = parseInt(document.getElementById('nDays').value) || 3;
-    var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
-    var crts   = getCourts();
-    var rrDays = Math.max(1, nDays - 1);
+    var lS       = document.getElementById('lS').value   || '13:30';
+    var lE       = document.getElementById('lE').value   || '14:30';
+    var nDays    = parseInt(document.getElementById('nDays').value) || 3;
+    var maxGPD   = parseInt(document.getElementById('maxGPD').value) || 2;
+    var crts     = getCourts();
+    var rrDays   = Math.max(1, nDays - 1);
     var dayHours = getDayHours();
+    var mv       = (document.getElementById('mainVenue') || {}).value || 'Main Venue';
+
+    // Read current rule state so the description reflects what is actually active
+    var ruleRest      = document.getElementById('ruleRest') && document.getElementById('ruleRest').checked;
+    var ruleVR        = document.getElementById('ruleVenueRest') && document.getElementById('ruleVenueRest').checked;
+    var vrMandatory   = document.getElementById('venueRestModeMandatory') && document.getElementById('venueRestModeMandatory').checked;
+    var mvFinal       = document.getElementById('mainVenueFinal') && document.getElementById('mainVenueFinal').checked;
+    var mv3rd         = document.getElementById('mainVenue3rd')   && document.getElementById('mainVenue3rd').checked;
+    var mvSF          = document.getElementById('mainVenueSF')    && document.getElementById('mainVenueSF').checked;
+    var finalTimesVal = (document.getElementById('finalTimes') || {}).value || '16:00, 14:30, 17:30';
+
+    function pill(t) { return '<span class="algo-pill">' + t + '</span>'; }
+    function on(b)   { return b ? '<span style="color:#68d391;font-weight:700">ON</span>' : '<span style="color:#fc8181;font-weight:700">OFF</span>'; }
+    function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
     var pills = [
       'Slot interval: 90 min',
@@ -1427,10 +1441,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       'Tournament days: ' + nDays,
       'Round-robin days: ' + rrDays,
       'Max games / team / day: ' + maxGPD,
-      'Available courts: ' + crts.length
-    ].map(function(t){ return '<span class="algo-pill">' + t + '</span>'; }).join('');
+      'Courts: ' + crts.length,
+      'Main venue: ' + mv
+    ].map(pill).join('');
 
-    // Build per-day slot pills (show regular day + final day if they differ)
+    // Build per-day slot pills
     var regularSlots = buildTimeSlots(
       toM(dayHours[0].start), toM(dayHours[0].end), toM(lS), toM(lE)
     ).map(function(m) { return toT(m); });
@@ -1439,69 +1454,124 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       toM(finalHours.start), toM(finalHours.end), toM(lS), toM(lE)
     ).map(function(m) { return toT(m); });
     var slotsMatch = regularSlots.join() === finalSlots.join();
-
-    var slotHtml = regularSlots.map(function(s){ return '<span class="algo-pill">' + s + '</span>'; }).join('');
+    var slotHtml = regularSlots.map(pill).join('');
     var finalSlotHtml = slotsMatch ? '' :
-      '<p style="margin-top:8px;font-size:11px;color:var(--g)"><strong style="color:var(--ol)">Final day (' + finalHours.start + '\u2013' + finalHours.end + '):</strong> '
-      + finalSlots.map(function(s){ return '<span class="algo-pill">' + s + '</span>'; }).join(' ')
-      + '</p>';
+      '<p style="margin-top:8px;font-size:11px;color:var(--g)"><strong style="color:var(--ol)">Finals day (' + finalHours.start + '\u2013' + finalHours.end + '):</strong> '
+      + finalSlots.map(pill).join(' ') + '</p>';
+
+    // Venue Priority Rules summary (read live from venueRules[])
+    var vrRows = '';
+    (window.venueRules || []).forEach(function(r) {
+      var badge = r.prio === 'blanes-only'
+        ? '<span style="color:#fc8181;font-weight:700">Mandatory (' + mv + ' only)</span>'
+        : '<span style="color:#f6ad55;font-weight:700">High Priority (' + mv + ' preferred)</span>';
+      vrRows += '<li><strong>' + esc(r.divName) + '</strong> \u2014 ' + badge + '</li>';
+    });
+    var vrSection = vrRows
+      ? '<ul>' + vrRows + '<li><em>All other divisions</em> \u2014 <span style="color:var(--g)">Flexible (any court)</span></li></ul>'
+      : '<p style="color:var(--g);font-style:italic">No rules configured — all divisions are Flexible (any court). Add rules in the Venue Priority Rules card.</p>';
 
     return '<div class="algo-config">' + pills + '</div>'
 
-      + '<div class="algo-section"><h4>How Groups Are Formed</h4>'
-      + '<p>Each division is split into groups so every team plays every other team in their group exactly once. '
-      + 'Smaller divisions (up to 5 teams) stay in one group. Larger divisions are split into balanced groups of 3 or 4. '
-      + 'You can review and rearrange teams between groups in the <strong>Groups</strong> tab before generating the schedule.</p></div>'
+      // ── 1. Groups ──────────────────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Step 1 — Groups</h4>'
+      + '<p>After pasting team lists, click <strong>Assign Groups</strong> (or go to the <strong>Groups</strong> tab) to review the automatic grouping. '
+      + 'You can drag teams between groups before generating the schedule.</p>'
+      + '<p><strong>Automatic group sizes:</strong></p><ul>'
+      + '<li>\u2264 5 teams \u2192 single group (everyone plays everyone)</li>'
+      + '<li>6 teams \u2192 2 groups of 3</li>'
+      + '<li>7\u20138 teams \u2192 2 groups of 4</li>'
+      + '<li>9\u201312 teams \u2192 3 groups of 3</li>'
+      + '<li>13+ teams \u2192 groups of 4 (balanced)</li>'
+      + '</ul>'
+      + '<p><strong>National mixing:</strong> the app automatically tries to ensure no group contains more than 2 teams from the same country '
+      + '(detected from the country code in team names, e.g. <em>"SURREY RAMS (ENG)"</em>). '
+      + 'If it is mathematically impossible it will get as close as possible.</p></div>'
 
-      + '<div class="algo-section"><h4>How Games Are Spread Across Days</h4>'
-      + '<p>All group games are spread across the ' + rrDays + ' round-robin day(s). '
-      + 'The key rule is: <strong>no team plays more than ' + maxGPD + ' game(s) on the same day</strong>. '
-      + 'Games are distributed to keep each team\'s workload as even as possible across the tournament. '
-      + 'If there are too many games to fit within this limit, a red warning will appear after you generate the schedule.</p></div>'
-
-      + '<div class="algo-section"><h4>Fixed Time Slots &amp; Operating Hours</h4>'
-      + '<p>The tournament uses a <strong>90-minute interval system</strong>. '
-      + 'Operating hours are <strong>' + dayHours[0].start + '\u2013' + dayHours[0].end + '</strong> for regular days'
-      + (slotsMatch ? '.' : ', except for the <strong>final day which ends at ' + finalHours.end + '</strong> to accommodate finals and ceremonies.')
-      + ' Every game starts at one of these fixed slots:</p>'
+      // ── 2. Time Slots ──────────────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Step 2 — Time Slots &amp; Operating Hours</h4>'
+      + '<p>Every game is placed at one of these fixed <strong>90-minute slots</strong>:</p>'
       + '<div class="algo-config" style="margin-bottom:0">' + slotHtml + '</div>'
       + finalSlotHtml
-      + '<p style="margin-top:8px">No game can start outside these times. The lunch break ('
-      + lS + '\u2013' + lE + ') is automatically skipped — any slot that falls in the lunch window is moved to ' + lE + '.</p></div>'
+      + '<p style="margin-top:8px">The lunch window (<strong>' + lS + '\u2013' + lE + '</strong>) is blocked automatically. '
+      + 'No game can start outside a day\'s configured operating hours.</p></div>'
 
-      + '<div class="algo-section"><h4>How Courts &amp; Times Are Assigned</h4>'
-      + '<p>Each game is placed in the earliest available slot that meets all constraints:</p><ul>'
-      + '<li><strong>Team rest (hard):</strong> a team must always skip at least one full slot between their games — so a team playing at 09:00 cannot play again until 12:00. This guarantees <strong>90 minutes minimum</strong> between the start of any two games for the same team.</li>'
-      + '<li><strong>Venue priority (see below):</strong> courts are offered in priority order for each division.</li>'
-      + '<li><strong>Club staff consideration:</strong> if two teams from the same club appear in different age groups (e.g. SURREY RAMS in Boys U14 and Boys U16), the scheduler tries to avoid scheduling them in the same slot. If unavoidable, an amber notice will appear.</li>'
-      + '<li>Each day\'s games must finish by its own <strong>last game start</strong> time.</li>'
+      // ── 3. Game Spread ─────────────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Step 3 — Spreading Games Across Days</h4>'
+      + '<p>Round-robin games fill the first <strong>' + rrDays + ' day(s)</strong>. '
+      + 'The hard limit is <strong>' + maxGPD + ' game(s) per team per day</strong> — configurable in Setup under <em>Max games per team per day</em>. '
+      + 'The scheduler always fills the main venue (<strong>' + mv + '</strong>) before using external courts, '
+      + 'so every available ' + mv + ' slot is used before a game goes elsewhere.</p>'
+      + '<p>If the engine cannot fit every game within these constraints, the remaining games are shown as '
+      + '<span style="color:#fc8181;font-weight:700">Failed / Unscheduled</span> in the status bar — no rule is silently broken.</p></div>'
+
+      // ── 4. Rest Rules ──────────────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Rest Rules <span style="font-weight:400;font-size:11px">(Advanced Scheduling Rules card)</span></h4>'
+      + '<p><strong>Team Rest Between Games</strong> ' + on(ruleRest) + '<br>'
+      + (ruleRest
+          ? 'A team must have at least <strong>one clear slot (90 min)</strong> between any two games on the same day. '
+            + 'Example: a team playing at 09:00 cannot play again until 12:00.'
+          : 'Currently <em>disabled</em> — teams may be scheduled back-to-back. Enable this when player welfare allows it.')
+      + '</p>'
+      + '<p style="margin-top:10px"><strong>Venue Change Rest (180 min)</strong> ' + on(ruleVR) + '<br>'
+      + (ruleVR
+          ? 'When a team\'s next game is at a <em>different venue</em>, a minimum <strong>3-hour (4-slot) gap</strong> is required on the same day. '
+            + 'Mode: <strong>' + (vrMandatory ? 'Mandatory' : 'High Priority') + '</strong>. '
+            + (vrMandatory
+                ? 'Hard constraint — any game that cannot satisfy the gap is left unscheduled rather than violating the rule.'
+                : 'Best-effort — the engine tries hard to respect the gap but may relax it if no other slot is available.')
+          : 'Currently <em>disabled</em> — venue changes on the same day have no additional rest requirement beyond the standard team rest.')
+      + '</p></div>'
+
+      // ── 5. Venue Priority ──────────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Venue Priority Rules <span style="font-weight:400;font-size:11px">(Venue Priority Rules card)</span></h4>'
+      + '<p>Each division can be assigned a court priority for <strong>' + mv + '</strong>. '
+      + 'Add or remove rules using the <em>+ Add Priority Rule</em> button in the Setup tab.</p>'
+      + '<p><strong>Priority levels:</strong></p><ul>'
+      + '<li><strong>Mandatory (' + mv + ' only)</strong> \u2014 <em>all</em> games for that division (round-robin, semi-finals, consolation, medal games) are placed exclusively at ' + mv + '. '
+        + 'If ' + mv + ' has no capacity the game is left unscheduled — it will never move to an external court.</li>'
+      + '<li><strong>High Priority</strong> \u2014 ' + mv + ' slots are strongly preferred; the engine falls back to external courts only when ' + mv + ' is fully occupied at that time.</li>'
+      + '<li><strong>Flexible</strong> (default, no rule needed) \u2014 any available court is used, with ' + mv + ' still filled first before external courts.</li>'
+      + '</ul>'
+      + '<p><strong>Current rules:</strong></p>' + vrSection + '</div>'
+
+      // ── 6. Venue Exclusivity ───────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Venue Exclusivity <span style="font-weight:400;font-size:11px">(Venue Exclusivity card)</span></h4>'
+      + '<p>Controls which specific playoff games <em>must</em> be held at <strong>' + mv + '</strong>:</p><ul>'
+      + '<li><strong>Championship Final</strong> \u2014 ' + on(mvFinal) + (mvFinal ? ' Must be at ' + mv + '.' : ' Can use any court.') + '</li>'
+      + '<li><strong>3rd Place game</strong> \u2014 ' + on(mv3rd) + (mv3rd ? ' Must be at ' + mv + '.' : ' Can use any court.') + '</li>'
+      + '<li><strong>Semi-finals</strong> \u2014 ' + on(mvSF) + (mvSF ? ' Must be at ' + mv + '.' : ' Prefer external courts, keeping ' + mv + ' free for medal games.') + '</li>'
       + '</ul></div>'
 
-      + '<div class="algo-section"><h4>Venue Priority Rules (Blanes)</h4><ul>'
-      + '<li><strong>Boys U18 / Boys U16 — exclusive Blanes access (hard rule):</strong> these divisions are always placed in the Blanes venue. If Blanes runs out of capacity, a red warning appears — their games will not be moved to another venue.</li>'
-      + '<li><strong>Girls U18 — highest priority for remaining Blanes slots:</strong> after Boys U18/U16 are placed, Girls U18 games fill Blanes courts first before any other division can use them.</li>'
-      + '<li><strong>Girls U16 — second priority for Blanes:</strong> Girls U16 take the next available Blanes slots after Girls U18 are satisfied.</li>'
-      + '<li><strong>All other divisions (U14, U12 Mix):</strong> scheduled in non-Blanes venues first, only using Blanes courts if all other venues are full.</li>'
-      + '</ul></div>'
-
+      // ── 7. Playoffs ────────────────────────────────────────────────────────
       + '<div class="algo-section"><h4>Playoffs &amp; Finals</h4>'
-      + '<p>Playoff games (Semi-finals, Finals, 3rd Place) are normally placed on the <strong>last day</strong> of the tournament. '
-      + 'However, if a division completes all its round-robin games before the last day <em>and</em> there are enough remaining slots on that earlier day, '
-      + 'the scheduler will move that division\'s entire playoff bracket to the earlier day — '
-      + 'keeping the last day free for divisions that still need it. '
-      + 'Finals and 3rd-place games always start at least <strong>90 minutes after the last semi-final ends</strong>. '
-      + 'Venue priority rules apply to playoff games too. '
-      + 'Playoff team slots show placeholders (e.g. <em>"1st Group A"</em>) until all round-robin results are scored — they fill in automatically.</p></div>'
+      + '<p>The last tournament day is reserved for playoffs. The bracket structure depends on the number of groups per division:</p><ul>'
+      + '<li><strong>4 groups</strong> \u2192 Championship (1st/2nd/3rd per group), 5th Place, 7th Place, 9th Place, 11th Place brackets</li>'
+      + '<li><strong>2 groups</strong> \u2192 Championship, 5th Place brackets; 7th Place is only added when groups have 4+ teams</li>'
+      + '<li><strong>1 group</strong> \u2192 Championship bracket only (semi-final + final + 3rd place)</li>'
+      + '</ul>'
+      + '<p><strong>Semi-final timing:</strong> the engine tries up to three placement options in order of preference — '
+      + 'SFs on the day before the final (freeing the finals day), SFs on the finals day at external courts (main venue reserved for medals), '
+      + 'and SFs on the finals day with a fallback to main venue if external courts are full. '
+      + 'The Championship Final and 3rd Place game always start at least <strong>180 minutes (2 slots)</strong> after their semi-finals begin.</p>'
+      + '<p><strong>Finals preferred times</strong> (currently: <em>' + esc(finalTimesVal) + '</em>): '
+      + 'the Championship Final is anchored to the closest available ' + mv + ' slot to these times — first match wins. '
+      + 'Change this in Setup under <em>Finals Preferred Times</em>.</p>'
+      + '<p>Playoff team slots show placeholders (e.g. <em>"1st Group A"</em>) until all round-robin scores are entered — they fill in automatically once the round-robin is complete.</p></div>'
 
+      // ── 8. Guarantees ──────────────────────────────────────────────────────
       + '<div class="algo-section"><h4>What the Scheduler Always Guarantees</h4><ul>'
-      + '<li>\u2705 No team is ever scheduled on two courts at the same time.</li>'
-      + '<li>\u2705 Every team has at least 90 minutes of recovery time between their games each day.</li>'
-      + '<li>\u2705 Boys U18/U16 have exclusive access to Blanes courts.</li>'
-      + '<li>\u2705 Girls U18/U16 are prioritised for Blanes, with U18 receiving higher precedence over U16.</li>'
-      + '<li>\u2705 Each day\'s games respect that day\'s own operating hours (final day ends at <strong>' + finalHours.end + '</strong>).</li>'
-      + '<li>\u2705 No games are placed during lunch (<strong>' + lS + '\u2013' + lE + '</strong>).</li>'
-      + '<li>\u2705 Finals always start at least 90 minutes after the semi-finals end.</li>'
-      + '<li>\u26A0\uFE0F Same-club time overlaps are avoided where possible — if unavoidable, an amber notice is shown so you can inform the club.</li>'
+      + '<li>\u2705 No team ever plays on two courts at the same time (double-booking is impossible).</li>'
+      + '<li>\u2705 No team ever plays against itself.</li>'
+      + (ruleRest ? '<li>\u2705 Minimum 90-minute gap between a team\'s games on the same day.</li>' : '<li>\u26A0\uFE0F Team rest is currently <strong>OFF</strong> — back-to-back games are allowed.</li>')
+      + (ruleVR   ? '<li>\u2705 Minimum 180-minute gap when a team switches venues on the same day' + (vrMandatory ? ' (hard constraint).' : ' (best-effort).') + '</li>' : '<li>\u26A0\uFE0F Venue-change rest is currently <strong>OFF</strong> — no extra gap is required when switching venues.</li>')
+      + '<li>\u2705 Divisions set to <strong>Mandatory</strong> in Venue Priority Rules are always at ' + mv + ' — they are never quietly moved to another venue.</li>'
+      + (mvFinal ? '<li>\u2705 Championship Final is always at <strong>' + mv + '</strong>.</li>' : '')
+      + (mv3rd   ? '<li>\u2705 3rd Place game is always at <strong>' + mv + '</strong>.</li>' : '')
+      + '<li>\u2705 ' + mv + ' courts are filled before external courts for every division (maximum ' + mv + ' utilisation).</li>'
+      + '<li>\u2705 Each day\'s games respect that day\'s operating hours (finals day ends at <strong>' + finalHours.end + '</strong>).</li>'
+      + '<li>\u2705 No games are placed during the lunch break (<strong>' + lS + '\u2013' + lE + '</strong>).</li>'
+      + '<li>\u26A0\uFE0F If a game cannot be placed without breaking a rule, it is reported as <strong>Failed / Unscheduled</strong> — no constraint is silently violated.</li>'
       + '</ul></div>';
   }
 
