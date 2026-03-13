@@ -2766,10 +2766,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         var pdSlots = dayTimeSlots[Math.min(pd, dayTimeSlots.length - 1)];
         var pcOrder = courtPriorityOrder(g.divName, crts, undefined, g.lbl, rules.mainVenue);
         // Use caller-supplied slot order on last day (Tier 1 or Tier 2 pass);
+        // bracket medals on finals day: forward order (earliest first) so Day N starts at 09:00;
         // default: reverse chronological (latest slot first) on all other days.
         var _slotSeq;
         if (lastDaySlotOrder && pd === nDays - 1) {
           _slotSeq = lastDaySlotOrder;
+        } else if (g.isBracketMedal && pd === nDays - 1) {
+          _slotSeq = [];
+          for (var _ri = 0; _ri < pdSlots.length; _ri++) _slotSeq.push(_ri);
         } else {
           _slotSeq = [];
           for (var _ri = pdSlots.length - 1; _ri >= 0; _ri--) _slotSeq.push(_ri);
@@ -2793,6 +2797,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           if (!g.isLate && !g.isBracketMedal) {
             var fSlot = finalBracketSlot[poChronKey];
             if (fSlot && fSlot.day === pd && psi > fSlot.slotIdx - _sfGap) continue;
+            // No Final anchor yet: if on finals day, reserve the last _sfGap slots for Finals/medal
+            if (!fSlot && pd === nDays - 1) {
+              var _pdSlots = dayTimeSlots[Math.min(pd, dayTimeSlots.length - 1)];
+              if (_pdSlots && psi > _pdSlots.length - 1 - _sfGap) continue;
+            }
           }
           for (var pco = 0; pco < pcOrder.length && !g.placed; pco++) {
             var pci = pcOrder[pco];
@@ -2897,6 +2906,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           // Must be at least 2 slots before the FINAL (180-min gap)
           var _cpFinal = finalBracketSlot[bk];
           if (_cpFinal && _cpFinal.day === _cpDay && _cpSi > _cpFinal.slotIdx - 2) continue;
+          // No Final anchor: on finals day, reserve last 2 slots for Finals/medal game
+          if (!_cpFinal && _cpDay === nDays - 1 && _cpSi > _cpDaySlots.length - 1 - 2) continue;
 
           // Collect courts that pass courtAllowed at this slot
           var _cpPcOrd = courtPriorityOrder(divName, crts, undefined, grp[0].lbl, rules.mainVenue);
@@ -3118,7 +3129,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         de.groups[gk].games.push({
           time: toT(daySlots[g.slotIdx]), t1: g.t1, t2: g.t2,
           lbl: g.lbl, bracket: g.bracket,
-          court: g.court, loc: g.loc || '', score1: null, score2: null, locked: false
+          court: g.court, loc: g.loc || '', score1: null, score2: null, locked: false,
+          dayLabel: 'Day ' + (day + 1)
         });
       });
 
@@ -3156,7 +3168,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       ? [{ label: lastDayEntry.label, divs: bracketDivsList }]
       : [];
 
-    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: nCourts, courts: crts, venueRestMandatory: rules.venueRestMandatory };
+    sched = { gameDays: gameDays, bracketDays: bracketDays, totalCourts: nCourts, courts: crts, venueRestMandatory: rules.venueRestMandatory,
+              daySlots: dayTimeSlots.map(function(slots) { return slots.map(toT); }) };
     window.sched = sched; // expose for test KPI computation
     // ── Test hook: expose scheduling result for automated smoke tests ─────────
     window._schedResult = {
@@ -3217,12 +3230,28 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       return gh;
     }
 
+    var allDaySlots = (sched.daySlots && sched.daySlots[Math.min(dayIdx, sched.daySlots.length - 1)]) || [];
     var h = '', lunchShown = false, lastDiv = '', lastGroup = '', lastTime = null;
+
+    // Emit ghost cards for any leading empty time slots (before the first game)
+    var _firstGameTime = all.length ? all[0].g.time : null;
+    allDaySlots.forEach(function(_st) {
+      if (_firstGameTime && toM(_st) >= toM(_firstGameTime)) return;
+      if (!lunchShown && toM(_st) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
+      h += ghostsForTime(_st);
+    });
+
     all.forEach(function (item) {
       var g = item.g;
       // When time slot changes, emit ghost cards for the just-completed slot
       if (lastTime !== null && lastTime !== g.time) {
         h += ghostsForTime(lastTime);
+        // Emit ghost cards for any fully-empty time slots between the two game slots
+        allDaySlots.forEach(function(_st) {
+          if (toM(_st) <= toM(lastTime) || toM(_st) >= toM(g.time)) return;
+          if (!lunchShown && toM(_st) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
+          h += ghostsForTime(_st);
+        });
       }
       if (!lunchShown && toM(g.time) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
       lastTime = g.time;
@@ -3295,6 +3324,12 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     });
     // Emit ghost cards for the final time slot
     if (lastTime) h += ghostsForTime(lastTime);
+    // Emit ghost cards for any trailing empty time slots (after the last game)
+    allDaySlots.forEach(function(_st) {
+      if (lastTime && toM(_st) <= toM(lastTime)) return;
+      if (!lunchShown && toM(_st) >= toM(lS)) { h += lunchBar(lS, lE); lunchShown = true; }
+      h += ghostsForTime(_st);
+    });
     return h;
   }
 
@@ -3461,7 +3496,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // ── Export buttons ────────────────────────────────────
     h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
       + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
-      + '<button id="exportPrintBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Print / PDF</button>'
+      + '<button id="printGridBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Court Grid</button>'
+      + '<button id="printDivBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128203; By Division</button>'
       + '<button id="jsonExportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128190; Save JSON</button>'
       + '<button id="jsonImportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128194; Load JSON</button>'
       + '</div>';
@@ -3550,14 +3586,16 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       }
     }
 
-    var csvBtn      = document.getElementById('exportCSVBtn');
-    var printBtn    = document.getElementById('exportPrintBtn');
-    var jsonExpBtn  = document.getElementById('jsonExportBtn');
-    var jsonImpBtn  = document.getElementById('jsonImportBtn');
-    if (csvBtn)     csvBtn.onclick     = exportScheduleToCSV;
-    if (printBtn)   printBtn.onclick   = exportScheduleToPrint;
-    if (jsonExpBtn) jsonExpBtn.onclick = exportScheduleToJSON;
-    if (jsonImpBtn) jsonImpBtn.onclick = function() { document.getElementById('jsonImportInput').click(); };
+    var csvBtn       = document.getElementById('exportCSVBtn');
+    var printGridBtn = document.getElementById('printGridBtn');
+    var printDivBtn  = document.getElementById('printDivBtn');
+    var jsonExpBtn   = document.getElementById('jsonExportBtn');
+    var jsonImpBtn   = document.getElementById('jsonImportBtn');
+    if (csvBtn)       csvBtn.onclick      = exportScheduleToCSV;
+    if (printGridBtn) printGridBtn.onclick = printCourtGrid;
+    if (printDivBtn)  printDivBtn.onclick  = printByDivision;
+    if (jsonExpBtn)   jsonExpBtn.onclick   = exportScheduleToJSON;
+    if (jsonImpBtn)   jsonImpBtn.onclick   = function() { document.getElementById('jsonImportInput').click(); };
   }
 
   // ── Export: CSV ───────────────────────────────────────
@@ -3589,48 +3627,270 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     URL.revokeObjectURL(url);
   }
 
-  // ── Export: Print window (PDF-ready) ─────────────────
-  function exportScheduleToPrint() {
+  // ── Print helpers ─────────────────────────────────────
+  function shortCourt(courtName) {
+    var s = courtName
+      .replace(/\bCourt\b\s*/i, '')
+      .replace(/\bBlanes\b/i,       'BL')
+      .replace(/\bSanta\s*Suzana\b/i,'SS')
+      .replace(/\bPalafolls\b/i,    'PAL')
+      .replace(/\s+/g, '');
+    // fallback: first 3 non-digit chars + trailing digits
+    if (s === courtName.replace(/\s+/g,'')) {
+      var digits = courtName.match(/\d+/);
+      s = courtName.replace(/\d.*$/,'').trim().slice(0,3).toUpperCase() + (digits ? digits[0] : '');
+    }
+    return s;
+  }
+
+  // ── Print: Court Grid (landscape, day per page) ───────
+  function printCourtGrid() {
     if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
-    var rows = '';
-    sched.gameDays.forEach(function(day) {
-      rows += '<h2>' + day.label + '</h2>';
-      day.divs.forEach(function(d) {
-        rows += '<h3>' + d.name + '</h3>';
-        var games = [];
-        if (d.games) {
-          games = d.games;
-        } else if (d.groups) {
-          Object.keys(d.groups).sort().forEach(function(gk) {
-            d.groups[gk].games.forEach(function(g) { games.push(g); });
-          });
-        }
-        games.sort(function(a, b) { return (a.time || '') < (b.time || '') ? -1 : 1; });
-        rows += '<table><thead><tr><th>Time</th><th>Home</th><th>Away</th><th>Court</th><th>Type</th></tr></thead><tbody>';
-        games.forEach(function(g) {
-          rows += '<tr><td>' + (g.time || '') + '</td><td>' + (g.t1 || '') + '</td><td>'
-            + (g.t2 || '') + '</td><td>' + (g.court || '') + '</td><td>' + (g.lbl || 'RR') + '</td></tr>';
-        });
-        rows += '</tbody></table>';
-      });
+    var courts = sched.courts || getCourts();
+    var lunchStart = (document.getElementById('lS') || {}).value || '';
+    var lunchEnd   = (document.getElementById('lE') || {}).value || '';
+
+    // Group courts by location for two-row header
+    var venueOrder = [], venueMap = {};
+    courts.forEach(function(c) {
+      var loc = c.loc || c.court;
+      if (!venueMap[loc]) { venueMap[loc] = []; venueOrder.push(loc); }
+      venueMap[loc].push(c.court);
     });
-    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tournament Schedule</title>'
-      + '<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}'
-      + 'h1{font-size:20px;margin:0 0 4px}p.sub{font-size:11px;color:#666;margin:0 0 20px}'
-      + 'h2{font-size:14px;margin:22px 0 6px;border-bottom:3px solid #FF6B00;padding-bottom:4px;color:#FF6B00}'
-      + 'h3{font-size:12px;margin:12px 0 4px;color:#333;font-weight:700}'
-      + 'table{width:100%;border-collapse:collapse;margin-bottom:14px}'
-      + 'th{background:#FF6B00;color:#fff;padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}'
-      + 'td{padding:4px 8px;border-bottom:1px solid #e5e5e5;font-size:11px}'
-      + 'tr:nth-child(even)td{background:#f9f9f9}'
-      + '.no-print{display:none}'
-      + '@media print{.no-print{display:none}table{page-break-inside:avoid}h2{page-break-before:auto}}'
-      + '</style></head><body>'
-      + '<h1>Euro Youth Basketball Cup — Tournament Schedule</h1>'
-      + '<p class="sub">Generated ' + new Date().toLocaleString() + '</p>'
-      + rows
-      + '<button class="no-print" onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#FF6B00;color:#fff;border:none;padding:10px 20px;font-size:13px;font-weight:700;border-radius:6px;cursor:pointer">Print / Save PDF</button>'
-      + '</body></html>';
+
+    var courtNames = courts.map(function(c) { return c.court; });
+    var nCols = courtNames.length; // total court columns (+ 1 for time)
+
+    function buildDayHTML(day) {
+      // Build gameMap: time → courtName → game info
+      var gameMap = {};
+      day.divs.forEach(function(d) {
+        function addGame(g) {
+          if (!g.time) return;
+          if (!gameMap[g.time]) gameMap[g.time] = {};
+          var score = (g.locked && (g.score1 !== undefined) && (g.score2 !== undefined))
+            ? (g.score1 + ' – ' + g.score2) : '';
+          gameMap[g.time][g.court] = { divName: d.name, divColor: d.color || '#FF6B00',
+            t1: g.t1 || '', t2: g.t2 || '', lbl: g.lbl || '', score: score };
+        }
+        if (d.games) d.games.forEach(addGame);
+        else if (d.groups) Object.keys(d.groups).forEach(function(gk) { d.groups[gk].games.forEach(addGame); });
+      });
+
+      var times = Object.keys(gameMap).sort();
+      if (!times.length) return '';
+
+      // Two-row header
+      var hdr1 = '<tr><th class="time-cell" rowspan="2">Time</th>';
+      venueOrder.forEach(function(loc) {
+        hdr1 += '<th class="venue-hdr" colspan="' + venueMap[loc].length + '">' + loc + '</th>';
+      });
+      hdr1 += '</tr>';
+      var hdr2 = '<tr>';
+      courts.forEach(function(c) { hdr2 += '<th>' + shortCourt(c.court) + '</th>'; });
+      hdr2 += '</tr>';
+
+      var lunchInserted = false;
+      var rows = '';
+      times.forEach(function(t) {
+        // Lunch row: inject before first slot >= lunchEnd
+        if (!lunchInserted && lunchEnd && t >= lunchEnd && lunchStart && lunchStart < lunchEnd) {
+          rows += '<tr class="lunch-row"><td colspan="' + (nCols + 1) + '">&#127860; LUNCH BREAK &nbsp;'
+            + lunchStart + ' – ' + lunchEnd + '</td></tr>';
+          lunchInserted = true;
+        }
+        rows += '<tr><td class="time-cell">' + t + '</td>';
+        courtNames.forEach(function(crt) {
+          var gm = gameMap[t] && gameMap[t][crt];
+          if (gm) {
+            var abbr = gm.divName.length > 18 ? gm.divName.slice(0, 16) + '…' : gm.divName;
+            rows += '<td class="game-cell" style="border-left:3px solid ' + gm.divColor + '">'
+              + '<div class="cell-div">' + abbr + (gm.lbl ? ' · ' + gm.lbl : '') + '</div>'
+              + '<div class="cell-teams">' + escH(gm.t1) + ' <span class="vs">vs</span> ' + escH(gm.t2) + '</div>'
+              + (gm.score ? '<div class="cell-score">' + gm.score + '</div>' : '')
+              + '</td>';
+          } else {
+            rows += '<td class="empty-cell"></td>';
+          }
+        });
+        rows += '</tr>';
+      });
+
+      return '<div class="day-page">'
+        + '<div class="day-hdr">' + day.label + '</div>'
+        + '<table><thead>' + hdr1 + hdr2 + '</thead><tbody>' + rows + '</tbody></table>'
+        + '</div>';
+    }
+
+    function escH(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    var body = '';
+    sched.gameDays.forEach(function(day) { body += buildDayHTML(day); });
+    if (sched.bracketDays) sched.bracketDays.forEach(function(day) { body += buildDayHTML(day); });
+
+    var css = '@page{size:A4 landscape;margin:10mm}'
+      + 'body{font-family:Arial,sans-serif;font-size:9px;color:#111}'
+      + '.day-page{page-break-after:always}'
+      + '.day-page:last-child{page-break-after:avoid}'
+      + 'table{width:100%;border-collapse:collapse;font-size:8px}'
+      + 'th{background:#FF6B00;color:#fff;padding:3px 4px;text-align:center;font-size:8px}'
+      + 'th.venue-hdr{background:#1a1a2e}'
+      + 'td{border:1px solid #ddd;padding:3px 4px;vertical-align:top;min-width:52px}'
+      + '.time-cell{font-weight:700;white-space:nowrap;background:#f5f5f5;text-align:center;width:44px}'
+      + '.game-cell{border-left-width:3px!important}'
+      + '.cell-div{font-size:7px;font-weight:700;text-transform:uppercase;color:#666;margin-bottom:1px}'
+      + '.cell-teams{font-size:8px;font-weight:600;line-height:1.3}'
+      + '.cell-teams .vs{color:#999;font-weight:400}'
+      + '.cell-score{font-size:8px;font-weight:700;color:#FF6B00;margin-top:2px}'
+      + '.empty-cell{background:#fafafa}'
+      + '.lunch-row td{background:#fff8e1;font-weight:700;text-align:center;color:#b45309;padding:4px;font-size:9px;border:1px solid #fcd34d}'
+      + '.day-hdr{font-size:13px;font-weight:900;color:#FF6B00;margin:0 0 6px;text-transform:uppercase;letter-spacing:1px;padding-bottom:4px;border-bottom:2px solid #FF6B00}'
+      + '.no-print{}'
+      + '@media print{.no-print{display:none}}';
+
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Court Grid</title>'
+      + '<style>' + css + '</style></head><body>'
+      + '<button class="no-print" onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#FF6B00;color:#fff;border:none;padding:8px 18px;font-size:12px;font-weight:700;border-radius:5px;cursor:pointer;z-index:999">&#128438; Print / Save PDF</button>'
+      + body + '</body></html>';
+
+    var w = window.open('', '_blank');
+    if (!w) { alert('Pop-up blocked. Allow pop-ups for this page and try again.'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+  }
+
+  // ── Print: By Division (portrait, one page per division) ─
+  function printByDivision() {
+    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+
+    function escH(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    var body = '';
+    divisions.forEach(function(div) {
+      // Collect RR games per day, grouped by group label
+      var rrDays = {};   // dayLabel → { groupKey → games[] }
+      sched.gameDays.forEach(function(day, di) {
+        day.divs.forEach(function(d) {
+          if (d.name !== div.name) return;
+          if (!rrDays[day.label]) rrDays[day.label] = { _order: di, groups: {} };
+          if (d.groups) {
+            Object.keys(d.groups).sort().forEach(function(gk) {
+              if (!rrDays[day.label].groups[gk]) rrDays[day.label].groups[gk] = [];
+              d.groups[gk].games.forEach(function(g) { rrDays[day.label].groups[gk].push(g); });
+            });
+          } else if (d.games) {
+            if (!rrDays[day.label].groups['']) rrDays[day.label].groups[''] = [];
+            d.games.forEach(function(g) { rrDays[day.label].groups[''].push(g); });
+          }
+        });
+      });
+
+      // Collect bracket games
+      var bracketGames = [];
+      (sched.bracketDays || []).forEach(function(bday) {
+        bday.divs.forEach(function(d) {
+          if (d.name !== div.name) return;
+          (d.games || []).forEach(function(g) { bracketGames.push({ day: bday.label, game: g }); });
+        });
+      });
+      bracketGames.sort(function(a, b) { return (a.game.time || '') < (b.game.time || '') ? -1 : 1; });
+
+      // No games for this division? skip
+      var hasGames = Object.keys(rrDays).length || bracketGames.length;
+      if (!hasGames) return;
+
+      // Roster section
+      var rosterHTML = '';
+      if (div.manualGroups && div.manualGroups.length) {
+        var parts = div.manualGroups.map(function(grp, gi) {
+          var letter = String.fromCharCode(65 + gi);
+          return '<strong>Group ' + letter + ':</strong> ' + grp.map(escH).join(', ');
+        });
+        rosterHTML = '<div class="roster">' + parts.join('<br>') + '</div>';
+      } else if (div.teams && div.teams.length) {
+        rosterHTML = '<div class="roster"><strong>Teams:</strong> ' + div.teams.map(escH).join(', ') + '</div>';
+      }
+
+      // Day sections (RR)
+      var daySections = '';
+      var dayLabels = Object.keys(rrDays).sort(function(a, b) {
+        return rrDays[a]._order - rrDays[b]._order;
+      });
+      dayLabels.forEach(function(dayLabel) {
+        var dayData = rrDays[dayLabel];
+        var groups = dayData.groups;
+        var gks = Object.keys(groups);
+        var groupsHTML = '';
+        gks.forEach(function(gk) {
+          var games = groups[gk].slice().sort(function(a, b) {
+            return (a.time || '') < (b.time || '') ? -1 : 1;
+          });
+          var groupHdr = gk ? '<div class="group-label">' + escH(gk) + '</div>' : '';
+          var rows = games.map(function(g) {
+            var score = (g.locked && g.score1 !== undefined && g.score2 !== undefined)
+              ? '<td class="score">' + g.score1 + ' – ' + g.score2 + '</td>' : '<td></td>';
+            return '<tr><td style="white-space:nowrap">' + escH(g.time || '') + '</td>'
+              + '<td>' + escH(g.t1 || '') + ' <span style="color:#999">vs</span> ' + escH(g.t2 || '') + '</td>'
+              + '<td class="court">' + escH(g.court || '') + '</td>' + score + '</tr>';
+          }).join('');
+          groupsHTML += groupHdr + '<table><thead><tr><th>Time</th><th>Matchup</th><th>Court</th><th>Score</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        });
+        daySections += '<div class="day-section"><div class="day-label">' + escH(dayLabel) + '</div>' + groupsHTML + '</div>';
+      });
+
+      // Bracket section
+      var bracketHTML = '';
+      if (bracketGames.length) {
+        var bRows = bracketGames.map(function(entry) {
+          var g = entry.game;
+          var score = (g.locked && g.score1 !== undefined && g.score2 !== undefined)
+            ? '<td class="score">' + g.score1 + ' – ' + g.score2 + '</td>' : '<td></td>';
+          return '<tr><td class="lbl">' + escH(g.lbl || '') + '</td>'
+            + '<td style="white-space:nowrap">' + escH(g.time || '') + '</td>'
+            + '<td>' + escH(g.t1 || '') + ' <span style="color:#999">vs</span> ' + escH(g.t2 || '') + '</td>'
+            + '<td class="court">' + escH(g.court || '') + '</td>' + score + '</tr>';
+        }).join('');
+        var bDayLabel = sched.bracketDays && sched.bracketDays[0] ? sched.bracketDays[0].label : 'Finals Day';
+        bracketHTML = '<div class="day-section"><div class="day-label">' + escH(bDayLabel) + '</div>'
+          + '<table><thead><tr><th>Round</th><th>Time</th><th>Matchup</th><th>Court</th><th>Score</th></tr></thead><tbody>'
+          + bRows + '</tbody></table></div>';
+      }
+
+      body += '<div class="div-page">'
+        + '<div class="div-title" style="border-color:' + (div.color || '#FF6B00') + ';color:' + (div.color || '#FF6B00') + '">'
+        + escH(div.name) + '</div>'
+        + rosterHTML
+        + daySections
+        + bracketHTML
+        + '</div>';
+    });
+
+    if (!body) { alert('No game data to print.'); return; }
+
+    var css = '@page{size:A4 portrait;margin:15mm}'
+      + 'body{font-family:Arial,sans-serif;font-size:11px;color:#111}'
+      + '.div-page{page-break-after:always}'
+      + '.div-page:last-child{page-break-after:avoid}'
+      + '.div-title{font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:1px;border-bottom:4px solid;padding-bottom:6px;margin-bottom:12px}'
+      + '.roster{font-size:10px;color:#555;margin-bottom:16px;line-height:1.7}'
+      + '.day-section{margin-bottom:14px}'
+      + '.day-label{font-size:11px;font-weight:700;text-transform:uppercase;color:#FF6B00;margin-bottom:6px;letter-spacing:.5px}'
+      + '.group-label{font-size:10px;font-weight:700;color:#555;margin:8px 0 4px}'
+      + 'table{width:100%;border-collapse:collapse;margin-bottom:8px}'
+      + 'th{background:#f0f0f0;font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:4px 8px;text-align:left}'
+      + 'td{padding:4px 8px;border-bottom:1px solid #eee;font-size:10px}'
+      + 'td.lbl{color:#FF6B00;font-weight:700;width:80px}'
+      + 'td.court{color:#777;font-size:9px}'
+      + 'td.score{font-weight:700;color:#333}'
+      + '.no-print{}'
+      + '@media print{.no-print{display:none}}';
+
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule by Division</title>'
+      + '<style>' + css + '</style></head><body>'
+      + '<button class="no-print" onclick="window.print()" style="position:fixed;top:10px;right:10px;background:#FF6B00;color:#fff;border:none;padding:8px 18px;font-size:12px;font-weight:700;border-radius:5px;cursor:pointer;z-index:999">&#128203; Print / Save PDF</button>'
+      + body + '</body></html>';
+
     var w = window.open('', '_blank');
     if (!w) { alert('Pop-up blocked. Allow pop-ups for this page and try again.'); return; }
     w.document.write(html);
@@ -3837,7 +4097,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     h += '<p class="help" style="margin-bottom:18px">Click any team slot to pick from the division\'s teams, or type freely.</p>';
 
     sched.bracketDays.forEach(function(day, dIdx) {
-      h += '<div class="day-hdr">' + day.label + '</div>';
+      h += '<div class="day-hdr">&#127942; Playoffs</div>';
 
       day.divs.forEach(function(d) {
         var dlId = 'dl-' + d.name.replace(/[^a-zA-Z0-9]/g, '_');
@@ -3862,22 +4122,44 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         bracketOrder.forEach(function(bk) {
           var games = byBracket[bk];
           h += '<div style="font-size:11px;font-weight:700;color:' + d.color + ';margin:8px 0 4px 12px;text-transform:uppercase;letter-spacing:0.5px">' + bk + '</div>';
+
+          // Group games by day within this bracket, preserving order
+          var byDay = {}, dayOrder = [];
           games.forEach(function(g) {
-            var gIdx = d.games.indexOf(g);
-            var p = fmt(g.time).split(' ');
-            h += '<div class="bs">'
-              + '<div style="min-width:55px">'
-              + '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:15px;color:' + d.color + '">' + p[0] + '</div>'
-              + '<div style="font-size:10px;color:var(--g)">' + p[1] + '</div>'
-              + '</div>'
-              + '<span class="rb" style="border-color:' + d.color + '66;color:' + d.color + '">' + (g.lbl || '') + '</span>'
-              + '<input class="be brk-in" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t1 || '') + '" autocomplete="off"'
-              + ' data-didx="' + dIdx + '" data-divname="' + d.name + '" data-gi="' + gIdx + '" data-field="t1">'
-              + '<span class="bvs">VS</span>'
-              + '<input class="be brk-in" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t2 || '') + '" autocomplete="off"'
-              + ' data-didx="' + dIdx + '" data-divname="' + d.name + '" data-gi="' + gIdx + '" data-field="t2">'
-              + '<span style="font-size:11px;color:var(--g);white-space:nowrap">' + g.court + '</span>'
-              + '</div>';
+            var dk = g.dayLabel || '';
+            if (!byDay[dk]) { byDay[dk] = []; dayOrder.push(dk); }
+            byDay[dk].push(g);
+          });
+          var multiDay = dayOrder.length > 1;
+
+          dayOrder.forEach(function(dk) {
+            if (multiDay && dk) {
+              h += '<div style="display:flex;align-items:center;gap:8px;margin:6px 12px 4px">'
+                + '<div style="flex:0 0 auto;font-size:10px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:0.6px;white-space:nowrap">' + dk + '</div>'
+                + '<div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>'
+                + '</div>';
+            }
+            byDay[dk].forEach(function(g) {
+              var gIdx = d.games.indexOf(g);
+              var p = fmt(g.time).split(' ');
+              h += '<div class="bs">'
+                + '<div style="min-width:55px">'
+                + '<div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:15px;color:' + d.color + '">' + p[0] + '</div>'
+                + '<div style="font-size:10px;color:var(--g)">' + p[1] + '</div>'
+                + '</div>'
+                + '<span class="rb" style="border-color:' + d.color + '66;color:' + d.color + '">' + (g.lbl || '') + '</span>'
+                + '<input class="be brk-in" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t1 || '') + '" autocomplete="off"'
+                + ' data-didx="' + dIdx + '" data-divname="' + d.name + '" data-gi="' + gIdx + '" data-field="t1">'
+                + '<span class="bvs">VS</span>'
+                + '<input class="be brk-in" list="' + dlId + '" placeholder="Pick or type team..." value="' + (g.t2 || '') + '" autocomplete="off"'
+                + ' data-didx="' + dIdx + '" data-divname="' + d.name + '" data-gi="' + gIdx + '" data-field="t2">'
+                + '<span style="font-size:11px;color:var(--g);white-space:nowrap">' + g.court + '</span>'
+                + '</div>';
+            });
+            // Arrow connector between days (e.g. between SFs day and Finals day)
+            if (multiDay && dk !== dayOrder[dayOrder.length - 1]) {
+              h += '<div style="text-align:center;color:var(--g);font-size:18px;margin:2px 0;opacity:0.4">&#8595;</div>';
+            }
           });
         });
       });
