@@ -172,6 +172,29 @@ footer span{color:var(--o)}
 /* Ghost cards — empty court slots */
 .ghost-card{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:6px;border:1.5px dashed rgba(255,255,255,0.15);background:rgba(255,255,255,0.03);cursor:pointer;opacity:.6;transition:opacity .15s,border-color .15s}
 .ghost-card:hover{opacity:1;border-color:rgba(255,107,0,0.5)}
+/* Edit mode */
+#schedOut.edit-mode-active .gc{cursor:grab;outline:1px dashed rgba(255,107,0,0.45);transition:outline .15s,transform .15s}
+#schedOut.edit-mode-active .gc:hover{outline:2px solid #FF6B00;transform:translateY(-1px) scale(1.006);background:rgba(255,107,0,.08)}
+#editModeBtn.em-on{background:#FF6B00!important;color:#fff!important;border-color:#FF6B00!important}
+/* Move game modal grid */
+.mg-day-tab{background:transparent;border:1px solid rgba(255,255,255,.15);border-bottom:none;color:var(--g);border-radius:5px 5px 0 0;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:700;font-family:Montserrat,sans-serif;transition:background .15s,color .15s}
+.mg-day-tab.active{background:rgba(255,107,0,.15);border-color:#FF6B00;color:#FF6B00}
+.mg-grid{border-collapse:collapse;width:100%}
+.mg-grid th,.mg-grid td{padding:3px 2px;text-align:center}
+.mg-th-time{font-size:10px;color:var(--g);white-space:nowrap;min-width:44px;text-align:right;padding-right:8px}
+.mg-th-court{font-size:10px;color:var(--g);white-space:nowrap;min-width:36px}
+.mg-time-cell{font-size:11px;text-align:right;padding-right:8px;white-space:nowrap;color:rgba(255,255,255,.5)}
+.mg-lunch-row td{font-size:10px;color:var(--g);background:rgba(255,255,255,.03);padding:5px 8px;text-align:center;letter-spacing:.5px}
+.mg-slot{border-radius:5px;padding:0;font-size:14px;font-weight:700;cursor:pointer;border:1px solid;width:34px;height:28px;transition:transform .1s,outline .1s;line-height:28px;display:inline-block;text-align:center}
+.mg-slot:hover:not(:disabled){transform:scale(1.18)}
+.mg-slot.mg-free{background:rgba(72,187,120,.15);border-color:rgba(72,187,120,.5);color:#68d391}
+.mg-slot.mg-warn{background:rgba(255,165,0,.12);border-color:rgba(255,165,0,.5);color:#ffa040}
+.mg-slot.mg-hard{background:rgba(229,62,62,.12);border-color:rgba(229,62,62,.5);color:#fc8181}
+.mg-slot.mg-taken{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.2);cursor:default}
+.mg-slot.mg-current{outline:2px solid #FF6B00}
+.mg-slot.mg-selected{outline:2px solid #fff;box-shadow:0 0 8px rgba(255,255,255,.25)}
+.mg-leg{font-size:11px;font-weight:700}
+.mg-leg-free{color:#68d391}.mg-leg-warn{color:#ffa040}.mg-leg-hard{color:#fc8181}.mg-leg-taken{color:rgba(255,255,255,.3)}
 .ghost-section{margin-top:12px}
 .ghost-section-hdr{font-size:10px;font-weight:700;letter-spacing:.08em;color:rgba(255,255,255,0.3);margin-bottom:6px;text-transform:uppercase}
 .manual-badge{font-size:10px;font-weight:700;color:#e53e3e;border:1px solid rgba(229,62,62,0.5);border-radius:3px;padding:1px 5px;margin-left:6px;white-space:nowrap}
@@ -443,6 +466,49 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   </div>
 </div>
 
+<div id="moveGameModal" class="modal-overlay">
+  <div class="modal-card" style="max-width:820px;width:96%;padding:0;overflow:hidden;border-radius:12px">
+    <div style="padding:18px 22px 14px;border-bottom:1px solid var(--b)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--g);margin-bottom:6px">✏ Move Game</div>
+          <span id="mgDivBadge" style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:4px;border:1px solid;display:inline-block;margin-bottom:8px"></span>
+          <div id="mgTeams" style="font-family:Montserrat,sans-serif;font-weight:900;font-size:18px;color:#fff;margin-bottom:5px"></div>
+          <div id="mgCurrentSlot" style="font-size:12px;font-weight:600"></div>
+        </div>
+        <button id="mgClose" style="background:none;border:none;color:var(--g);font-size:24px;cursor:pointer;padding:0 4px;line-height:1;margin-top:-4px">&times;</button>
+      </div>
+    </div>
+    <div style="padding:10px 22px 0;border-bottom:1px solid var(--b)">
+      <div id="mgDayTabs" style="display:flex;gap:4px"></div>
+    </div>
+    <div style="padding:14px 22px;max-height:320px;overflow-y:auto">
+      <div style="font-size:11px;opacity:.45;margin-bottom:10px">Select a target slot — green = clear, amber = minor warning, red = conflict, gray = occupied.</div>
+      <div id="mgSlotGrid" style="overflow-x:auto"></div>
+    </div>
+    <div id="mgSelected" style="display:none;padding:11px 22px;border-top:1px solid var(--b);background:rgba(255,255,255,.025)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.5px">Selected:</span>
+        <span id="mgSelInfo" style="font-weight:700;color:#fff;font-size:13px"></span>
+      </div>
+      <div id="mgWarnings"></div>
+    </div>
+    <div style="padding:12px 22px;border-top:1px solid var(--b);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <span class="mg-leg mg-leg-free">✓ Free</span>
+        <span class="mg-leg mg-leg-warn">⚠ Warning</span>
+        <span class="mg-leg mg-leg-hard">✗ Conflict</span>
+        <span class="mg-leg mg-leg-taken">● Occupied</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="mgCancel" class="modal-btn cancel">Cancel</button>
+        <button id="mgMove" class="modal-btn confirm" disabled>Move Here</button>
+        <button id="mgOverride" class="modal-btn" style="display:none;background:#c53030;color:#fff">⚠ Move Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="addGameModal" class="modal-overlay">
   <div class="modal-card modal-wide" style="max-width:520px">
     <h3>+ Place Game Manually</h3>
@@ -482,11 +548,27 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   ];
   // ── Test hook: allow automated tests to override sites before generation ──
   window._setSites = function(newSites) { sites = newSites.slice(); };
+  // ── Test exports: pure utility functions for unit-test isolation ─────────────
+  window._testExports = {
+    optimalChunkSize: function(n) { return optimalChunkSize(n); },
+    chunk: function(arr, size) { return chunk(arr, size); },
+    extractCountry: function(name) { return extractCountry(name); },
+    buildTimeSlots: function(st, et, lSm, lEm) { return buildTimeSlots(st, et, lSm, lEm); },
+    applyNationalMixing: function(groups) { return applyNationalMixing(groups); },
+    toM: function(t) { return toM(t); },
+    toT: function(m) { return toT(m); }
+  };
   var sched = {};
   var scheduleWarnings = [];  // amber / soft warnings (club conflicts etc.)
   var unscheduledGames = []; // structured list of games that failed to place
   var _agPending = null; // { dayIdx, time, court, loc }
   var _agSelected = null; // selected game from picker
+  var _editMode = false;        // edit-mode toggle
+  var _mgContext = null;        // { dayIdx, divName, gi, gk, t1, t2, time, court, loc }
+  var _mgGameRef = null;        // direct object reference in sched
+  var _mgSelectedSlot = null;   // { dayIdx, time, court, loc }
+  var _mgActiveDay = 0;
+  var _mgOccupied = {};         // "dayIdx|time|court" → true (excl. moved game)
   var WarningService = {
     _buildTeamMap: function() {
       var map = {};
@@ -1173,7 +1255,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       return n;
     }
     var improved = true;
-    while (improved) {
+    var _mixIter = 0, _mixMax = nGroups * nGroups * 8; // FIX: iteration cap
+    while (improved && _mixIter++ < _mixMax) {
       improved = false;
       for (var gi = 0; gi < nGroups && !improved; gi++) {
         for (var ti = 0; ti < result[gi].length && !improved; ti++) {
@@ -1688,8 +1771,16 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (e.target === this) this.classList.remove('active');
   });
 
-  // ── Manual Game Placement ───────────────────────────────
+  // ── Manual Game Placement / Edit Mode ──────────────────
   document.getElementById('schedOut').addEventListener('click', function(e) {
+    // Edit mode: clicking a game card opens the move modal
+    if (_editMode) {
+      var gc = e.target.closest('.gc');
+      if (gc && !e.target.closest('input') && !e.target.closest('button')) {
+        openMoveGameModal(gc);
+        return;
+      }
+    }
     var card = e.target.closest('.ghost-card');
     if (!card) return;
     showAddGameModal({
@@ -1795,6 +1886,241 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   });
   document.getElementById('agPlace').onclick = function() { placeManualGame(false); };
   document.getElementById('agOverride').onclick = function() { placeManualGame(true); };
+
+  // ── Move Game (Edit Mode) ──────────────────────────────
+  function buildMgOccupied() {
+    _mgOccupied = {};
+    var ref = _mgGameRef;
+    function addGame(g, dIdx) {
+      if (g === ref) return;
+      if (g.time && g.court) _mgOccupied[dIdx + '|' + g.time + '|' + g.court] = true;
+    }
+    (sched.gameDays || []).forEach(function(dayObj, dIdx) {
+      dayObj.divs.forEach(function(d) {
+        if (d.games) d.games.forEach(function(g) { addGame(g, dIdx); });
+        if (d.groups) Object.keys(d.groups).forEach(function(gk) {
+          d.groups[gk].games.forEach(function(g) { addGame(g, dIdx); });
+        });
+      });
+    });
+  }
+
+  function classifyMoveSlot(dayIdx, time, court, loc) {
+    if (_mgOccupied[dayIdx + '|' + time + '|' + court]) return { cls: 'taken', warnings: [] };
+    // Temporarily blank the game being moved so WarningService ignores it
+    var s1 = _mgGameRef.t1, s2 = _mgGameRef.t2;
+    _mgGameRef.t1 = '\x00'; _mgGameRef.t2 = '\x00';
+    var warnings = WarningService.check(_mgContext.t1, _mgContext.t2, dayIdx, time, loc);
+    _mgGameRef.t1 = s1; _mgGameRef.t2 = s2;
+    if (!warnings.length) return { cls: 'free', warnings: [] };
+    var hasHard = warnings.some(function(w) { return w.type === 'double' || w.type === 'rest'; });
+    return { cls: hasHard ? 'hard' : 'warn', warnings: warnings };
+  }
+
+  function renderMgDayTabs(activeDayIdx) {
+    var tabs = '';
+    (sched.gameDays || []).forEach(function(day, dIdx) {
+      tabs += '<button class="mg-day-tab' + (dIdx === activeDayIdx ? ' active' : '') + '" data-day="' + dIdx + '">Day ' + (dIdx + 1) + '</button>';
+    });
+    document.getElementById('mgDayTabs').innerHTML = tabs;
+  }
+
+  function renderMgSlotGrid(dayIdx) {
+    var courts = sched.courts || [];
+    var slots = (sched.daySlots && sched.daySlots[Math.min(dayIdx, sched.daySlots.length - 1)]) || [];
+    var lS = document.getElementById('lS').value || '13:30';
+    var lE = document.getElementById('lE').value || '14:30';
+    var lSm = toM(lS), lEm = toM(lE);
+    var h = '<table class="mg-grid"><thead><tr><th class="mg-th-time"></th>';
+    courts.forEach(function(c) { h += '<th class="mg-th-court" title="' + c.court + '">' + shortCourt(c.court) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    var lunchShown = false;
+    slots.forEach(function(t) {
+      var tM = toM(t);
+      if (!lunchShown && tM >= lSm) {
+        h += '<tr class="mg-lunch-row"><td colspan="' + (courts.length + 1) + '">&#127860; Lunch ' + fmt(lS) + '&#8211;' + fmt(lE) + '</td></tr>';
+        lunchShown = true;
+      }
+      var fp = fmt(t).split(' ');
+      h += '<tr><td class="mg-time-cell"><strong>' + fp[0] + '</strong>&nbsp;' + fp[1] + '</td>';
+      courts.forEach(function(c) {
+        var r = classifyMoveSlot(dayIdx, t, c.court, c.loc);
+        var isCurrent = (dayIdx === _mgContext.dayIdx && t === _mgContext.time && c.court === _mgContext.court);
+        var cls = 'mg-slot mg-' + r.cls + (isCurrent ? ' mg-current' : '');
+        var icon = { free: '&#10003;', warn: '&#9888;', hard: '&#10007;', taken: '&#9679;' }[r.cls];
+        h += '<td><button class="' + cls + '" data-day="' + dayIdx + '" data-time="' + t + '" data-court="' + escAttr(c.court) + '" data-loc="' + escAttr(c.loc) + '"' + (r.cls === 'taken' ? ' disabled' : '') + '>' + icon + '</button></td>';
+      });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    document.getElementById('mgSlotGrid').innerHTML = h;
+  }
+
+  function escAttr(s) { return (s || '').replace(/"/g, '&quot;'); }
+
+  function openMoveGameModal(gcEl) {
+    if (!sched || !sched.gameDays) return;
+    var divName = gcEl.dataset.div;
+    var t1 = gcEl.dataset.t1 || '';
+    var t2 = gcEl.dataset.t2 || '';
+    var loc = gcEl.dataset.venue || '';
+    // Extract day/gi/gk from a score input child (or score-edit button)
+    var scoreIn = gcEl.querySelector('[data-day][data-gi]');
+    if (!scoreIn) return;
+    var dayIdx = parseInt(scoreIn.dataset.day);
+    var gi = parseInt(scoreIn.dataset.gi);
+    var gk = scoreIn.dataset.gk || '';
+    // Locate the game object in sched
+    var dayObj = sched.gameDays[dayIdx];
+    if (!dayObj) return;
+    var divObj = dayObj.divs.find(function(d) { return d.name === divName; });
+    if (!divObj) return;
+    var gameRef;
+    if (gk && divObj.groups && divObj.groups[gk]) {
+      gameRef = divObj.groups[gk].games[gi];
+    } else if (divObj.games) {
+      gameRef = divObj.games[gi];
+    }
+    if (!gameRef) return;
+    _mgContext = { dayIdx: dayIdx, divName: divName, gi: gi, gk: gk, t1: t1, t2: t2, time: gameRef.time, court: gameRef.court, loc: loc };
+    _mgGameRef = gameRef;
+    _mgSelectedSlot = null;
+    _mgActiveDay = dayIdx;
+    buildMgOccupied();
+    // Header
+    var divDef = divisions.find(function(d) { return d.name === divName; });
+    var color = divDef ? divDef.color : '#FF6B00';
+    var badge = document.getElementById('mgDivBadge');
+    badge.textContent = divName;
+    badge.style.background = color + '22';
+    badge.style.borderColor = color + '66';
+    badge.style.color = color;
+    document.getElementById('mgTeams').innerHTML = t1 + '<span style="color:var(--g);font-size:13px;margin:0 10px">VS</span>' + t2;
+    document.getElementById('mgCurrentSlot').innerHTML = 'Currently: <strong>Day ' + (dayIdx + 1) + '</strong> &middot; ' + fmt(gameRef.time) + ' &middot; ' + gameRef.court;
+    document.getElementById('mgCurrentSlot').style.color = color;
+    renderMgDayTabs(dayIdx);
+    renderMgSlotGrid(dayIdx);
+    document.getElementById('mgSelected').style.display = 'none';
+    document.getElementById('mgMove').disabled = true;
+    document.getElementById('mgOverride').style.display = 'none';
+    document.getElementById('moveGameModal').classList.add('active');
+  }
+
+  function closeMoveGameModal() {
+    document.getElementById('moveGameModal').classList.remove('active');
+    _mgContext = null; _mgGameRef = null; _mgSelectedSlot = null; _mgOccupied = {};
+  }
+
+  function removeMgGame() {
+    var ctx = _mgContext;
+    if (!ctx) return;                                               // FIX: null guard
+    var dayObj = sched.gameDays && sched.gameDays[ctx.dayIdx];
+    if (!dayObj) return;
+    var divObj = dayObj.divs.find(function(d) { return d.name === ctx.divName; });
+    if (!divObj) return;
+    if (ctx.gk && divObj.groups && divObj.groups[ctx.gk]) {
+      var arr = divObj.groups[ctx.gk].games;
+      var i = arr.indexOf(_mgGameRef);
+      if (i !== -1) arr.splice(i, 1);
+    } else if (divObj.games) {
+      var i = divObj.games.indexOf(_mgGameRef);
+      if (i !== -1) divObj.games.splice(i, 1);
+    }
+  }
+
+  function commitMoveGame(isOverride) {
+    if (!_mgSelectedSlot || !_mgContext || !_mgGameRef) return;
+    var tgt = _mgSelectedSlot;
+    removeMgGame();
+    // Update the game object in-place
+    _mgGameRef.time = tgt.time;
+    _mgGameRef.court = tgt.court;
+    _mgGameRef.loc = tgt.loc;
+    _mgGameRef.manualOverride = true;
+    if (isOverride) _mgGameRef.manualConflictOverride = true;
+    if (_mgGameRef.dayLabel !== undefined) _mgGameRef.dayLabel = 'Day ' + (tgt.dayIdx + 1);
+    // Insert into new position
+    var lastDayIdx = (sched.gameDays || []).length;
+    var target = tgt.dayIdx < lastDayIdx ? sched.gameDays[tgt.dayIdx] : (sched.bracketDays || [])[0];
+    if (target) {
+      var divName = _mgContext.divName;
+      var divColor = (divisions.find(function(d) { return d.name === divName; }) || {}).color || '#888';
+      // If moving within same day + same group, keep in the group
+      if (tgt.dayIdx === _mgContext.dayIdx && _mgContext.gk) {
+        var sameDiv = target.divs.find(function(d) { return d.name === divName; });
+        if (sameDiv && sameDiv.groups && sameDiv.groups[_mgContext.gk]) {
+          sameDiv.groups[_mgContext.gk].games.push(_mgGameRef);
+          closeMoveGameModal(); renderSched(); renderStandings(); renderBrack(); return;
+        }
+      }
+      // Otherwise use flat games[] (same pattern as placeManualGame)
+      var divEntry = (target.divs || []).find(function(d) { return d.name === divName && d.games; });
+      if (!divEntry) {
+        var existing = (target.divs || []).find(function(d) { return d.name === divName; });
+        if (existing && existing.groups && !existing.games) {
+          divEntry = { name: divName, color: divColor, games: [] };
+          target.divs.push(divEntry);
+        } else if (existing) {
+          divEntry = existing;
+        } else {
+          divEntry = { name: divName, color: divColor, games: [] };
+          if (!target.divs) target.divs = [];
+          target.divs.push(divEntry);
+        }
+      }
+      if (!divEntry.games) divEntry.games = [];
+      divEntry.games.push(_mgGameRef);
+    }
+    closeMoveGameModal(); renderSched(); renderStandings(); renderBrack();
+  }
+
+  // Move modal event wiring
+  document.getElementById('mgClose').onclick = closeMoveGameModal;
+  document.getElementById('mgCancel').onclick = closeMoveGameModal;
+  document.getElementById('moveGameModal').addEventListener('click', function(e) {
+    if (e.target === this) closeMoveGameModal();
+  });
+  document.getElementById('mgDayTabs').addEventListener('click', function(e) {
+    var btn = e.target.closest('.mg-day-tab');
+    if (!btn) return;
+    var dIdx = +btn.dataset.day;
+    _mgActiveDay = dIdx;
+    _mgSelectedSlot = null;
+    renderMgDayTabs(dIdx);
+    renderMgSlotGrid(dIdx);
+    document.getElementById('mgSelected').style.display = 'none';
+    document.getElementById('mgMove').disabled = true;
+    document.getElementById('mgOverride').style.display = 'none';
+  });
+  document.getElementById('mgSlotGrid').addEventListener('click', function(e) {
+    var btn = e.target.closest('.mg-slot');
+    if (!btn || btn.disabled) return;
+    this.querySelectorAll('.mg-slot.mg-selected').forEach(function(b) { b.classList.remove('mg-selected'); });
+    btn.classList.add('mg-selected');
+    var dayIdx = +btn.dataset.day;
+    var time = btn.dataset.time;
+    var court = btn.dataset.court;
+    var loc = btn.dataset.loc;
+    _mgSelectedSlot = { dayIdx: dayIdx, time: time, court: court, loc: loc };
+    // Get warnings (blank game ref so WarningService ignores it)
+    var s1 = _mgGameRef.t1, s2 = _mgGameRef.t2;
+    _mgGameRef.t1 = '\x00'; _mgGameRef.t2 = '\x00';
+    var warnings = WarningService.check(_mgContext.t1, _mgContext.t2, dayIdx, time, loc);
+    _mgGameRef.t1 = s1; _mgGameRef.t2 = s2;
+    var venueMode = 'off';
+    var vrEl = document.getElementById('ruleVenueRest');
+    if (vrEl && vrEl.checked) venueMode = document.getElementById('venueRestModeMandatory').checked ? 'mandatory' : 'priority';
+    document.getElementById('mgSelInfo').textContent = fmt(time) + ' \u00b7 ' + court;
+    document.getElementById('mgWarnings').innerHTML = warnings.length
+      ? WarningService.formatHTML(warnings, venueMode)
+      : '<div style="color:#68d391;font-size:12px;padding:4px 0">&#10003; No conflicts detected</div>';
+    document.getElementById('mgSelected').style.display = '';
+    var hasConflict = warnings.length > 0;
+    document.getElementById('mgMove').disabled = hasConflict;
+    document.getElementById('mgOverride').style.display = hasConflict ? '' : 'none';
+  });
+  document.getElementById('mgMove').onclick = function() { commitMoveGame(false); };
+  document.getElementById('mgOverride').onclick = function() { commitMoveGame(true); };
 
   // ── Generate ───────────────────────────────────────────
   document.getElementById('genBtn').addEventListener('click', function () {
@@ -3495,6 +3821,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
     // ── Export buttons ────────────────────────────────────
     h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
+      + '<button id="editModeBtn" class="btn' + (_editMode ? ' em-on' : '') + '" style="background:' + (_editMode ? '#FF6B00' : '#1e3a5f') + ';color:' + (_editMode ? '#fff' : 'var(--g)') + ';padding:9px 18px;font-weight:700;border:1px solid ' + (_editMode ? '#FF6B00' : 'rgba(255,255,255,.2)') + '">&#9998; ' + (_editMode ? 'Editing&#8202;&#8212;&#8202;click game to move' : 'Edit Schedule') + '</button>'
       + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
       + '<button id="printGridBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Court Grid</button>'
       + '<button id="printDivBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128203; By Division</button>'
@@ -3591,11 +3918,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var printDivBtn  = document.getElementById('printDivBtn');
     var jsonExpBtn   = document.getElementById('jsonExportBtn');
     var jsonImpBtn   = document.getElementById('jsonImportBtn');
+    var editBtn      = document.getElementById('editModeBtn');
     if (csvBtn)       csvBtn.onclick      = exportScheduleToCSV;
     if (printGridBtn) printGridBtn.onclick = printCourtGrid;
     if (printDivBtn)  printDivBtn.onclick  = printByDivision;
     if (jsonExpBtn)   jsonExpBtn.onclick   = exportScheduleToJSON;
     if (jsonImpBtn)   jsonImpBtn.onclick   = function() { document.getElementById('jsonImportInput').click(); };
+    if (editBtn) editBtn.onclick = function() {
+      _editMode = !_editMode;
+      document.getElementById('schedOut').classList.toggle('edit-mode-active', _editMode);
+      renderSched(); // re-render to update button label/style
+    };
   }
 
   // ── Export: CSV ───────────────────────────────────────
@@ -4199,7 +4532,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         games.forEach(function(g){
           if (g.lbl) return; // only round robin
           if (g.score1 !== null && g.score2 !== null) {
-            var st = standing[d.name].teams;
+            var st = standing[d.name] ? standing[d.name].teams : null;
+            if (!st) return;
+            // FIX: guard against manually-placed teams not in division roster
+            if (!st[g.t1]) st[g.t1] = { W:0, L:0, PF:0, PA:0 };
+            if (!st[g.t2]) st[g.t2] = { W:0, L:0, PF:0, PA:0 };
             st[g.t1].PF += g.score1;
             st[g.t1].PA += g.score2;
             st[g.t2].PF += g.score2;
@@ -4382,42 +4719,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   });
 
   function isRoundRobinComplete() {
-  
-      function validateRoundRobin() {
-        var warnings = [];
-        var teamGames = {};
-        if (!sched.gameDays) return warnings;
-        sched.gameDays.forEach(function(day){
-          day.divs.forEach(function(d){
-            var games = [];
-            if (d.games) {
-              games = d.games;
-            } else if (d.groups) {
-              Object.keys(d.groups).forEach(function(gk){ games = games.concat(d.groups[gk].games); });
-            }
-            games.forEach(function(g){
-              if (!g.lbl) {
-                if (!teamGames[g.t1]) teamGames[g.t1] = [];
-                if (!teamGames[g.t2]) teamGames[g.t2] = [];
-                var gameTime = toM(g.time);
-                for (var i = 0; i < teamGames[g.t1].length; i++) {
-                  if (Math.abs(gameTime - teamGames[g.t1][i]) < 30) {
-                    warnings.push('⚠️ ' + g.t1 + ' has concurrent games around ' + g.time);
-                  }
-                }
-                for (var i = 0; i < teamGames[g.t2].length; i++) {
-                  if (Math.abs(gameTime - teamGames[g.t2][i]) < 30) {
-                    warnings.push('⚠️ ' + g.t2 + ' has concurrent games around ' + g.time);
-                  }
-                }
-                teamGames[g.t1].push(gameTime);
-                teamGames[g.t2].push(gameTime);
-              }
-            });
-          });
-        });
-        return warnings;
-      }
+    // FIX: removed inner validateRoundRobin shadow that checked concurrent games
+    // (wrong criterion — completeness only requires all RR games to be scored)
     if (!sched.gameDays) return false;
     var allScored = true;
     sched.gameDays.forEach(function(day){
@@ -4435,9 +4738,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         });
       });
     });
-    if (!allScored) return false;
-    var validation = validateRoundRobin();
-    return Object.keys(validation).length === 0;
+    return allScored;
   }
 
   document.getElementById('schedOut').addEventListener('input', function (e) {
