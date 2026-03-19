@@ -556,7 +556,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     buildTimeSlots: function(st, et, lSm, lEm) { return buildTimeSlots(st, et, lSm, lEm); },
     applyNationalMixing: function(groups) { return applyNationalMixing(groups); },
     toM: function(t) { return toM(t); },
-    toT: function(m) { return toT(m); }
+    toT: function(m) { return toT(m); },
+    isRoundRobinComplete: function() { return isRoundRobinComplete(); },
+    computeStandings: function() { return computeStandings(); }
   };
   var sched = {};
   var scheduleWarnings = [];  // amber / soft warnings (club conflicts etc.)
@@ -971,7 +973,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     for (var i = 0; i < arr.length; i += size) res.push(arr.slice(i, i + size));
     return res;
   }
-  function toM(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
+  function toM(t) { var p = (t || '00:00').split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
   function toT(m) { return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
   function fmt(t) {
     var p = t.split(':'), h = parseInt(p[0]), m = parseInt(p[1]);
@@ -2023,8 +2025,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var i = arr.indexOf(_mgGameRef);
       if (i !== -1) arr.splice(i, 1);
     } else if (divObj.games) {
-      var i = divObj.games.indexOf(_mgGameRef);
-      if (i !== -1) divObj.games.splice(i, 1);
+      var idx = divObj.games.indexOf(_mgGameRef);
+      if (idx !== -1) divObj.games.splice(idx, 1);
     }
   }
 
@@ -2129,6 +2131,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (!crts.length) { alert('Please add at least 1 venue!'); return; }
     // Guard: block generation if any division has duplicate team names
     if (!validateNoDuplicates()) return;
+    // Ensure groups are mixed before generation (runs applyNationalMixing if groups haven't
+    // been set yet — e.g. when user skips the Groups tab and clicks Generate directly)
+    ensureManualGroups();
 
     var lSm      = toM(document.getElementById('lS').value || '13:30');
     var lEm      = toM(document.getElementById('lE').value || '14:30');
@@ -4001,7 +4006,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         function addGame(g) {
           if (!g.time) return;
           if (!gameMap[g.time]) gameMap[g.time] = {};
-          var score = (g.locked && (g.score1 !== undefined) && (g.score2 !== undefined))
+          var score = (g.locked && (g.score1 !== null) && (g.score2 !== null))
             ? (g.score1 + ' – ' + g.score2) : '';
           gameMap[g.time][g.court] = { divName: d.name, divColor: d.color || '#FF6B00',
             t1: g.t1 || '', t2: g.t2 || '', lbl: g.lbl || '', score: score };
@@ -4161,7 +4166,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           });
           var groupHdr = gk ? '<div class="group-label">' + escH(gk) + '</div>' : '';
           var rows = games.map(function(g) {
-            var score = (g.locked && g.score1 !== undefined && g.score2 !== undefined)
+            var score = (g.locked && g.score1 !== null && g.score2 !== null)
               ? '<td class="score">' + g.score1 + ' – ' + g.score2 + '</td>' : '<td></td>';
             return '<tr><td style="white-space:nowrap">' + escH(g.time || '') + '</td>'
               + '<td>' + escH(g.t1 || '') + ' <span style="color:#999">vs</span> ' + escH(g.t2 || '') + '</td>'
@@ -4177,7 +4182,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       if (bracketGames.length) {
         var bRows = bracketGames.map(function(entry) {
           var g = entry.game;
-          var score = (g.locked && g.score1 !== undefined && g.score2 !== undefined)
+          var score = (g.locked && g.score1 !== null && g.score2 !== null)
             ? '<td class="score">' + g.score1 + ' – ' + g.score2 + '</td>' : '<td></td>';
           return '<tr><td class="lbl">' + escH(g.lbl || '') + '</td>'
             + '<td style="white-space:nowrap">' + escH(g.time || '') + '</td>'
