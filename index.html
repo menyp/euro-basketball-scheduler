@@ -2503,8 +2503,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // Reserve enough tail-slots for all SFs to land on Day N-2 (1 slot per nCourts SFs).
     // The +1 buffer was causing RR to need 3-deep Phase E chains → quota violations.
     // After the SF co-placement pre-pass fix, 3 slots (ceil(28/10)=3) is sufficient.
+    // Phase A's Option C places one bracket per slot (typically 2–4 SFs side-by-side
+    // on different courts). So slots needed ≈ ceil(SFs / (nCourts / 2)), not ceil(SFs / nCourts).
+    // Halving the divisor gives ~2 reserved slots for most scenarios instead of 3–4,
+    // freeing Day N-2 tail slots for RR use. Under-reservation is safe because
+    // Phase A's Option A fallback can still place SFs on Day N-1.
     var _sfReserve = nDays >= 3
-      ? Math.max(2, Math.ceil(_sfCount / Math.max(nCourts, 1)))
+      ? Math.max(1, Math.ceil(_sfCount / Math.max(nCourts * 2, 1)))
       : 0;
 
     function rrSlotOK(divName, day, si) {
@@ -3471,21 +3476,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
     // ── Step 5a: Last-resort — RR overflow onto Day N ────────────────────────
     // Runs AFTER Phases A+B+B2 so all playoff placements are visible via
-    // divEarliestPO. This lets Step 5a enforce the "all RR before any PO for
-    // this division" chronology rule instead of bypassing it.
+    // divEarliestPO AND via the grid. This lets Step 5a enforce the
+    // "all RR before any PO for this division" chronology rule directly.
     //
-    // Blanes courts on Day N are only used for the morning/midday portion
-    // (first half of slots). Afternoon Blanes is reserved for Phase A playoffs.
-    // External courts have no such restriction — Phase A never needs them for
-    // Finals/3rd Place, so external can absorb overflow at any time slot.
-    //
-    // courtAllowed is also enforced so Mandatory-division RR stays in main venue.
+    // courtAllowed is enforced so Mandatory-division RR stays at main venue.
+    // There is NO half-day Blanes restriction — Step 5a runs after Phase A
+    // has already claimed its Day N-1 slots, and the grid already reflects
+    // every PO placement, so any remaining Blanes court at any slot is
+    // genuinely free and safe to use for RR overflow.
     (function runStep5a() {
       var _5aDay = nDays - 1;
       var _5aSlots = dayTimeSlots[Math.min(_5aDay, dayTimeSlots.length - 1)];
-      // Blanes may only be used in morning/midday (first half of slots).
-      // External courts may be used in any slot (no afternoon restriction).
-      var _5aMainMaxSi = Math.ceil(_5aSlots.length / 2) - 1;
       rrItems.forEach(function(fg) {
         if (fg.placed) return;
         // Causality gate: the earliest PO for this division constrains where
@@ -3508,8 +3509,6 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             var eidx = eOrder[ei];
             if (grid[_5aDay][lsi][eidx]) continue;
             if (!courtAllowed(fg.divName, eidx)) continue; // respect venue rules
-            // Blanes: morning/midday only — afternoon reserved for Phase A playoffs
-            if (isMainVenue(crts[eidx]) && lsi > _5aMainMaxSi) continue;
             if (venueChangeConflict(fk1, _5aDay, lsi, crts[eidx].loc)) continue;
             if (venueChangeConflict(fk2, _5aDay, lsi, crts[eidx].loc)) continue;
             // maxGPD already guarded above — placement is legitimate, no quota violation
