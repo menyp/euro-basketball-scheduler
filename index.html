@@ -1103,6 +1103,43 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return false;
   }
 
+  // Hard ceiling on manual group size. The scheduler's round-robin math and
+  // safe-start gates are tuned for groups of <= 4 (the standard format).
+  // Larger groups create RR rounds that don't fit within the tournament day window.
+  var MAX_GROUP_SIZE = 4;
+
+  // Returns an array of offenders: [{ divName, gi, size }, ...] for each
+  // manual group that exceeds MAX_GROUP_SIZE. Empty array means all clean.
+  function findOversizedGroups() {
+    var offenders = [];
+    divisions.forEach(function(d) {
+      (d.manualGroups || []).forEach(function(g, gi) {
+        if (g.length > MAX_GROUP_SIZE) {
+          offenders.push({ divName: d.name, gi: gi, size: g.length });
+        }
+      });
+    });
+    return offenders;
+  }
+
+  // Validates manual group sizes. Returns true if all clean, false + toast
+  // listing offenders otherwise. Used by genBtn and the Apply button.
+  function validateGroupSizes() {
+    var offenders = findOversizedGroups();
+    if (!offenders.length) return true;
+    var lines = offenders.map(function(o) {
+      return '<strong>' + o.divName + '</strong> Group ' + String.fromCharCode(65 + o.gi)
+        + ' has ' + o.size + ' teams';
+    }).join('<br>');
+    showToast(
+      'Groups Too Large',
+      'Each group must have at most ' + MAX_GROUP_SIZE + ' teams.<br>' + lines
+      + '<br>Rebalance the groups (use <em>Auto</em> or move teams between groups) before continuing.',
+      'error'
+    );
+    return false;
+  }
+
   function extractClub(teamName) {
     if (!teamName) return '';
     var m = teamName.match(/^(.+?)\s*\([^)]+\)\s*$/);
@@ -1344,6 +1381,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         });
       }());
       var hasDivDups = Object.keys(_dupSet).length > 0;
+      // Check for oversized groups in this division
+      var _oversizedIdx = {};
+      d.manualGroups.forEach(function(g, gi) {
+        if (g.length > MAX_GROUP_SIZE) _oversizedIdx[gi] = g.length;
+      });
+      var hasOversized = Object.keys(_oversizedIdx).length > 0;
+      var blockApply = hasDivDups || hasOversized;
       var dupDivBanner = hasDivDups
         ? '<div style="display:flex;align-items:center;gap:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
           + '<span style="font-size:16px">&#x274C;</span>'
@@ -1351,15 +1395,26 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           + ' <span style="color:#8892a4">Apply and Generate are blocked until duplicates are removed.</span></span>'
           + '</div>'
         : '';
+      var oversizedBanner = hasOversized
+        ? '<div style="display:flex;align-items:center;gap:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
+          + '<span style="font-size:16px">&#x26A0;&#xFE0F;</span>'
+          + '<span><strong style="color:#fca5a5">Groups too large.</strong>'
+          + ' <span style="color:#8892a4">Each group must have at most ' + MAX_GROUP_SIZE
+          + ' teams. Apply and Generate are blocked until rebalanced.</span></span>'
+          + '</div>'
+        : '';
+      var applyTitle = hasDivDups ? 'Remove duplicate teams first'
+                      : hasOversized ? 'Rebalance oversized groups first'
+                      : '';
       var html = '<div style="display:flex;justify-content:space-between;align-items:center">'
         + '<div class="stitle">' + d.name + ' <span style="font-weight:600;color:#999;font-size:12px;margin-left:8px">(' + d.teams.length + ' teams)</span></div>'
         + '<div>'
         + '<button class="btn small" data-di="' + di + '" data-action="auto" style="margin-right:6px">Auto</button>'
         + '<button class="btn small" data-di="' + di + '" data-action="apply" style="background:var(--o);color:#fff'
-          + (hasDivDups ? ';opacity:.45;cursor:not-allowed' : '') + '"'
-          + (hasDivDups ? ' title="Remove duplicate teams first"' : '') + '>Apply</button>'
+          + (blockApply ? ';opacity:.45;cursor:not-allowed' : '') + '"'
+          + (applyTitle ? ' title="' + applyTitle + '"' : '') + '>Apply</button>'
         + '</div></div>'
-        + dupDivBanner;
+        + dupDivBanner + oversizedBanner;
       html += '<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
       d.manualGroups.forEach(function(g, gi){
         // Check for same-country violations in this group
@@ -1369,8 +1424,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         var natBadge = natViolation
           ? '<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px" title="3+ teams from the same country in this group">⚠ Same Country</span>'
           : '';
+        var sizeBadge = (g.length > MAX_GROUP_SIZE)
+          ? '<span style="font-size:10px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 6px;margin-left:6px" title="Max ' + MAX_GROUP_SIZE + ' teams per group">⚠ Too Large (' + g.length + ')</span>'
+          : '';
         html += '<div class="group-box" data-di="' + di + '" data-gi="' + gi + '">'
-          + '<div style="font-weight:700;margin-bottom:6px">Group ' + String.fromCharCode(65 + gi) + natBadge + '</div>'
+          + '<div style="font-weight:700;margin-bottom:6px">Group ' + String.fromCharCode(65 + gi) + natBadge + sizeBadge + '</div>'
           + '<div class="chips" style="min-height:40px">';
         g.forEach(function(t, ti){
           var isDup = !!_dupSet[t.trim().toLowerCase()];
@@ -1414,6 +1472,17 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           );
           return;
         }
+        // Guard: block apply if any group in this division exceeds MAX_GROUP_SIZE
+        var _applyOver = (divisions[di].manualGroups || []).filter(function(g) { return g.length > MAX_GROUP_SIZE; });
+        if (_applyOver.length) {
+          showToast(
+            'Cannot Apply \u2014 Groups Too Large in \u201C' + divisions[di].name + '\u201D',
+            _applyOver.length + ' group' + (_applyOver.length > 1 ? 's have' : ' has')
+            + ' more than ' + MAX_GROUP_SIZE + ' teams. Use <em>Auto</em> or move teams between groups to rebalance.',
+            'error'
+          );
+          return;
+        }
         // apply manualGroups back to division teams preserving order
         var mg = divisions[di].manualGroups || [];
         divisions[di].teams = [].concat.apply([], mg);
@@ -1425,6 +1494,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // add to group
     if (e.target.classList && e.target.classList.contains('group-add')) {
       var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi);
+      // Guard: don't let a group exceed MAX_GROUP_SIZE
+      if (divisions[di].manualGroups[gi].length >= MAX_GROUP_SIZE) {
+        showToast('Group Full', 'Group ' + String.fromCharCode(65 + gi) + ' already has ' + MAX_GROUP_SIZE + ' teams (the maximum). Move a team out first.', 'error');
+        return;
+      }
       var name = prompt('Add team to ' + divisions[di].name + ' Group ' + String.fromCharCode(65+gi));
       if (!name) return;
       name = name.trim(); if (!name) return;
@@ -1443,6 +1517,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (e.target.classList && e.target.classList.contains('chip-left')) {
       var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi), ti = parseInt(e.target.dataset.ti);
       if (gi === 0) return;
+      // Guard: refuse to overfill the target group
+      if (divisions[di].manualGroups[gi-1].length >= MAX_GROUP_SIZE) {
+        showToast('Target Group Full', 'Group ' + String.fromCharCode(65 + gi - 1) + ' already has ' + MAX_GROUP_SIZE + ' teams.', 'error');
+        return;
+      }
       var item = divisions[di].manualGroups[gi].splice(ti,1)[0];
       divisions[di].manualGroups[gi-1].push(item);
       renderGroups();
@@ -1452,6 +1531,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi), ti = parseInt(e.target.dataset.ti);
       var mg = divisions[di].manualGroups;
       if (gi >= mg.length-1) return;
+      // Guard: refuse to overfill the target group
+      if (mg[gi+1].length >= MAX_GROUP_SIZE) {
+        showToast('Target Group Full', 'Group ' + String.fromCharCode(65 + gi + 1) + ' already has ' + MAX_GROUP_SIZE + ' teams.', 'error');
+        return;
+      }
       var item = mg[gi].splice(ti,1)[0];
       mg[gi+1].push(item);
       renderGroups();
@@ -2163,6 +2247,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // Ensure groups are mixed before generation (runs applyNationalMixing if groups haven't
     // been set yet — e.g. when user skips the Groups tab and clicks Generate directly)
     ensureManualGroups();
+    // Guard: block generation if any manual group exceeds MAX_GROUP_SIZE
+    if (!validateGroupSizes()) return;
 
     var lSm      = toM(document.getElementById('lS').value || '13:30');
     var lEm      = toM(document.getElementById('lE').value || '14:30');
