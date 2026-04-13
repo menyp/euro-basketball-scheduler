@@ -1031,7 +1031,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   // ── Toast notification system ─────────────────────────────────────────────
   var _toastTimers = {};
   var _toastSeq = 0;
-  function showToast(title, msg, type) {
+  // Pass `sticky=true` for toasts that must stay on screen until the admin
+  // clicks × (e.g. the JSON import fix summary — easy to miss in 6 seconds).
+  function showToast(title, msg, type, sticky) {
     // type: 'error' | 'warn'
     var stack = document.getElementById('toast-stack');
     if (!stack) return;
@@ -1047,9 +1049,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '</div>'
       + '<button class="toast-close" data-tid="' + id + '" title="Dismiss">&times;</button>';
     stack.appendChild(el);
-    _toastTimers[id] = setTimeout(function() { dismissToast(id); }, 6000);
+    if (!sticky) {
+      _toastTimers[id] = setTimeout(function() { dismissToast(id); }, 6000);
+    }
     el.querySelector('.toast-close').addEventListener('click', function() {
-      clearTimeout(_toastTimers[id]);
+      if (_toastTimers[id]) clearTimeout(_toastTimers[id]);
       dismissToast(id);
     });
     return id;
@@ -4670,8 +4674,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return fixes;
   }
 
-  // Renders the fix log to a single amber info toast. If the list is empty,
-  // no toast is shown (the common case for healthy JSON files).
+  // Renders the fix log to a single sticky amber info toast. If the list is
+  // empty, no toast is shown (the common case for healthy JSON files). The
+  // toast is sticky so it stays visible until the admin clicks × — data
+  // fixes are important and easy to miss in the default 6-second timeout.
   function reportSanitizeFixes(fixes) {
     if (!fixes || !fixes.length) return;
     var lines = fixes.map(function(f) {
@@ -4680,7 +4686,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     showToast('Data Fixes Applied on Load',
       'The loaded JSON had some inconsistencies that were auto-corrected:<br>' + lines
       + '<br>Review the <em>Groups</em> tab before generating.',
-      'warn');
+      'warn', true /* sticky */);
   }
 
   function importScheduleFromJSON(file) {
