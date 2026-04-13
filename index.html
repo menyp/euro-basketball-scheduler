@@ -2413,6 +2413,69 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       }
     }
 
+    // ── PO placement helpers ───────────────────────────────────────────────
+    // Championship SFs / Finals / 3rd Place have empty t1/t2 (TBD — filled post-RR).
+    // Consolation medal games (5th/6th, 7th/8th …) have CONCRETE t1/t2.
+    // These helpers update team-level state (teamSlotBusy, teamVenueBySlot,
+    // teamDayCount) for games with concrete teams, so subsequent placements
+    // correctly see "team busy at this slot" / "team already at quota".
+    // For TBD games the helpers no-op on the team-state side.
+
+    // Returns true if a PO game's concrete teams can play at (pd, psi).
+    // Enforces:
+    //   - Team rest (slotConflict): ±1 slot gap if ruleRest=ON, exact-slot always
+    //   - Daily quota (maxGPD)
+    // For TBD games (empty t1/t2), always returns true.
+    function _poTeamCanPlay(g, pd, psi) {
+      if (!g.t1 || !g.t2) return true;
+      var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+      if (slotConflict(k1, pd, psi) || slotConflict(k2, pd, psi)) return false;
+      if (((teamDayCount[k1] || {})[pd] || 0) >= maxGPD) return false;
+      if (((teamDayCount[k2] || {})[pd] || 0) >= maxGPD) return false;
+      return true;
+    }
+
+    // Writes the placement to the grid, poGridGame, and — for concrete-team
+    // games — to teamSlotBusy, teamVenueBySlot, and teamDayCount.
+    // Callers still set g.placed / g.day / g.slotIdx / g.courtIdx / g.court / g.loc
+    // themselves because some call sites (Phase A+B atomic) place several games
+    // in a tight loop and want full control of the assignment.
+    function _recordPOPlacement(g, pd, psi, pci) {
+      grid[pd][psi][pci] = true;
+      poGridGame[pd + ':' + psi + ':' + pci] = g;
+      if (g.t1 && g.t2) {
+        var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+        var loc = crts[pci].loc;
+        teamSlotBusy[k1 + ':' + pd + ':' + psi] = true;
+        teamSlotBusy[k2 + ':' + pd + ':' + psi] = true;
+        teamVenueBySlot[k1 + ':' + pd + ':' + psi] = loc;
+        teamVenueBySlot[k2 + ':' + pd + ':' + psi] = loc;
+        teamDayCount[k1] = teamDayCount[k1] || {};
+        teamDayCount[k2] = teamDayCount[k2] || {};
+        teamDayCount[k1][pd] = (teamDayCount[k1][pd] || 0) + 1;
+        teamDayCount[k2][pd] = (teamDayCount[k2][pd] || 0) + 1;
+      }
+    }
+
+    // Reverses a PO placement (used by tryEvictPO). Clears grid + poGridGame
+    // and, for concrete-team games, also clears the team-state entries so the
+    // slot is fully freed for a replacement game.
+    function _unrecordPOPlacement(g) {
+      var pd = g.day, psi = g.slotIdx, pci = g.courtIdx;
+      if (pd < 0 || psi < 0 || pci < 0) return;
+      if (grid[pd] && grid[pd][psi]) grid[pd][psi][pci] = false;
+      delete poGridGame[pd + ':' + psi + ':' + pci];
+      if (g.t1 && g.t2) {
+        var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+        delete teamSlotBusy[k1 + ':' + pd + ':' + psi];
+        delete teamSlotBusy[k2 + ':' + pd + ':' + psi];
+        delete teamVenueBySlot[k1 + ':' + pd + ':' + psi];
+        delete teamVenueBySlot[k2 + ':' + pd + ':' + psi];
+        if (teamDayCount[k1] && teamDayCount[k1][pd] > 0) teamDayCount[k1][pd]--;
+        if (teamDayCount[k2] && teamDayCount[k2][pd] > 0) teamDayCount[k2][pd]--;
+      }
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // RR-FIRST ALGORITHM (scratch-branch experiment)
     // ════════════════════════════════════════════════════════════════════════════
@@ -2999,14 +3062,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (b.sfs.length > 0) {
           var bsfPlaced = 0;
           for (var bsfi = 0; bsfi < b.sfs.length && bsfi < sfCourtList.length; bsfi++) {
-            b.sfs[bsfi].placed   = true;
-            b.sfs[bsfi].day      = sfDayActual;
-            b.sfs[bsfi].slotIdx  = sfSlotActual;
-            b.sfs[bsfi].courtIdx = sfCourtList[bsfi];
-            b.sfs[bsfi].court    = crts[sfCourtList[bsfi]].court;
-            b.sfs[bsfi].loc      = crts[sfCourtList[bsfi]].loc;
-            grid[sfDayActual][sfSlotActual][sfCourtList[bsfi]] = true;
-            poGridGame[sfDayActual + ':' + sfSlotActual + ':' + sfCourtList[bsfi]] = b.sfs[bsfi];
+            var _sfg = b.sfs[bsfi], _sfCi = sfCourtList[bsfi];
+            _sfg.placed = true; _sfg.day = sfDayActual; _sfg.slotIdx = sfSlotActual;
+            _sfg.courtIdx = _sfCi; _sfg.court = crts[_sfCi].court; _sfg.loc = crts[_sfCi].loc;
+            _recordPOPlacement(_sfg, sfDayActual, sfSlotActual, _sfCi);
             bsfPlaced++;
           }
           if (bsfPlaced > 0) {
@@ -3017,14 +3076,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         }
         // Finals & 3rd Place
         for (var ali = 0; ali < b.lates.length; ali++) {
-          b.lates[ali].placed   = true;
-          b.lates[ali].day      = ad;
-          b.lates[ali].slotIdx  = finalSlotIdx;
-          b.lates[ali].courtIdx = freeLate[ali];
-          b.lates[ali].court    = crts[freeLate[ali]].court;
-          b.lates[ali].loc      = crts[freeLate[ali]].loc;
-          grid[ad][finalSlotIdx][freeLate[ali]] = true;
-          poGridGame[ad + ':' + finalSlotIdx + ':' + freeLate[ali]] = b.lates[ali];
+          var _lg = b.lates[ali], _lCi = freeLate[ali];
+          _lg.placed = true; _lg.day = ad; _lg.slotIdx = finalSlotIdx;
+          _lg.courtIdx = _lCi; _lg.court = crts[_lCi].court; _lg.loc = crts[_lCi].loc;
+          _recordPOPlacement(_lg, ad, finalSlotIdx, _lCi);
         }
         finalBracketSlot[bk] = { day: ad, slotIdx: finalSlotIdx };
         anchored = true;
@@ -3054,11 +3109,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       if (victim.isLate) return false; // Finals/3rd Place are always eviction-immune
       var savedDay = victim.day, savedSlot = victim.slotIdx;
       var savedCi  = victim.courtIdx, savedCourt = victim.court;
-      // Un-place victim
+      // Un-place victim — clears grid + team state so the slot can be reclaimed
+      _unrecordPOPlacement(victim);
       victim.placed = false; victim.day = -1; victim.slotIdx = -1;
       victim.courtIdx = -1; victim.court = null;
-      grid[savedDay][savedSlot][savedCi] = false;
-      delete poGridGame[savedDay + ':' + savedSlot + ':' + savedCi];
       // Try to re-place victim at a new slot (consolation games can use any day)
       tryPlacePO(victim, 3);
       if (!victim.placed) tryPlacePO(victim, 1);
@@ -3074,8 +3128,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       // Could not find a new home — restore original placement
       victim.placed = true; victim.day = savedDay; victim.slotIdx = savedSlot;
       victim.courtIdx = savedCi; victim.court = savedCourt;
-      grid[savedDay][savedSlot][savedCi] = true;
-      poGridGame[savedDay + ':' + savedSlot + ':' + savedCi] = victim;
+      _recordPOPlacement(victim, savedDay, savedSlot, savedCi);
       return false;
     }
 
@@ -3141,6 +3194,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
               if (_pdSlots && psi > _pdSlots.length - 1 - _sfGap) continue;
             }
           }
+          // Team-level gate (concrete teams only): rest + maxGPD.
+          // TBD games (championship SFs/Finals with empty t1/t2) always pass.
+          if (!_poTeamCanPlay(g, pd, psi)) continue;
           for (var pco = 0; pco < pcOrder.length && !g.placed; pco++) {
             var pci = pcOrder[pco];
             if (!grid[pd][psi][pci] && courtAllowed(g.divName, pci, g.lbl)) {
@@ -3151,8 +3207,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
               }
               g.placed = true; g.day = pd; g.slotIdx = psi;
               g.courtIdx = pci; g.court = crts[pci].court; g.loc = crts[pci].loc;
-              grid[pd][psi][pci] = true;
-              poGridGame[pd + ':' + psi + ':' + pci] = g;
+              _recordPOPlacement(g, pd, psi, pci);
               // Update tracking maps so subsequent games in the same bracket respect chronology
               if (g.isLate) {
                 var curF = finalBracketSlot[poChronKey];
@@ -3268,10 +3323,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
           // Commit all SFs atomically at this slot
           grp.forEach(function(g2, _gii) {
+            var _cpPci = _cpFree[_gii];
             g2.placed = true; g2.day = _cpDay; g2.slotIdx = _cpSi;
-            g2.courtIdx = _cpFree[_gii]; g2.court = crts[_cpFree[_gii]].court; g2.loc = crts[_cpFree[_gii]].loc;
-            grid[_cpDay][_cpSi][_cpFree[_gii]] = true;
-            poGridGame[_cpDay + ':' + _cpSi + ':' + _cpFree[_gii]] = g2;
+            g2.courtIdx = _cpPci; g2.court = crts[_cpPci].court; g2.loc = crts[_cpPci].loc;
+            _recordPOPlacement(g2, _cpDay, _cpSi, _cpPci);
           });
           var _cpSfCur = sfBracketLastSlot[bk];
           if (!_cpSfCur || _cpDay > _cpSfCur.day || (_cpDay === _cpSfCur.day && _cpSi > _cpSfCur.slotIdx))
@@ -3299,8 +3354,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
               if (!grid[_pinDay][_pinSi][_pidx2] && courtAllowed(g2.divName, _pidx2, g2.lbl)) {
                 g2.placed = true; g2.day = _pinDay; g2.slotIdx = _pinSi;
                 g2.courtIdx = _pidx2; g2.court = crts[_pidx2].court; g2.loc = crts[_pidx2].loc;
-                grid[_pinDay][_pinSi][_pidx2] = true;
-                poGridGame[_pinDay + ':' + _pinSi + ':' + _pidx2] = g2;
+                _recordPOPlacement(g2, _pinDay, _pinSi, _pidx2);
                 // sfBracketLastSlot: SF1 already set it; only update if this SF is at a later slot
                 var _pinSfCur = sfBracketLastSlot[bk];
                 if (!_pinSfCur || _pinDay > _pinSfCur.day || (_pinDay === _pinSfCur.day && _pinSi > _pinSfCur.slotIdx))
@@ -3355,15 +3409,18 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
               var victim = poGridGame[adE + ':' + esi + ':' + eci];
               if (!victim || !tryEvictPO(victim, myPrio)) continue;
               g.placed = true; g.day = adE; g.slotIdx = esi; g.courtIdx = eci; g.court = crts[eci].court; g.loc = crts[eci].loc;
-              grid[adE][esi][eci] = true;
-              poGridGame[adE + ':' + esi + ':' + eci] = g;
+              _recordPOPlacement(g, adE, esi, eci);
               var fE2 = finalBracketSlot[ckE];
               if (!fE2 || adE > fE2.day || (adE === fE2.day && esi > fE2.slotIdx))
                 finalBracketSlot[ckE] = { day: adE, slotIdx: esi };
             }
           }
         }
-        // Pass 6: Venue constraint override — absolute last resort; bypasses courtAllowed
+        // Pass 6: Last-resort same-day retry — respects courtAllowed as a HARD gate.
+        // No venue override. If a Mandatory division can't find a main-venue slot
+        // even after Pass 5 eviction, the game stays unscheduled and is surfaced
+        // via the alert banner so the admin sees it and can act (add a court,
+        // approve a rule relaxation via the Advisor, or extend the day).
         if (!g.placed) {
           var adF6 = nDays - 1;
           var ckF6 = g.divName + '\x00' + g.bracket;
@@ -3373,14 +3430,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             if (sfLF6 && sfLF6.day === adF6 && f6si < sfLF6.slotIdx + 2) continue;
             for (var f6ci = 0; f6ci < nCourts && !g.placed; f6ci++) {
               if (grid[adF6][f6si][f6ci]) continue;
+              if (!courtAllowed(g.divName, f6ci, g.lbl)) continue; // HARD gate
+              if (!_poTeamCanPlay(g, adF6, f6si)) continue;
               g.placed = true; g.day = adF6; g.slotIdx = f6si; g.courtIdx = f6ci; g.court = crts[f6ci].court; g.loc = crts[f6ci].loc;
-              g.venueOverride = true;
-              grid[adF6][f6si][f6ci] = true;
-              poGridGame[adF6 + ':' + f6si + ':' + f6ci] = g;
+              _recordPOPlacement(g, adF6, f6si, f6ci);
               var fF6 = finalBracketSlot[ckF6];
               if (!fF6 || adF6 > fF6.day || (adF6 === fF6.day && f6si > fF6.slotIdx))
                 finalBracketSlot[ckF6] = { day: adF6, slotIdx: f6si };
-              scheduleWarnings.push('VENUE CONSTRAINT OVERRIDE: ' + g.lbl + ' (' + g.divName + ') placed at ' + crts[f6ci].court + ' — no main-venue slot available on Day ' + (adF6 + 1) + '.');
             }
           }
         }
