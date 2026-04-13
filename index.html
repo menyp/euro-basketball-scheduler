@@ -4969,7 +4969,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
     var body = '';
     sched.gameDays.forEach(function(day) { body += buildDayHTML(day); });
-    if (sched.bracketDays) sched.bracketDays.forEach(function(day) { body += buildDayHTML(day); });
+    // NOTE: sched.bracketDays is intentionally NOT iterated here. It is a
+    // merged cross-day playoff view (used to drive the Bracket tab), not an
+    // additional day. Iterating it would render the finals day a second time
+    // with the same playoff games, producing a duplicate "Day N — Playoffs"
+    // page in the printed PDF.
 
     var css = '@page{size:A4 landscape;margin:10mm}'
       + 'body{font-family:Arial,sans-serif;font-size:9px;color:#111}'
