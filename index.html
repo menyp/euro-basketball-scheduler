@@ -2354,40 +2354,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       return score;
     }
 
-    // tryEvictPO: attempt to displace a low-priority PO game from its grid slot
-    // so a higher-priority game can claim that slot.
-    // Safety constraint: never evict isLate games (Finals/3rd Place) as that risks
-    // breaking bracket integrity. Only consolation games are safe to displace.
-    // Returns true on success (victim re-placed elsewhere); false restores original.
-    function tryEvictPO(victim, requesterPriority) {
-      if (poPriority(victim) >= requesterPriority) return false;
-      if (victim.isLate) return false; // Finals/3rd Place are always eviction-immune
-      var savedDay = victim.day, savedSlot = victim.slotIdx;
-      var savedCi  = victim.courtIdx, savedCourt = victim.court;
-      // Un-place victim
-      victim.placed = false; victim.day = -1; victim.slotIdx = -1;
-      victim.courtIdx = -1; victim.court = null;
-      grid[savedDay][savedSlot][savedCi] = false;
-      delete poGridGame[savedDay + ':' + savedSlot + ':' + savedCi];
-      // Try to re-place victim at a new slot (consolation games can use any day)
-      tryPlacePO(victim, 3);
-      if (!victim.placed) tryPlacePO(victim, 1);
-      if (!victim.placed) tryPlacePO(victim, null);
-      if (victim.placed) {
-        // Guard: if victim re-claimed the exact same slot we just freed, the slot wasn't
-        // actually freed for the requester — treat this as a failed eviction.
-        if (victim.day === savedDay && victim.slotIdx === savedSlot && victim.courtIdx === savedCi) {
-          return false; // slot still occupied by victim; requester must look elsewhere
-        }
-        return true; // eviction succeeded; original slot is now free
-      }
-      // Could not find a new home — restore original placement
-      victim.placed = true; victim.day = savedDay; victim.slotIdx = savedSlot;
-      victim.courtIdx = savedCi; victim.court = savedCourt;
-      grid[savedDay][savedSlot][savedCi] = true;
-      poGridGame[savedDay + ':' + savedSlot + ':' + savedCi] = victim;
-      return false;
-    }
+    // NOTE: tryEvictPO is defined inside runPhaseB2 (below) alongside its caller
+    // (medal cascade Pass 5) and its recursive dependency tryPlacePO.
 
     function recordPlacement(item, day, si, ci) {
       item.placed = true; item.day = day; item.slotIdx = si; item.courtIdx = ci; item.court = crts[ci].court; item.loc = crts[ci].loc;
@@ -2487,166 +2455,173 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // First pass: saturate the main venue before touching any external courts.
     // Every slot at Blanes is attempted before external courts are considered.
     // No external fallback here — games that can't fit at Blanes are left for Phase C.
-    var mvCourts = [];
-    crts.forEach(function(c, i) {
-      if (isMainVenue(c)) mvCourts.push(i);
-    });
-    for (var c1day = 0; c1day < nDays; c1day++) {
-      var c1slots = dayTimeSlots[Math.min(c1day, dayTimeSlots.length - 1)];
-      for (var c1si = 0; c1si < c1slots.length; c1si++) {
-        var c1queue = [];
-        rrItems.forEach(function(g) {
-          if (g.placed) return;
-          if (!rrSlotOK(g.divName, c1day, c1si)) return;
-          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
-          if (teamCanPlay(k1, c1day, c1si) && teamCanPlay(k2, c1day, c1si)) c1queue.push(g);
-        });
-        c1queue.sort(function(a, b) {
-          var at = venueTierNum(a.divName), bt = venueTierNum(b.divName);
-          if (at !== bt) return at - bt;
-          // Seniority: older age groups get Blanes slots before younger ones (same venue tier)
-          var aa = extractAgeGroup(a.divName), ba = extractAgeGroup(b.divName);
-          if (aa !== ba) return ba - aa;
-          if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
-          var asz = Math.max(teamGroupSz[a.divName+'\x00'+a.t1]||0, teamGroupSz[a.divName+'\x00'+a.t2]||0);
-          var bsz = Math.max(teamGroupSz[b.divName+'\x00'+b.t1]||0, teamGroupSz[b.divName+'\x00'+b.t2]||0);
-          if (bsz !== asz) return bsz - asz;
-          if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
-          var ag = a.group || '', bg = b.group || '';
-          if (ag !== bg) return ag < bg ? -1 : 1;
-          return (a.t1 || '') < (b.t1 || '') ? -1 : 1;
-        });
-        for (var c1qi = 0; c1qi < c1queue.length; ) {
-          var c1g = c1queue[c1qi];
-          if (c1g.placed) { c1queue.splice(c1qi, 1); continue; }
-          var c1rk1 = c1g.divName + '\x00' + c1g.t1, c1rk2 = c1g.divName + '\x00' + c1g.t2;
-          if (!teamCanPlay(c1rk1, c1day, c1si) || !teamCanPlay(c1rk2, c1day, c1si)) { c1qi++; continue; }
-          var c1placed = false;
-          // Try main venue courts only — with venue-rest first, then relaxed
-          for (var c1p = 0; c1p <= 1 && !c1placed; c1p++) {
-            for (var c1mci = 0; c1mci < mvCourts.length && !c1placed; c1mci++) {
-              var c1ci = mvCourts[c1mci];
-              if (grid[c1day][c1si][c1ci]) continue;
-              if (!courtAllowed(c1g.divName, c1ci)) continue;
-              if (c1p === 0) {
-                if (venueChangeConflict(c1rk1, c1day, c1si, crts[c1ci].loc)) continue;
-                if (venueChangeConflict(c1rk2, c1day, c1si, crts[c1ci].loc)) continue;
+    (function runPhaseC1() {
+      var mvCourts = [];
+      crts.forEach(function(c, i) {
+        if (isMainVenue(c)) mvCourts.push(i);
+      });
+      for (var c1day = 0; c1day < nDays; c1day++) {
+        var c1slots = dayTimeSlots[Math.min(c1day, dayTimeSlots.length - 1)];
+        for (var c1si = 0; c1si < c1slots.length; c1si++) {
+          var c1queue = [];
+          rrItems.forEach(function(g) {
+            if (g.placed) return;
+            if (!rrSlotOK(g.divName, c1day, c1si)) return;
+            var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+            if (teamCanPlay(k1, c1day, c1si) && teamCanPlay(k2, c1day, c1si)) c1queue.push(g);
+          });
+          c1queue.sort(function(a, b) {
+            var at = venueTierNum(a.divName), bt = venueTierNum(b.divName);
+            if (at !== bt) return at - bt;
+            // Seniority: older age groups get Blanes slots before younger ones (same venue tier)
+            var aa = extractAgeGroup(a.divName), ba = extractAgeGroup(b.divName);
+            if (aa !== ba) return ba - aa;
+            if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
+            var asz = Math.max(teamGroupSz[a.divName+'\x00'+a.t1]||0, teamGroupSz[a.divName+'\x00'+a.t2]||0);
+            var bsz = Math.max(teamGroupSz[b.divName+'\x00'+b.t1]||0, teamGroupSz[b.divName+'\x00'+b.t2]||0);
+            if (bsz !== asz) return bsz - asz;
+            if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
+            var ag = a.group || '', bg = b.group || '';
+            if (ag !== bg) return ag < bg ? -1 : 1;
+            return (a.t1 || '') < (b.t1 || '') ? -1 : 1;
+          });
+          for (var c1qi = 0; c1qi < c1queue.length; ) {
+            var c1g = c1queue[c1qi];
+            if (c1g.placed) { c1queue.splice(c1qi, 1); continue; }
+            var c1rk1 = c1g.divName + '\x00' + c1g.t1, c1rk2 = c1g.divName + '\x00' + c1g.t2;
+            if (!teamCanPlay(c1rk1, c1day, c1si) || !teamCanPlay(c1rk2, c1day, c1si)) { c1qi++; continue; }
+            var c1placed = false;
+            // Try main venue courts only — with venue-rest first, then relaxed
+            for (var c1p = 0; c1p <= 1 && !c1placed; c1p++) {
+              for (var c1mci = 0; c1mci < mvCourts.length && !c1placed; c1mci++) {
+                var c1ci = mvCourts[c1mci];
+                if (grid[c1day][c1si][c1ci]) continue;
+                if (!courtAllowed(c1g.divName, c1ci)) continue;
+                if (c1p === 0) {
+                  if (venueChangeConflict(c1rk1, c1day, c1si, crts[c1ci].loc)) continue;
+                  if (venueChangeConflict(c1rk2, c1day, c1si, crts[c1ci].loc)) continue;
+                }
+                recordPlacement(c1g, c1day, c1si, c1ci);
+                c1queue.splice(c1qi, 1);
+                c1placed = true;
               }
-              recordPlacement(c1g, c1day, c1si, c1ci);
-              c1queue.splice(c1qi, 1);
-              c1placed = true;
             }
+            if (!c1placed) c1qi++;
           }
-          if (!c1placed) c1qi++;
         }
       }
-    }
+    })();
 
     // ── Phase C: External-fill pass (games that couldn't fit in main venue) ───
     // Only games not placed by Phase C1 reach here. Tries all courts in
     // Blanes-first order so any remaining Blanes capacity is still used first.
-    for (var day = 0; day < nDays; day++) {
-      var slots = dayTimeSlots[Math.min(day, dayTimeSlots.length - 1)];
-      for (var si = 0; si < slots.length; si++) {
-        var queue = [];
-        rrItems.forEach(function(g) {
-          if (g.placed) return;
-          if (!rrSlotOK(g.divName, day, si)) return;
-          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
-          if (teamCanPlay(k1, day, si) && teamCanPlay(k2, day, si)) queue.push(g);
-        });
-        queue.sort(function(a, b) {
-          var at = venueTierNum(a.divName), bt = venueTierNum(b.divName);
-          if (at !== bt) return at - bt;
-          // Seniority: older age groups get Blanes slots before younger ones (same venue tier)
-          var aa = extractAgeGroup(a.divName), ba = extractAgeGroup(b.divName);
-          if (aa !== ba) return ba - aa;
-          if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
-          var asz = Math.max(teamGroupSz[a.divName+'\x00'+a.t1]||0, teamGroupSz[a.divName+'\x00'+a.t2]||0);
-          var bsz = Math.max(teamGroupSz[b.divName+'\x00'+b.t1]||0, teamGroupSz[b.divName+'\x00'+b.t2]||0);
-          if (bsz !== asz) return bsz - asz;
-          if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
-          var ag = a.group || '', bg = b.group || '';
-          if (ag !== bg) return ag < bg ? -1 : 1;
-          return (a.t1 || '') < (b.t1 || '') ? -1 : 1;
-        });
-        for (var qi = 0; qi < queue.length; ) {
-          var g = queue[qi];
-          if (g.placed) { queue.splice(qi, 1); continue; }
-          var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
-          if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) { qi++; continue; }
-          var cOrder = courtPriorityOrder(g.divName, crts, undefined, undefined, rules.mainVenue);
-          var gPlaced = false;
-          // First pass: respect venue-change rest
-          for (var coi = 0; coi < cOrder.length && !gPlaced; coi++) {
-            var ci = cOrder[coi];
-            if (grid[day][si][ci]) continue;
-            if (!courtAllowed(g.divName, ci)) continue;
-            if (venueChangeConflict(rk1, day, si, crts[ci].loc)) continue;
-            if (venueChangeConflict(rk2, day, si, crts[ci].loc)) continue;
-            recordPlacement(g, day, si, ci);
-            queue.splice(qi, 1);
-            gPlaced = true;
-          }
-          // Second pass: relax venue-change rest — RR games must be scheduled even if
-          // venue-rest can't be satisfied (tight configs have no slack for this constraint)
-          if (!gPlaced) {
-            for (var coi2 = 0; coi2 < cOrder.length && !gPlaced; coi2++) {
-              var ci2 = cOrder[coi2];
-              if (grid[day][si][ci2]) continue;
-              if (!courtAllowed(g.divName, ci2)) continue;
-              recordPlacement(g, day, si, ci2);
+    (function runPhaseC() {
+      for (var day = 0; day < nDays; day++) {
+        var slots = dayTimeSlots[Math.min(day, dayTimeSlots.length - 1)];
+        for (var si = 0; si < slots.length; si++) {
+          var queue = [];
+          rrItems.forEach(function(g) {
+            if (g.placed) return;
+            if (!rrSlotOK(g.divName, day, si)) return;
+            var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+            if (teamCanPlay(k1, day, si) && teamCanPlay(k2, day, si)) queue.push(g);
+          });
+          queue.sort(function(a, b) {
+            var at = venueTierNum(a.divName), bt = venueTierNum(b.divName);
+            if (at !== bt) return at - bt;
+            // Seniority: older age groups get Blanes slots before younger ones (same venue tier)
+            var aa = extractAgeGroup(a.divName), ba = extractAgeGroup(b.divName);
+            if (aa !== ba) return ba - aa;
+            if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
+            var asz = Math.max(teamGroupSz[a.divName+'\x00'+a.t1]||0, teamGroupSz[a.divName+'\x00'+a.t2]||0);
+            var bsz = Math.max(teamGroupSz[b.divName+'\x00'+b.t1]||0, teamGroupSz[b.divName+'\x00'+b.t2]||0);
+            if (bsz !== asz) return bsz - asz;
+            if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
+            var ag = a.group || '', bg = b.group || '';
+            if (ag !== bg) return ag < bg ? -1 : 1;
+            return (a.t1 || '') < (b.t1 || '') ? -1 : 1;
+          });
+          for (var qi = 0; qi < queue.length; ) {
+            var g = queue[qi];
+            if (g.placed) { queue.splice(qi, 1); continue; }
+            var rk1 = g.divName + '\x00' + g.t1, rk2 = g.divName + '\x00' + g.t2;
+            if (!teamCanPlay(rk1, day, si) || !teamCanPlay(rk2, day, si)) { qi++; continue; }
+            var cOrder = courtPriorityOrder(g.divName, crts, undefined, undefined, rules.mainVenue);
+            var gPlaced = false;
+            // First pass: respect venue-change rest
+            for (var coi = 0; coi < cOrder.length && !gPlaced; coi++) {
+              var ci = cOrder[coi];
+              if (grid[day][si][ci]) continue;
+              if (!courtAllowed(g.divName, ci)) continue;
+              if (venueChangeConflict(rk1, day, si, crts[ci].loc)) continue;
+              if (venueChangeConflict(rk2, day, si, crts[ci].loc)) continue;
+              recordPlacement(g, day, si, ci);
               queue.splice(qi, 1);
               gPlaced = true;
             }
+            // Second pass: relax venue-change rest — RR games must be scheduled even if
+            // venue-rest can't be satisfied (tight configs have no slack for this constraint)
+            if (!gPlaced) {
+              for (var coi2 = 0; coi2 < cOrder.length && !gPlaced; coi2++) {
+                var ci2 = cOrder[coi2];
+                if (grid[day][si][ci2]) continue;
+                if (!courtAllowed(g.divName, ci2)) continue;
+                recordPlacement(g, day, si, ci2);
+                queue.splice(qi, 1);
+                gPlaced = true;
+              }
+            }
+            if (!gPlaced) qi++;
           }
-          if (!gPlaced) qi++;
         }
       }
-    }
+    })();
 
     // ── Phase C2: RR venue-rest fallback (respects maxGPD, skips venue-change constraint) ─
     // Games blocked only by venue-change rest get a second pass without that check.
     // maxGPD is still enforced so these placements are NOT quota violations.
-    for (var c2day = 0; c2day < nDays; c2day++) {
-      var c2slots = dayTimeSlots[Math.min(c2day, dayTimeSlots.length - 1)];
-      for (var c2si = 0; c2si < c2slots.length; c2si++) {
-        var c2queue = [];
-        rrItems.forEach(function(g) {
-          if (g.placed) return;
-          if (!rrSlotOK(g.divName, c2day, c2si)) return;
-          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
-          if (teamCanPlay(k1, c2day, c2si) && teamCanPlay(k2, c2day, c2si)) c2queue.push(g);
-        });
-        c2queue.sort(function(a, b) {
-          if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
-          if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
-          return (a.group || '') < (b.group || '') ? -1 : 1;
-        });
-        for (var c2qi = 0; c2qi < c2queue.length; ) {
-          var c2g = c2queue[c2qi];
-          if (c2g.placed) { c2queue.splice(c2qi, 1); continue; }
-          var c2rk1 = c2g.divName + '\x00' + c2g.t1, c2rk2 = c2g.divName + '\x00' + c2g.t2;
-          if (!teamCanPlay(c2rk1, c2day, c2si) || !teamCanPlay(c2rk2, c2day, c2si)) { c2qi++; continue; }
-          var c2cOrder = courtPriorityOrder(c2g.divName, crts, undefined, undefined, rules.mainVenue);
-          var c2gPlaced = false;
-          for (var c2coi = 0; c2coi < c2cOrder.length; c2coi++) {
-            var c2ci = c2cOrder[c2coi];
-            if (grid[c2day][c2si][c2ci]) continue;
-            if (!courtAllowed(c2g.divName, c2ci)) continue;
-            // Venue-rest check intentionally skipped — this pass is the venue-rest fallback
-            recordPlacement(c2g, c2day, c2si, c2ci);
-            c2queue.splice(c2qi, 1);
-            c2gPlaced = true;
-            break;
+    (function runPhaseC2() {
+      for (var c2day = 0; c2day < nDays; c2day++) {
+        var c2slots = dayTimeSlots[Math.min(c2day, dayTimeSlots.length - 1)];
+        for (var c2si = 0; c2si < c2slots.length; c2si++) {
+          var c2queue = [];
+          rrItems.forEach(function(g) {
+            if (g.placed) return;
+            if (!rrSlotOK(g.divName, c2day, c2si)) return;
+            var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+            if (teamCanPlay(k1, c2day, c2si) && teamCanPlay(k2, c2day, c2si)) c2queue.push(g);
+          });
+          c2queue.sort(function(a, b) {
+            if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
+            if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
+            return (a.group || '') < (b.group || '') ? -1 : 1;
+          });
+          for (var c2qi = 0; c2qi < c2queue.length; ) {
+            var c2g = c2queue[c2qi];
+            if (c2g.placed) { c2queue.splice(c2qi, 1); continue; }
+            var c2rk1 = c2g.divName + '\x00' + c2g.t1, c2rk2 = c2g.divName + '\x00' + c2g.t2;
+            if (!teamCanPlay(c2rk1, c2day, c2si) || !teamCanPlay(c2rk2, c2day, c2si)) { c2qi++; continue; }
+            var c2cOrder = courtPriorityOrder(c2g.divName, crts, undefined, undefined, rules.mainVenue);
+            var c2gPlaced = false;
+            for (var c2coi = 0; c2coi < c2cOrder.length; c2coi++) {
+              var c2ci = c2cOrder[c2coi];
+              if (grid[c2day][c2si][c2ci]) continue;
+              if (!courtAllowed(c2g.divName, c2ci)) continue;
+              // Venue-rest check intentionally skipped — this pass is the venue-rest fallback
+              recordPlacement(c2g, c2day, c2si, c2ci);
+              c2queue.splice(c2qi, 1);
+              c2gPlaced = true;
+              break;
+            }
+            if (!c2gPlaced) c2qi++;
           }
-          if (!c2gPlaced) c2qi++;
         }
       }
-    }
+    })();
 
     // ── Phase E: Recursive Rescue Shuffle (up to 3-deep chain displacement) ──
     // Runs BEFORE Phase D so reshuffling can avoid quota violations entirely.
+    (function runPhaseE() {
     var gridGame = {};
     rrItems.forEach(function(g) {
       if (g.placed) gridGame[g.day + ':' + g.slotIdx + ':' + g.courtIdx] = g;
@@ -2755,49 +2730,52 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (chain) execChain(chain, depth);
       }
     });
+    })();
 
     // ── Phase D: RR soft-quota fallback ──────────────────────────────────────
     // Only fires for games Phase E's rescue shuffle could not fix within maxGPD.
-    for (var dday = 0; dday < nDays; dday++) {
-      var dslots = dayTimeSlots[Math.min(dday, dayTimeSlots.length - 1)];
-      for (var dsi = 0; dsi < dslots.length; dsi++) {
-        var dqueue = [];
-        rrItems.forEach(function(g) {
-          if (g.placed) return;
-          if (!rrSlotOK(g.divName, dday, dsi)) return;
-          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
-          if (teamCanPlaySoft(k1, dday, dsi) && teamCanPlaySoft(k2, dday, dsi)) dqueue.push(g);
-        });
-        dqueue.sort(function(a, b) {
-          if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
-          if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
-          return (a.group || '') < (b.group || '') ? -1 : 1;
-        });
-        for (var dqi = 0; dqi < dqueue.length; ) {
-          var dg = dqueue[dqi];
-          if (dg.placed) { dqueue.splice(dqi, 1); continue; }
-          var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
-          if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) { dqi++; continue; }
-          var dcOrder = courtPriorityOrder(dg.divName, crts, undefined, undefined, rules.mainVenue);
-          var dgPlaced = false;
-          for (var dcoi = 0; dcoi < dcOrder.length; dcoi++) {
-            var dci = dcOrder[dcoi];
-            if (grid[dday][dsi][dci]) continue;
-            if (!courtAllowed(dg.divName, dci)) continue;
-            if (venueChangeConflict(drk1, dday, dsi, crts[dci].loc)) continue;
-            if (venueChangeConflict(drk2, dday, dsi, crts[dci].loc)) continue;
-            // Only flag as quota violation if placement genuinely exceeds the daily limit
-            if (((teamDayCount[drk1] || {})[dday] || 0) >= maxGPD ||
-                ((teamDayCount[drk2] || {})[dday] || 0) >= maxGPD) dg.quotaViolation = true;
-            recordPlacement(dg, dday, dsi, dci);
-            dqueue.splice(dqi, 1);
-            dgPlaced = true;
-            break;
+    (function runPhaseD() {
+      for (var dday = 0; dday < nDays; dday++) {
+        var dslots = dayTimeSlots[Math.min(dday, dayTimeSlots.length - 1)];
+        for (var dsi = 0; dsi < dslots.length; dsi++) {
+          var dqueue = [];
+          rrItems.forEach(function(g) {
+            if (g.placed) return;
+            if (!rrSlotOK(g.divName, dday, dsi)) return;
+            var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+            if (teamCanPlaySoft(k1, dday, dsi) && teamCanPlaySoft(k2, dday, dsi)) dqueue.push(g);
+          });
+          dqueue.sort(function(a, b) {
+            if (a.roundIdx !== b.roundIdx) return a.roundIdx - b.roundIdx;
+            if (a.divName !== b.divName) return a.divName < b.divName ? -1 : 1;
+            return (a.group || '') < (b.group || '') ? -1 : 1;
+          });
+          for (var dqi = 0; dqi < dqueue.length; ) {
+            var dg = dqueue[dqi];
+            if (dg.placed) { dqueue.splice(dqi, 1); continue; }
+            var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
+            if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) { dqi++; continue; }
+            var dcOrder = courtPriorityOrder(dg.divName, crts, undefined, undefined, rules.mainVenue);
+            var dgPlaced = false;
+            for (var dcoi = 0; dcoi < dcOrder.length; dcoi++) {
+              var dci = dcOrder[dcoi];
+              if (grid[dday][dsi][dci]) continue;
+              if (!courtAllowed(dg.divName, dci)) continue;
+              if (venueChangeConflict(drk1, dday, dsi, crts[dci].loc)) continue;
+              if (venueChangeConflict(drk2, dday, dsi, crts[dci].loc)) continue;
+              // Only flag as quota violation if placement genuinely exceeds the daily limit
+              if (((teamDayCount[drk1] || {})[dday] || 0) >= maxGPD ||
+                  ((teamDayCount[drk2] || {})[dday] || 0) >= maxGPD) dg.quotaViolation = true;
+              recordPlacement(dg, dday, dsi, dci);
+              dqueue.splice(dqi, 1);
+              dgPlaced = true;
+              break;
+            }
+            if (!dgPlaced) dqi++;
           }
-          if (!dgPlaced) dqi++;
         }
       }
-    }
+    })();
 
     // ── Step 5a: Last-resort — RR overflow onto Day N ────────────────────────
     // Root cause fixed here: with rest=OFF, venueChangeConflict() always returns
@@ -2811,42 +2789,44 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // Finals/3rd Place, so external can absorb overflow at any time slot.
     //
     // courtAllowed is also enforced so Mandatory-division RR stays in main venue.
-    var _5aDay = nDays - 1;
-    var _5aSlots = dayTimeSlots[Math.min(_5aDay, dayTimeSlots.length - 1)];
-    // Blanes may only be used in morning/midday (first half of slots).
-    // External courts may be used in any slot (no afternoon restriction).
-    var _5aMainMaxSi = Math.ceil(_5aSlots.length / 2) - 1;
-    rrItems.forEach(function(fg) {
-      if (fg.placed) return;
-      var fk1 = fg.divName + '\x00' + fg.t1;
-      var fk2 = fg.divName + '\x00' + fg.t2;
-      var placed5a = false;
-      for (var lsi = 0; lsi < _5aSlots.length && !placed5a; lsi++) {
-        if (slotConflict(fk1, _5aDay, lsi) || slotConflict(fk2, _5aDay, lsi)) continue;
-        if (((teamDayCount[fk1] || {})[_5aDay] || 0) >= maxGPD) continue;
-        if (((teamDayCount[fk2] || {})[_5aDay] || 0) >= maxGPD) continue;
-        var eOrder = courtPriorityOrder(fg.divName, crts, undefined, undefined, rules.mainVenue);
-        for (var ei = 0; ei < eOrder.length && !placed5a; ei++) {
-          var eidx = eOrder[ei];
-          if (grid[_5aDay][lsi][eidx]) continue;
-          if (!courtAllowed(fg.divName, eidx)) continue; // respect venue rules
-          // Blanes: morning/midday only — afternoon reserved for Phase A playoffs
-          if (isMainVenue(crts[eidx]) && lsi > _5aMainMaxSi) continue;
-          if (venueChangeConflict(fk1, _5aDay, lsi, crts[eidx].loc)) continue;
-          if (venueChangeConflict(fk2, _5aDay, lsi, crts[eidx].loc)) continue;
-          // maxGPD already guarded above — placement is legitimate, no quota violation
-          recordPlacement(fg, _5aDay, lsi, eidx);
-          placed5a = true;
+    (function runStep5a() {
+      var _5aDay = nDays - 1;
+      var _5aSlots = dayTimeSlots[Math.min(_5aDay, dayTimeSlots.length - 1)];
+      // Blanes may only be used in morning/midday (first half of slots).
+      // External courts may be used in any slot (no afternoon restriction).
+      var _5aMainMaxSi = Math.ceil(_5aSlots.length / 2) - 1;
+      rrItems.forEach(function(fg) {
+        if (fg.placed) return;
+        var fk1 = fg.divName + '\x00' + fg.t1;
+        var fk2 = fg.divName + '\x00' + fg.t2;
+        var placed5a = false;
+        for (var lsi = 0; lsi < _5aSlots.length && !placed5a; lsi++) {
+          if (slotConflict(fk1, _5aDay, lsi) || slotConflict(fk2, _5aDay, lsi)) continue;
+          if (((teamDayCount[fk1] || {})[_5aDay] || 0) >= maxGPD) continue;
+          if (((teamDayCount[fk2] || {})[_5aDay] || 0) >= maxGPD) continue;
+          var eOrder = courtPriorityOrder(fg.divName, crts, undefined, undefined, rules.mainVenue);
+          for (var ei = 0; ei < eOrder.length && !placed5a; ei++) {
+            var eidx = eOrder[ei];
+            if (grid[_5aDay][lsi][eidx]) continue;
+            if (!courtAllowed(fg.divName, eidx)) continue; // respect venue rules
+            // Blanes: morning/midday only — afternoon reserved for Phase A playoffs
+            if (isMainVenue(crts[eidx]) && lsi > _5aMainMaxSi) continue;
+            if (venueChangeConflict(fk1, _5aDay, lsi, crts[eidx].loc)) continue;
+            if (venueChangeConflict(fk2, _5aDay, lsi, crts[eidx].loc)) continue;
+            // maxGPD already guarded above — placement is legitimate, no quota violation
+            recordPlacement(fg, _5aDay, lsi, eidx);
+            placed5a = true;
+          }
         }
-      }
-    });
+      });
+    })();
 
     // ── 4. Playoff Placement (runs after all RR is placed) ────────────────────
     // Phase A: Place Finals & 3rd-Place as anchors — Day N-1 is now clean since
     //          Phase C above never touched it (rrSlotOK blocks Day N-1 for RR).
     // Phase B2: SFs, consolation, and other playoff games in remaining slots.
 
-    // Group poItems by bracket key
+    // Group poItems by bracket key (shared with Phase B2 via handler closure)
     var byBracket = {};
     poItems.forEach(function(g) {
       var bk = g.divName + '\x00' + g.bracket;
@@ -2854,6 +2834,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       if (g.isLate) byBracket[bk].lates.push(g);
       else          byBracket[bk].sfs.push(g);
     });
+
+    (function runPhasesAB() {
 
     // ── Phases A+B: Atomic Bracket Placement ─────────────────────────────────
     // ARCHITECTURAL CHANGE: Replaces the previous two-pass (Phase A then Phase B)
@@ -3060,6 +3042,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         anchored = true;
       }
     });
+    })();
 
     // Phase B2 — greedy fallback for ALL remaining unplaced PO games.
     // Handles: (a) consolation brackets that have no Finals (5th/6th, 7th/8th…),
@@ -3072,6 +3055,42 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     //  Pass 1 — full 180-min venue change constraint (slack=3).
     //  Pass 2 — if still unplaced, retry with relaxed 90-min constraint (slack=1) and log warning.
     //  Pass 3 — if still unplaced, ignore venue rest entirely (guarantee placement).
+    (function runPhaseB2() {
+    // tryEvictPO: attempt to displace a low-priority PO game from its grid slot
+    // so a higher-priority game can claim that slot.
+    // Safety constraint: never evict isLate games (Finals/3rd Place) as that risks
+    // breaking bracket integrity. Only consolation games are safe to displace.
+    // Returns true on success (victim re-placed elsewhere); false restores original.
+    function tryEvictPO(victim, requesterPriority) {
+      if (poPriority(victim) >= requesterPriority) return false;
+      if (victim.isLate) return false; // Finals/3rd Place are always eviction-immune
+      var savedDay = victim.day, savedSlot = victim.slotIdx;
+      var savedCi  = victim.courtIdx, savedCourt = victim.court;
+      // Un-place victim
+      victim.placed = false; victim.day = -1; victim.slotIdx = -1;
+      victim.courtIdx = -1; victim.court = null;
+      grid[savedDay][savedSlot][savedCi] = false;
+      delete poGridGame[savedDay + ':' + savedSlot + ':' + savedCi];
+      // Try to re-place victim at a new slot (consolation games can use any day)
+      tryPlacePO(victim, 3);
+      if (!victim.placed) tryPlacePO(victim, 1);
+      if (!victim.placed) tryPlacePO(victim, null);
+      if (victim.placed) {
+        // Guard: if victim re-claimed the exact same slot we just freed, the slot wasn't
+        // actually freed for the requester — treat this as a failed eviction.
+        if (victim.day === savedDay && victim.slotIdx === savedSlot && victim.courtIdx === savedCi) {
+          return false; // slot still occupied by victim; requester must look elsewhere
+        }
+        return true; // eviction succeeded; original slot is now free
+      }
+      // Could not find a new home — restore original placement
+      victim.placed = true; victim.day = savedDay; victim.slotIdx = savedSlot;
+      victim.courtIdx = savedCi; victim.court = savedCourt;
+      grid[savedDay][savedSlot][savedCi] = true;
+      poGridGame[savedDay + ':' + savedSlot + ':' + savedCi] = victim;
+      return false;
+    }
+
     function tryPlacePO(g, venueSlack, lastDaySlotOrder) {
       var pdMin = (LATE_LBLS[g.lbl]) ? nDays - 1 : 0;
       var poChronKey = g.divName + '\x00' + g.bracket;
@@ -3393,6 +3412,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (!g.placed) tryPlacePO(g, null); // fallback: ignore venue rest for SFs always
       }
     });
+    })(); // end runPhaseB2
 
     // ── Chronological Integrity Map (repopulated from PO placements) ────────
     // divEarliestPO and rrSlotOK are defined above (before Phase C).
