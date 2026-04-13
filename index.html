@@ -1140,6 +1140,38 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return false;
   }
 
+  // Safety-net check: confirms that for every division, `teams[]` matches the
+  // flattened `manualGroups` as a set (same names, same count). Called by genBtn
+  // before scheduling so a drift that slipped past the import sanitizer (or was
+  // injected via DevTools) is caught and reported rather than silently ignored.
+  function validateDivisionIntegrity() {
+    var errors = [];
+    divisions.forEach(function(d) {
+      if (!d.manualGroups || !d.manualGroups.length) return; // not yet grouped — skip
+      var flatMG = [].concat.apply([], d.manualGroups);
+      var teamsSorted = (d.teams || []).slice().sort();
+      var flatSorted = flatMG.slice().sort();
+      var mismatch = teamsSorted.length !== flatSorted.length
+        || teamsSorted.some(function(t, i) { return t !== flatSorted[i]; });
+      if (mismatch) {
+        errors.push({ divName: d.name, teamsCount: teamsSorted.length, groupsCount: flatSorted.length });
+      }
+    });
+    if (!errors.length) return true;
+    var lines = errors.map(function(e) {
+      return '<strong>' + e.divName + '</strong>: '
+        + e.teamsCount + ' team' + (e.teamsCount === 1 ? '' : 's')
+        + ' listed but ' + e.groupsCount + ' in groups';
+    }).join('<br>');
+    showToast(
+      'Division Data Inconsistent',
+      'The following divisions have a mismatch between teams and manual groups:<br>' + lines
+      + '<br>Open the <em>Groups</em> tab, click <em>Auto</em> (or move teams manually), then click <em>Apply</em>.',
+      'error'
+    );
+    return false;
+  }
+
   function extractClub(teamName) {
     if (!teamName) return '';
     var m = teamName.match(/^(.+?)\s*\([^)]+\)\s*$/);
@@ -1505,13 +1537,22 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       // prevent duplicates
       if (divisions[di].teams.indexOf(name) !== -1) { alert('Team already exists'); return; }
       divisions[di].manualGroups[gi].push(name);
+      divisions[di].teams.push(name); // keep teams[] in sync with manualGroups
       renderGroups();
+      renderDivisions();
     }
     // remove chip
     if (e.target.classList && e.target.classList.contains('chip-rm')) {
       var di = parseInt(e.target.dataset.di), gi = parseInt(e.target.dataset.gi), ti = parseInt(e.target.dataset.ti);
-      divisions[di].manualGroups[gi].splice(ti,1);
+      var removed = divisions[di].manualGroups[gi].splice(ti,1)[0];
+      // Also remove from teams[] so the division stays consistent — prevents
+      // orphans (team in teams[] but not in any group) that caused issue #2.
+      if (removed) {
+        var tix = divisions[di].teams.indexOf(removed);
+        if (tix !== -1) divisions[di].teams.splice(tix, 1);
+      }
       renderGroups();
+      renderDivisions();
     }
     // move left
     if (e.target.classList && e.target.classList.contains('chip-left')) {
@@ -2249,6 +2290,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     ensureManualGroups();
     // Guard: block generation if any manual group exceeds MAX_GROUP_SIZE
     if (!validateGroupSizes()) return;
+    // Guard: block generation if teams[] and manualGroups are out of sync
+    // (safety net — the import sanitizer + chip-rm/group-add fixes should
+    // keep this from firing in normal use)
+    if (!validateDivisionIntegrity()) return;
 
     var lSm      = toM(document.getElementById('lS').value || '13:30');
     var lEm      = toM(document.getElementById('lE').value || '14:30');
@@ -4537,6 +4582,107 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   // ── Import: restore from JSON snapshot ───────────────
   function setField(id, val) { var el = document.getElementById(id); if (el && val !== undefined) el.value = val; }
   function setChecked(id, val) { var el = document.getElementById(id); if (el && val !== undefined) el.checked = !!val; }
+  // Sanitize divisions loaded from JSON. Fixes data drift between
+  // `teams[]` and `manualGroups` that can occur when prior sessions used
+  // chip-rm or group-add without syncing both lists, or saved malformed
+  // team names. Returns an array of fix-log entries for UI reporting.
+  //
+  // Behaviour per division:
+  //  - trim whitespace on every team name in teams[] and manualGroups[][]
+  //  - drop empty / whitespace-only entries
+  //  - drop empty groups from manualGroups
+  //  - detect "malformed" names: just "(XXX)" country codes with no actual name
+  //  - move orphaned teams (in teams[] but not in any group) to the smallest
+  //    group (creating a new group if all are full)
+  //  - final sync: teams[] = flat(manualGroups)
+  function sanitizeDivisionsAfterImport() {
+    var fixes = [];
+    var malformedRe = /^\s*\([A-Z]{2,4}\)\s*$/;
+    divisions.forEach(function(d) {
+      if (!d) return;
+      // 1. Trim and drop empty entries in teams[]
+      var cleanedTeams = (d.teams || [])
+        .map(function(t) { return (t == null ? '' : String(t)).trim(); })
+        .filter(function(t) { return t.length > 0; });
+      if (cleanedTeams.length !== (d.teams || []).length) {
+        fixes.push({ divName: d.name, detail: 'removed ' + ((d.teams || []).length - cleanedTeams.length) + ' blank team entries' });
+      }
+      d.teams = cleanedTeams;
+
+      // 2. Trim + drop empties inside each manualGroup, then drop empty groups
+      if (d.manualGroups && d.manualGroups.length) {
+        var cleanedGroups = [];
+        var droppedEmptyGroups = 0;
+        d.manualGroups.forEach(function(g, gi) {
+          var cleanedG = (g || [])
+            .map(function(t) { return (t == null ? '' : String(t)).trim(); })
+            .filter(function(t) { return t.length > 0; });
+          if (cleanedG.length === 0) {
+            droppedEmptyGroups++;
+          } else {
+            cleanedGroups.push(cleanedG);
+          }
+        });
+        if (droppedEmptyGroups > 0) {
+          fixes.push({ divName: d.name, detail: 'removed ' + droppedEmptyGroups + ' empty group' + (droppedEmptyGroups === 1 ? '' : 's') });
+        }
+        d.manualGroups = cleanedGroups;
+      }
+
+      // 3. Detect malformed team names (just "(XXX)")
+      var malformed = [];
+      d.teams.forEach(function(t) { if (malformedRe.test(t)) malformed.push(t); });
+      if (d.manualGroups) {
+        d.manualGroups.forEach(function(g) {
+          g.forEach(function(t) { if (malformedRe.test(t) && malformed.indexOf(t) === -1) malformed.push(t); });
+        });
+      }
+      if (malformed.length) {
+        fixes.push({ divName: d.name, detail: 'flagged malformed name' + (malformed.length === 1 ? '' : 's') + ' — please rename: ' + malformed.join(', ') });
+      }
+
+      // 4. Reconcile teams[] vs flat(manualGroups)
+      if (d.manualGroups && d.manualGroups.length) {
+        var flatMG = [].concat.apply([], d.manualGroups);
+        // Teams in teams[] but not in flatMG → orphans. Move each to smallest group.
+        var orphans = d.teams.filter(function(t) { return flatMG.indexOf(t) === -1; });
+        orphans.forEach(function(orphan) {
+          // Find smallest group that still has room
+          var smallestIdx = -1, smallestLen = Infinity;
+          d.manualGroups.forEach(function(g, gi) {
+            if (g.length < smallestLen && g.length < MAX_GROUP_SIZE) {
+              smallestLen = g.length; smallestIdx = gi;
+            }
+          });
+          if (smallestIdx === -1) {
+            // All full — create a new group
+            d.manualGroups.push([orphan]);
+            fixes.push({ divName: d.name, detail: 'moved orphaned team "' + orphan + '" into a new group' });
+          } else {
+            d.manualGroups[smallestIdx].push(orphan);
+            fixes.push({ divName: d.name, detail: 'moved orphaned team "' + orphan + '" into Group ' + String.fromCharCode(65 + smallestIdx) });
+          }
+        });
+        // Final sync: teams[] = flat(manualGroups) so they match exactly
+        d.teams = [].concat.apply([], d.manualGroups);
+      }
+    });
+    return fixes;
+  }
+
+  // Renders the fix log to a single amber info toast. If the list is empty,
+  // no toast is shown (the common case for healthy JSON files).
+  function reportSanitizeFixes(fixes) {
+    if (!fixes || !fixes.length) return;
+    var lines = fixes.map(function(f) {
+      return '\u2022 <strong>' + f.divName + '</strong>: ' + f.detail;
+    }).join('<br>');
+    showToast('Data Fixes Applied on Load',
+      'The loaded JSON had some inconsistencies that were auto-corrected:<br>' + lines
+      + '<br>Review the <em>Groups</em> tab before generating.',
+      'warn');
+  }
+
   function importScheduleFromJSON(file) {
     var reader = new FileReader();
     reader.onload = function(e) {
@@ -4545,6 +4691,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (!data.sched || !data.sched.gameDays) { alert('Invalid schedule file.'); return; }
         sched            = data.sched;
         divisions        = data.divisions        || divisions;
+        // Auto-repair any data-integrity drift between teams[] and manualGroups
+        var sanitizeFixes = sanitizeDivisionsAfterImport();
         venueRules       = data.venueRules       || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
@@ -4580,6 +4728,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         renderVenueRules();
         renderSched();
         switchTab('schedule');
+        // Show any auto-fix summary AFTER render so the toast overlays the schedule
+        reportSanitizeFixes(sanitizeFixes);
       } catch(ex) { alert('Could not parse file: ' + ex.message); }
     };
     reader.readAsText(file);
