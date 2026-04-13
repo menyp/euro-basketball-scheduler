@@ -4589,104 +4589,185 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   // Sanitize divisions loaded from JSON. Fixes data drift between
   // `teams[]` and `manualGroups` that can occur when prior sessions used
   // chip-rm or group-add without syncing both lists, or saved malformed
-  // team names. Returns an array of fix-log entries for UI reporting.
+  // team names.
   //
-  // Behaviour per division:
-  //  - trim whitespace on every team name in teams[] and manualGroups[][]
-  //  - drop empty / whitespace-only entries
-  //  - drop empty groups from manualGroups
-  //  - detect "malformed" names: just "(XXX)" country codes with no actual name
-  //  - move orphaned teams (in teams[] but not in any group) to the smallest
-  //    group (creating a new group if all are full)
-  //  - final sync: teams[] = flat(manualGroups)
+  // Returns an array of structured "issue" objects that reportSanitizeFixes()
+  // then renders as a grouped, plain-English summary. Keeping the issues
+  // structured (instead of pre-formatted strings) lets us group by division
+  // and phrase them as "what we found / what we did / what you need to do".
+  //
+  // Issue kinds:
+  //   'blanks-removed'          — { count }        empty strings dropped from teams[]
+  //   'empty-groups-removed'    — { count }        empty arrays dropped from manualGroups
+  //   'orphan-team-placed'      — { team, dest }   valid team not in any group, auto-placed
+  //   'malformed-team-placed'   — { team, dest }   incomplete name (just "(XXX)"), auto-placed + needs rename
+  //   'malformed-team-in-group' — { team }         incomplete name already in a group + needs rename
   function sanitizeDivisionsAfterImport() {
-    var fixes = [];
+    var issues = [];
     var malformedRe = /^\s*\([A-Z]{2,4}\)\s*$/;
     divisions.forEach(function(d) {
       if (!d) return;
-      // 1. Trim and drop empty entries in teams[]
+
+      // 1. Trim and drop blank entries in teams[]
       var cleanedTeams = (d.teams || [])
         .map(function(t) { return (t == null ? '' : String(t)).trim(); })
         .filter(function(t) { return t.length > 0; });
-      if (cleanedTeams.length !== (d.teams || []).length) {
-        fixes.push({ divName: d.name, detail: 'removed ' + ((d.teams || []).length - cleanedTeams.length) + ' blank team entries' });
+      var blanksInTeams = (d.teams || []).length - cleanedTeams.length;
+      if (blanksInTeams > 0) {
+        issues.push({ divName: d.name, kind: 'blanks-removed', count: blanksInTeams });
       }
       d.teams = cleanedTeams;
 
       // 2. Trim + drop empties inside each manualGroup, then drop empty groups
+      var droppedEmptyGroups = 0;
       if (d.manualGroups && d.manualGroups.length) {
         var cleanedGroups = [];
-        var droppedEmptyGroups = 0;
-        d.manualGroups.forEach(function(g, gi) {
+        d.manualGroups.forEach(function(g) {
           var cleanedG = (g || [])
             .map(function(t) { return (t == null ? '' : String(t)).trim(); })
             .filter(function(t) { return t.length > 0; });
-          if (cleanedG.length === 0) {
-            droppedEmptyGroups++;
-          } else {
-            cleanedGroups.push(cleanedG);
-          }
+          if (cleanedG.length === 0) droppedEmptyGroups++;
+          else cleanedGroups.push(cleanedG);
         });
-        if (droppedEmptyGroups > 0) {
-          fixes.push({ divName: d.name, detail: 'removed ' + droppedEmptyGroups + ' empty group' + (droppedEmptyGroups === 1 ? '' : 's') });
-        }
         d.manualGroups = cleanedGroups;
       }
-
-      // 3. Detect malformed team names (just "(XXX)")
-      var malformed = [];
-      d.teams.forEach(function(t) { if (malformedRe.test(t)) malformed.push(t); });
-      if (d.manualGroups) {
-        d.manualGroups.forEach(function(g) {
-          g.forEach(function(t) { if (malformedRe.test(t) && malformed.indexOf(t) === -1) malformed.push(t); });
-        });
-      }
-      if (malformed.length) {
-        fixes.push({ divName: d.name, detail: 'flagged malformed name' + (malformed.length === 1 ? '' : 's') + ' — please rename: ' + malformed.join(', ') });
+      if (droppedEmptyGroups > 0) {
+        issues.push({ divName: d.name, kind: 'empty-groups-removed', count: droppedEmptyGroups });
       }
 
-      // 4. Reconcile teams[] vs flat(manualGroups)
+      // 3. Reconcile orphans and flag malformed names in one pass
       if (d.manualGroups && d.manualGroups.length) {
         var flatMG = [].concat.apply([], d.manualGroups);
-        // Teams in teams[] but not in flatMG → orphans. Move each to smallest group.
         var orphans = d.teams.filter(function(t) { return flatMG.indexOf(t) === -1; });
         orphans.forEach(function(orphan) {
-          // Find smallest group that still has room
+          // Pick the smallest group that still has room; else start a new one
           var smallestIdx = -1, smallestLen = Infinity;
           d.manualGroups.forEach(function(g, gi) {
             if (g.length < smallestLen && g.length < MAX_GROUP_SIZE) {
               smallestLen = g.length; smallestIdx = gi;
             }
           });
+          var destIdx;
           if (smallestIdx === -1) {
-            // All full — create a new group
             d.manualGroups.push([orphan]);
-            fixes.push({ divName: d.name, detail: 'moved orphaned team "' + orphan + '" into a new group' });
+            destIdx = d.manualGroups.length - 1;
           } else {
             d.manualGroups[smallestIdx].push(orphan);
-            fixes.push({ divName: d.name, detail: 'moved orphaned team "' + orphan + '" into Group ' + String.fromCharCode(65 + smallestIdx) });
+            destIdx = smallestIdx;
           }
+          var destLabel = 'Group ' + String.fromCharCode(65 + destIdx);
+          // A single team can be BOTH orphaned AND malformed — emit one combined
+          // issue so the admin sees the whole story in a single line.
+          var isMalformed = malformedRe.test(orphan);
+          issues.push({
+            divName: d.name,
+            kind: isMalformed ? 'malformed-team-placed' : 'orphan-team-placed',
+            team: orphan,
+            dest: destLabel
+          });
         });
+
+        // Malformed names that are already in a group (not orphans) still need
+        // to be flagged — the admin should rename them before generating.
+        d.manualGroups.forEach(function(g) {
+          g.forEach(function(t) {
+            if (malformedRe.test(t) && orphans.indexOf(t) === -1) {
+              issues.push({ divName: d.name, kind: 'malformed-team-in-group', team: t });
+            }
+          });
+        });
+
         // Final sync: teams[] = flat(manualGroups) so they match exactly
         d.teams = [].concat.apply([], d.manualGroups);
       }
     });
-    return fixes;
+    return issues;
   }
 
-  // Renders the fix log to a single sticky amber info toast. If the list is
-  // empty, no toast is shown (the common case for healthy JSON files). The
-  // toast is sticky so it stays visible until the admin clicks × — data
-  // fixes are important and easy to miss in the default 6-second timeout.
-  function reportSanitizeFixes(fixes) {
-    if (!fixes || !fixes.length) return;
-    var lines = fixes.map(function(f) {
-      return '\u2022 <strong>' + f.divName + '</strong>: ' + f.detail;
-    }).join('<br>');
-    showToast('Data Fixes Applied on Load',
-      'The loaded JSON had some inconsistencies that were auto-corrected:<br>' + lines
-      + '<br>Review the <em>Groups</em> tab before generating.',
-      'warn', true /* sticky */);
+  // Returns true if this issue requires admin action (not just a cleanup notice).
+  function issueNeedsAction(iss) {
+    return iss.kind === 'malformed-team-placed' || iss.kind === 'malformed-team-in-group';
+  }
+
+  // Converts one structured issue into a plain-English HTML description.
+  // Non-technical wording: no "orphan", no "malformed", no "manualGroups".
+  function describeSanitizeIssue(iss) {
+    switch (iss.kind) {
+      case 'blanks-removed':
+        return 'Removed <strong>' + iss.count + '</strong> blank team '
+          + (iss.count === 1 ? 'name' : 'names') + ' from the team list.';
+      case 'empty-groups-removed':
+        return 'Removed <strong>' + iss.count + '</strong> empty '
+          + (iss.count === 1 ? 'group that had' : 'groups that had')
+          + ' no teams in it.';
+      case 'orphan-team-placed':
+        return 'Team <strong>' + iss.team + '</strong> was in your team list but '
+          + 'was not assigned to any group. We moved it into <strong>' + iss.dest
+          + '</strong> so no team gets lost.';
+      case 'malformed-team-placed':
+        return '<span style="color:#ffcf94">&#9888; Team <strong>"' + iss.team + '"</strong> '
+          + 'has an incomplete name (only a country code, no actual team name). '
+          + 'We placed it into <strong>' + iss.dest + '</strong> to keep it visible. '
+          + '<strong>Please rename it</strong> to the real team name '
+          + '(for example "MADELENA ' + iss.team + '") or remove it.</span>';
+      case 'malformed-team-in-group':
+        return '<span style="color:#ffcf94">&#9888; Team <strong>"' + iss.team + '"</strong> '
+          + 'has an incomplete name (only a country code, no actual team name). '
+          + '<strong>Please rename it</strong> to the real team name or remove it.</span>';
+      default:
+        return '';
+    }
+  }
+
+  // Renders the structured issues as a single sticky amber toast. Groups
+  // issues by division and clearly separates auto-fixes from items that
+  // still need the admin's attention. Stays on screen until dismissed.
+  function reportSanitizeFixes(issues) {
+    if (!issues || !issues.length) return;
+
+    // Group issues by division, preserving insertion order
+    var byDiv = {}, divOrder = [];
+    issues.forEach(function(iss) {
+      if (!byDiv[iss.divName]) { byDiv[iss.divName] = []; divOrder.push(iss.divName); }
+      byDiv[iss.divName].push(iss);
+    });
+    var hasActionNeeded = issues.some(issueNeedsAction);
+
+    // Build HTML content
+    var html = '<div style="line-height:1.55">'
+      + '<p style="margin:0 0 10px">'
+      + (hasActionNeeded
+          ? 'We found problems in your loaded file. Some were fixed automatically '
+            + '— but <strong style="color:#ffcf94">others need your attention</strong>:'
+          : 'We cleaned up a few small issues in your loaded file:')
+      + '</p>';
+
+    divOrder.forEach(function(dn) {
+      html += '<div style="margin-top:10px;padding-left:2px">'
+        + '<div style="color:#fff;font-weight:800;font-size:12px;letter-spacing:.3px;margin-bottom:4px">'
+        + dn + '</div>'
+        + '<ul style="margin:0 0 0 18px;padding:0;color:#b8c0d0">';
+      byDiv[dn].forEach(function(iss) {
+        html += '<li style="margin-bottom:5px">' + describeSanitizeIssue(iss) + '</li>';
+      });
+      html += '</ul></div>';
+    });
+
+    if (hasActionNeeded) {
+      html += '<p style="margin:12px 0 0;padding:8px 10px;background:rgba(245,158,11,.12);'
+        + 'border-left:3px solid #f59e0b;border-radius:4px;color:#ffd494;font-weight:600">'
+        + '&#128073; Open the <strong>Groups</strong> tab to fix the teams flagged above '
+        + 'before generating the schedule.'
+        + '</p>';
+    } else {
+      html += '<p style="margin:10px 0 0;color:#8892a4;font-size:11px">'
+        + 'No action needed. Your schedule is ready to review.'
+        + '</p>';
+    }
+    html += '</div>';
+
+    var title = hasActionNeeded ? 'Data Issues Found \u2014 Please Review' : 'Data Cleaned Up on Load';
+    showToast(title, html, 'warn', true /* sticky */);
   }
 
   function importScheduleFromJSON(file) {
