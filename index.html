@@ -564,6 +564,19 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   </div>
 </div>
 
+<div id="auditModal" class="modal-overlay">
+  <div class="modal-card modal-wide" style="max-width:760px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">&#128269; Schedule Audit Report</h3>
+      <button id="auditClose" type="button" style="background:none;border:none;color:var(--g);font-size:26px;cursor:pointer;line-height:1;padding:0 4px">&times;</button>
+    </div>
+    <div id="auditContent"></div>
+    <div class="modal-buttons" style="margin-top:16px">
+      <button class="modal-btn cancel" id="auditCloseBtn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
 <footer><span>Euro Youth Basketball Cup</span> &middot; Tournament Scheduler &middot; Barcelona, Spain</footer>
 
 <script>
@@ -1174,6 +1187,539 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       'error'
     );
     return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCHEDULE AUDIT — integrity checks runnable against the current sched.
+  // Ported inline from tests/smoke-test.js + tests/unit-tests.js so the same
+  // rule checks the automated test suite uses are available at runtime in
+  // the browser (via the 🔍 Audit Schedule button in the Schedule tab).
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Walks every placed game in sched. Callback: cb(game, divName, dayKey).
+  // Handles both shapes: d.games (bracket) and d.groups[gk].games (round robin).
+  // bracketDays are walked separately with a 'bracket-N' dayKey so they don't
+  // collide with gameDays day indices in per-day tallies.
+  function walkAllGames(s, cb) {
+    (s.gameDays || []).forEach(function(dayObj, di) {
+      (dayObj.divs || []).forEach(function(d) {
+        var dn = d.name || '';
+        if (d.games) {
+          d.games.forEach(function(g) { cb(g, dn, di); });
+        } else if (d.groups) {
+          Object.keys(d.groups).forEach(function(gk) {
+            d.groups[gk].games.forEach(function(g) { cb(g, dn, di); });
+          });
+        }
+      });
+    });
+    (s.bracketDays || []).forEach(function(dayObj, bi) {
+      (dayObj.divs || []).forEach(function(d) {
+        var dn = d.name || '';
+        if (d.games) {
+          d.games.forEach(function(g) { cb(g, dn, 'bracket-' + bi); });
+        }
+      });
+    });
+  }
+
+  // Flattened game list deduplicated by reference — for checks that want a
+  // single pass across every placed game regardless of which array it lives in.
+  function allSchedGames(s) {
+    var out = [], seen = new Set();
+    (s.gameDays || []).forEach(function(day, di) {
+      (day.divs || []).forEach(function(d) {
+        if (d.groups) Object.keys(d.groups).forEach(function(gk) {
+          d.groups[gk].games.forEach(function(g) {
+            if (!seen.has(g)) { seen.add(g); out.push({ g: g, dIdx: di, divName: d.name }); }
+          });
+        });
+        if (d.games) d.games.forEach(function(g) {
+          if (!seen.has(g)) { seen.add(g); out.push({ g: g, dIdx: di, divName: d.name }); }
+        });
+      });
+    });
+    (s.bracketDays || []).forEach(function(day, bdIdx) {
+      var dIdx = (s.gameDays || []).length + bdIdx;
+      (day.divs || []).forEach(function(d) {
+        if (d.games) d.games.forEach(function(g) {
+          if (!seen.has(g)) { seen.add(g); out.push({ g: g, dIdx: dIdx, divName: d.name }); }
+        });
+      });
+    });
+    return out;
+  }
+
+  // Check 1: no team plays itself (t1 !== t2)
+  function auditCheckNoSelfPlay() {
+    var violations = [];
+    walkAllGames(sched, function(g, dn, dayKey) {
+      if (!g.t1 || !g.t2) return;
+      if (g.t1.trim().toLowerCase() === g.t2.trim().toLowerCase()) {
+        violations.push('[' + dn + '] ' + g.t1 + ' vs ' + g.t2 + ' at ' + g.time);
+      }
+    });
+    return violations;
+  }
+
+  // Check 2: no double-booking (same team at same time on same day)
+  function auditCheckNoDoubleBooking() {
+    var violations = [];
+    var slots = {};
+    walkAllGames(sched, function(g, dn, dayKey) {
+      if (!g.time) return;
+      [g.t1, g.t2].forEach(function(team) {
+        if (!team || !team.trim()) return;
+        var k = dn + '|' + team.trim().toLowerCase() + '|' + dayKey + '|' + g.time;
+        slots[k] = (slots[k] || 0) + 1;
+        if (slots[k] === 2) {
+          violations.push(team.trim() + ' [' + dn + '] double-booked at ' + g.time + ' on day ' + (typeof dayKey === 'number' ? dayKey + 1 : dayKey));
+        }
+      });
+    });
+    return violations;
+  }
+
+  // Check 3: team rest between games (min gap in minutes)
+  function auditCheckRestBetweenGames(minGapMin) {
+    var violations = [];
+    var timelines = {};
+    walkAllGames(sched, function(g, dn, dayKey) {
+      if (!g.time) return;
+      [g.t1, g.t2].forEach(function(team) {
+        if (!team || !team.trim()) return;
+        var k = dn + '|' + team.trim().toLowerCase() + '|' + dayKey;
+        if (!timelines[k]) timelines[k] = [];
+        timelines[k].push({ time: toM(g.time), timeStr: g.time });
+      });
+    });
+    Object.keys(timelines).forEach(function(k) {
+      var games = timelines[k].sort(function(a, b) { return a.time - b.time; });
+      for (var i = 1; i < games.length; i++) {
+        var gap = games[i].time - games[i - 1].time;
+        if (gap < minGapMin) {
+          var parts = k.split('|');
+          violations.push((parts[1] || '?') + ' [' + (parts[0] || '') + ']: gap ' + gap + 'min (' + games[i-1].timeStr + ' → ' + games[i].timeStr + ', need ' + minGapMin + ')');
+        }
+      }
+    });
+    return violations;
+  }
+
+  // Check 4: venue-change rest (team switching venues needs ≥ minGapMin)
+  function auditCheckVenueChangeRest(minGapMin) {
+    var violations = [];
+    var timelines = {};
+    walkAllGames(sched, function(g, dn, dayKey) {
+      if (!g.time || !g.loc) return;
+      [g.t1, g.t2].forEach(function(team) {
+        if (!team || !team.trim()) return;
+        var k = dn + '|' + team.trim().toLowerCase() + '|' + dayKey;
+        if (!timelines[k]) timelines[k] = [];
+        timelines[k].push({ time: toM(g.time), timeStr: g.time, loc: g.loc });
+      });
+    });
+    Object.keys(timelines).forEach(function(k) {
+      var games = timelines[k].sort(function(a, b) { return a.time - b.time; });
+      for (var i = 1; i < games.length; i++) {
+        if (games[i].loc === games[i - 1].loc) continue; // same venue — no constraint
+        var gap = games[i].time - games[i - 1].time;
+        if (gap < minGapMin) {
+          var parts = k.split('|');
+          violations.push((parts[1] || '?') + ' [' + (parts[0] || '') + ']: venue change ' + games[i-1].loc + '→' + games[i].loc + ' only ' + gap + 'min apart');
+        }
+      }
+    });
+    return violations;
+  }
+
+  // Check 5: max games per team per day
+  function auditCheckMaxGamesPerDay(maxGPD) {
+    var violations = [];
+    var teamDayCount = {};
+    function addGame(g, divName, dayKey) {
+      [g.t1, g.t2].forEach(function(team) {
+        if (!team || !team.trim()) return;
+        var k = (divName || '') + '|' + team.trim().toLowerCase();
+        if (!teamDayCount[k]) teamDayCount[k] = {};
+        teamDayCount[k][dayKey] = (teamDayCount[k][dayKey] || 0) + 1;
+      });
+    }
+    walkAllGames(sched, addGame);
+    Object.keys(teamDayCount).forEach(function(key) {
+      Object.keys(teamDayCount[key]).forEach(function(dayKey) {
+        var count = teamDayCount[key][dayKey];
+        if (count > maxGPD) {
+          var parts = key.split('|');
+          var label = parts.length > 1 ? parts[1] + ' [' + parts[0] + ']' : key;
+          violations.push(label + ' day=' + (typeof dayKey === 'string' && dayKey.indexOf('bracket') === 0 ? dayKey : (parseInt(dayKey) + 1)) + ': ' + count + ' games (max=' + maxGPD + ')');
+        }
+      });
+    });
+    return violations;
+  }
+
+  // Check 6: RR games all before PO games (per division chronology)
+  function auditCheckChronologicalIntegrity() {
+    var violations = [];
+    var earliestPO = {};
+    allSchedGames(sched).forEach(function(x) {
+      var g = x.g, dIdx = x.dIdx, dn = x.divName;
+      if (!g.lbl) return;
+      var tm = toM(g.time);
+      var cur = earliestPO[dn];
+      if (!cur || dIdx < cur.day || (dIdx === cur.day && tm < cur.timeM)) {
+        earliestPO[dn] = { day: dIdx, timeM: tm };
+      }
+    });
+    allSchedGames(sched).forEach(function(x) {
+      var g = x.g, dIdx = x.dIdx, dn = x.divName;
+      if (g.lbl) return;
+      var po = earliestPO[dn];
+      if (!po) return;
+      var tm = toM(g.time);
+      if (dIdx > po.day || (dIdx === po.day && tm > po.timeM)) {
+        violations.push(dn + ': RR "' + g.t1 + ' vs ' + g.t2 + '" at Day' + (dIdx+1) + ' ' + g.time + ' > earliest PO Day' + (po.day+1) + ' ' + toT(po.timeM));
+      }
+    });
+    return violations;
+  }
+
+  // Check 7: SF → FINAL gap ≥ 90 min per bracket
+  function auditCheckFinalsSequencing() {
+    var violations = [];
+    var byBracket = {};
+    allSchedGames(sched).forEach(function(x) {
+      var g = x.g, dIdx = x.dIdx;
+      if (!g.lbl) return;
+      var key = g.bracket || 'Championship';
+      if (!byBracket[key]) byBracket[key] = { sfs: [], finals: [] };
+      if (/^SF/.test(g.lbl))  byBracket[key].sfs.push({ day: dIdx, timeM: toM(g.time) });
+      if (g.lbl === 'FINAL')  byBracket[key].finals.push({ day: dIdx, timeM: toM(g.time) });
+    });
+    Object.keys(byBracket).forEach(function(key) {
+      var sfs = byBracket[key].sfs, finals = byBracket[key].finals;
+      if (!sfs.length || !finals.length) return;
+      var latestSF = sfs.reduce(function(a, b) {
+        return (a.day > b.day || (a.day === b.day && a.timeM > b.timeM)) ? a : b;
+      });
+      finals.forEach(function(fin) {
+        var MIN_GAP = 90;
+        var ok = latestSF.day < fin.day || (latestSF.day === fin.day && latestSF.timeM + MIN_GAP <= fin.timeM);
+        if (!ok) violations.push(key + ': SF at Day' + (latestSF.day+1) + ' ' + toT(latestSF.timeM) + ' is < ' + MIN_GAP + 'min before FINAL at Day' + (fin.day+1) + ' ' + toT(fin.timeM));
+      });
+    });
+    return violations;
+  }
+
+  // Check 8: no duplicate RR matchups (same pair in same division)
+  function auditCheckNoDuplicateMatchups() {
+    var violations = [];
+    var seen = {};
+    allSchedGames(sched).forEach(function(x) {
+      var g = x.g, dn = x.divName;
+      if (g.lbl) return;
+      if (!g.t1 || !g.t2) return;
+      var pair = [g.t1, g.t2].sort().join('||');
+      var key = dn + '|' + pair;
+      if (seen[key]) violations.push(dn + ': "' + g.t1 + ' vs ' + g.t2 + '" scheduled more than once');
+      seen[key] = true;
+    });
+    return violations;
+  }
+
+  // Orchestrator: runs every check and returns a structured report
+  function runScheduleAudit() {
+    var rules = getRuleToggles();
+    var gpd = parseInt(document.getElementById('maxGPD').value) || 2;
+    var checks = [];
+    function row(label, violations) {
+      checks.push({
+        label: label,
+        pass: violations.length === 0,
+        count: violations.length,
+        violations: violations
+      });
+    }
+    row('No team plays itself', auditCheckNoSelfPlay());
+    row('No team double-booked (same time)', auditCheckNoDoubleBooking());
+    if (rules.rest)      row('Team rest \u2265 90 min between games', auditCheckRestBetweenGames(90));
+    if (rules.venueRest) row('Venue-change rest \u2265 180 min', auditCheckVenueChangeRest(180));
+    row('Max ' + gpd + ' games per team per day', auditCheckMaxGamesPerDay(gpd));
+    row('All RR games before any playoff (per division)', auditCheckChronologicalIntegrity());
+    row('Semifinal \u2265 90 min before its Final', auditCheckFinalsSequencing());
+    row('No duplicate RR matchups', auditCheckNoDuplicateMatchups());
+
+    // Stats
+    var scheduledGames = 0;
+    walkAllGames(sched, function(g) {
+      if (g.t1 || g.t2 || g.lbl) scheduledGames++;
+    });
+    // Deduplicate via allSchedGames for an accurate count
+    scheduledGames = allSchedGames(sched).length;
+    var failedCount = (unscheduledGames || []).length;
+    var courtUsage = {};
+    allSchedGames(sched).forEach(function(x) {
+      if (x.g.court) courtUsage[x.g.court] = (courtUsage[x.g.court] || 0) + 1;
+    });
+
+    return {
+      checks: checks,
+      passed: checks.filter(function(c) { return c.pass; }).length,
+      failed: checks.filter(function(c) { return !c.pass; }).length,
+      stats: {
+        gamesScheduled: scheduledGames,
+        gamesFailed: failedCount,
+        gamesTotal: scheduledGames + failedCount,
+        courtUsage: courtUsage
+      }
+    };
+  }
+
+  // Escapes HTML-sensitive chars for safe insertion into the audit modal.
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Renders the report object into the audit modal's content div.
+  // Compact header badge + stats row + per-check list + court utilization.
+  function renderAuditReport(report) {
+    var total = report.checks.length;
+    var allPass = report.failed === 0;
+    var badgeColor = allPass ? '#10B981' : '#EF4444';
+    var badgeText  = allPass ? '\u2705 PASS' : '\u274C ISSUES FOUND';
+    var stats = report.stats;
+    var html = ''
+      + '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:14px">'
+      +   '<div style="background:rgba(' + (allPass ? '16,185,129' : '239,68,68') + ',.15);'
+      +        'border:1px solid ' + badgeColor + ';border-radius:8px;padding:10px 16px;'
+      +        'font-family:Montserrat,sans-serif;font-weight:900;color:' + badgeColor + '">'
+      +     badgeText
+      +   '</div>'
+      +   '<div style="color:#cbd5e0;font-size:12px;line-height:1.6">'
+      +     '<strong style="color:#fff">' + report.passed + ' / ' + total + '</strong> checks passed &nbsp;\u2022&nbsp; '
+      +     '<strong style="color:#fff">' + stats.gamesScheduled + '</strong> games scheduled &nbsp;\u2022&nbsp; '
+      +     '<strong style="color:' + (stats.gamesFailed ? '#ff6060' : '#10B981') + '">' + stats.gamesFailed + '</strong> failed &nbsp;\u2022&nbsp; '
+      +     '<strong style="color:#fff">' + Object.keys(stats.courtUsage).length + '</strong> courts used'
+      +   '</div>'
+      + '</div>';
+
+    // Per-check list
+    html += '<div style="border:1px solid var(--b);border-radius:8px;overflow:hidden;margin-bottom:16px">';
+    report.checks.forEach(function(c, i) {
+      var isLast = (i === report.checks.length - 1);
+      var rowBg = c.pass ? 'rgba(16,185,129,.05)' : 'rgba(239,68,68,.09)';
+      var icon = c.pass ? '<span style="color:#10B981;font-weight:900">\u2713</span>' : '<span style="color:#ff6060;font-weight:900">\u2717</span>';
+      var status = c.pass ? 'OK' : (c.count + ' violation' + (c.count === 1 ? '' : 's'));
+      var statusColor = c.pass ? '#10B981' : '#ff6060';
+      html += '<div style="padding:10px 14px;background:' + rowBg
+        + (isLast ? '' : ';border-bottom:1px solid var(--b)')
+        + ';display:flex;align-items:flex-start;gap:10px;font-size:12px">'
+        + '<div style="font-size:16px;line-height:1.2;flex-shrink:0;width:18px;text-align:center">' + icon + '</div>'
+        + '<div style="flex:1">'
+        +   '<div style="display:flex;justify-content:space-between;gap:12px">'
+        +     '<span style="color:#e2e8f0;font-weight:600">' + escHtml(c.label) + '</span>'
+        +     '<span style="color:' + statusColor + ';font-weight:700;font-size:11px">' + status + '</span>'
+        +   '</div>';
+      if (!c.pass && c.violations && c.violations.length) {
+        var shown = c.violations.slice(0, 3);
+        html += '<ul style="margin:6px 0 0 4px;padding:0 0 0 14px;color:#ffb8b8;font-size:11px;line-height:1.6">';
+        shown.forEach(function(v) { html += '<li>' + escHtml(v) + '</li>'; });
+        if (c.violations.length > 3) {
+          html += '<li style="opacity:.7">\u2026 and ' + (c.violations.length - 3) + ' more</li>';
+        }
+        html += '</ul>';
+      }
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    // Court utilization mini bar chart
+    var courts = Object.keys(stats.courtUsage);
+    if (courts.length) {
+      courts.sort();
+      var maxU = courts.reduce(function(m, c) { return Math.max(m, stats.courtUsage[c]); }, 0);
+      html += '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--g);margin-bottom:8px">Court Utilization</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 18px">';
+      courts.forEach(function(c) {
+        var n = stats.courtUsage[c];
+        var pct = Math.round(n / maxU * 100);
+        html += '<div style="display:flex;align-items:center;gap:8px;font-size:11px">'
+          + '<span style="color:#e2e8f0;font-weight:600;min-width:110px">' + escHtml(c) + '</span>'
+          + '<div style="flex:1;height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden">'
+          +   '<div style="width:' + pct + '%;height:100%;background:#FF6B00"></div>'
+          + '</div>'
+          + '<span style="color:#FF6B00;font-weight:800;min-width:22px;text-align:right">' + n + '</span>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    document.getElementById('auditContent').innerHTML = html;
+  }
+
+  // Opens the audit modal. Guards on "no schedule yet".
+  function openAuditModal() {
+    if (!sched || !sched.gameDays || !sched.gameDays.length) {
+      showToast('No Schedule Yet', 'Generate a schedule first before running an audit.', 'error');
+      return;
+    }
+    var report = runScheduleAudit();
+    renderAuditReport(report);
+    document.getElementById('auditModal').classList.add('active');
+  }
+
+  function closeAuditModal() {
+    var m = document.getElementById('auditModal');
+    if (m) m.classList.remove('active');
+  }
+
+  // ── Export for AI Review ─────────────────────────────────────────────────
+  // Generates a self-contained markdown file the admin can paste into
+  // ChatGPT / Claude / Gemini to get an independent audit of the schedule.
+  // Format: audit request prompt → tournament rules → configuration →
+  // schedule table → unscheduled games → your-task prompt.
+  function exportAuditMarkdown() {
+    if (!sched || !sched.gameDays || !sched.gameDays.length) {
+      showToast('No Schedule Yet', 'Generate a schedule first before exporting for AI review.', 'error');
+      return;
+    }
+    var rules = getRuleToggles();
+    var gpd = parseInt(document.getElementById('maxGPD').value) || 2;
+    var tName = (document.getElementById('tName').value || 'Tournament').trim();
+    var nDays = parseInt(document.getElementById('nDays').value) || 3;
+    var lS = document.getElementById('lS').value || '13:30';
+    var lE = document.getElementById('lE').value || '14:30';
+    var dayHours = getDayHours();
+    var crts = getCourts();
+
+    // Group courts by venue for the config section
+    var venueMap = {};
+    crts.forEach(function(c) {
+      if (!venueMap[c.loc]) venueMap[c.loc] = [];
+      venueMap[c.loc].push(c.court);
+    });
+
+    var lines = [];
+    // Top: audit request prompt so it's the first thing the AI reads
+    lines.push('# ' + tName + ' — Schedule Audit Request');
+    lines.push('');
+    lines.push('You are a sports-tournament scheduling expert. Please audit the schedule below against the rules and report any issues you find.');
+    lines.push('');
+    lines.push('## Hard Rules (all must be satisfied)');
+    lines.push('');
+    lines.push('1. Every team plays every other team in its group exactly once (round robin)');
+    lines.push('2. No team can be in two games at the same time on any day');
+    lines.push('3. All round-robin games for a division must complete BEFORE any of that division\'s playoff games');
+    lines.push('4. Semifinals must start at least 90 min before their bracket\'s Final');
+    lines.push('5. Max **' + gpd + '** games per team per day');
+    if (rules.rest)      lines.push('6. At least **90 min** rest between a team\'s consecutive games');
+    if (rules.venueRest) lines.push('7. At least **180 min** rest when a team switches venues');
+    lines.push('8. Lunch break **' + lS + '–' + lE + '** — no games start during this window');
+    lines.push('9. Each group has at most 4 teams');
+    lines.push('10. Court capacity: no more games per slot than courts available');
+    if (rules.mainVenueFinal) lines.push('11. Finals must be placed at the main venue (**' + (rules.mainVenue || 'Blanes') + '**)');
+    if (rules.mainVenue3rd)   lines.push('12. 3rd Place games must be placed at the main venue');
+    if (venueRules && venueRules.length) {
+      venueRules.forEach(function(vr) {
+        if (vr.prio === 'blanes-only') {
+          lines.push('13. **' + vr.divName + '** is Mandatory — ALL games (RR + playoffs) must be at the main venue');
+        }
+      });
+    }
+    lines.push('');
+
+    // Config
+    lines.push('## Configuration');
+    lines.push('');
+    lines.push('- **Dates:** ' + nDays + ' days');
+    lines.push('- **Main venue:** ' + (rules.mainVenue || 'Blanes'));
+    lines.push('- **Courts:** ' + crts.length + ' total');
+    Object.keys(venueMap).forEach(function(v) {
+      lines.push('  - ' + v + ': ' + venueMap[v].length + ' court' + (venueMap[v].length === 1 ? '' : 's') + ' (' + venueMap[v].join(', ') + ')');
+    });
+    lines.push('- **Daily hours:**');
+    dayHours.forEach(function(h, i) {
+      lines.push('  - Day ' + (i+1) + ': ' + h.start + ' – ' + h.end);
+    });
+    lines.push('- **Lunch break:** ' + lS + ' – ' + lE);
+    lines.push('- **Max games/team/day:** ' + gpd);
+    lines.push('- **Rest rule 90min:** ' + (rules.rest ? 'ON' : 'OFF'));
+    lines.push('- **Venue-change rest 180min:** ' + (rules.venueRest ? 'ON (' + (rules.venueRestMandatory ? 'Mandatory' : 'High Priority') + ')' : 'OFF'));
+    lines.push('');
+
+    // Divisions
+    lines.push('## Divisions');
+    lines.push('');
+    divisions.forEach(function(d) {
+      lines.push('- **' + d.name + '** (' + d.teams.length + ' teams)');
+      if (d.manualGroups && d.manualGroups.length) {
+        d.manualGroups.forEach(function(g, gi) {
+          lines.push('  - Group ' + String.fromCharCode(65 + gi) + ': ' + g.map(function(t) { return t; }).join(', '));
+        });
+      }
+    });
+    lines.push('');
+
+    // Schedule table
+    lines.push('## Generated Schedule');
+    lines.push('');
+    lines.push('| Day | Time | Venue | Court | Division | Group / Label | Home | Away |');
+    lines.push('|---|---|---|---|---|---|---|---|');
+    var rows = [];
+    allSchedGames(sched).forEach(function(x) {
+      var g = x.g;
+      if (!g.time) return;
+      var dayLabel = 'Day ' + (x.dIdx + 1);
+      var venue = g.loc || '?';
+      var court = (g.court || '').replace(venue + ' ', '') || g.court || '?';
+      var groupLabel = g.lbl ? (g.lbl + (g.bracket ? ' / ' + g.bracket : '')) : (x.divName + ' RR');
+      // Escape pipe characters so they don't break the markdown table
+      function cell(v) { return String(v == null ? '' : v).replace(/\|/g, '\\|'); }
+      rows.push('| ' + cell(dayLabel) + ' | ' + cell(g.time) + ' | ' + cell(venue) + ' | ' + cell(g.court) + ' | ' + cell(x.divName) + ' | ' + cell(groupLabel) + ' | ' + cell(g.t1 || '(TBD)') + ' | ' + cell(g.t2 || '(TBD)') + ' |');
+    });
+    // Sort rows by day then time for readability
+    rows.sort();
+    lines = lines.concat(rows);
+    lines.push('');
+
+    // Unscheduled games
+    if (unscheduledGames && unscheduledGames.length) {
+      lines.push('## Unscheduled Games (failed to place)');
+      lines.push('');
+      unscheduledGames.forEach(function(u) {
+        var label = u.lbl ? ('[' + u.lbl + '] ') : '';
+        lines.push('- **' + u.div + '** ' + (u.group || '') + ' — ' + label + (u.t1 || '?') + ' vs ' + (u.t2 || '?') + ' — ' + (u.reason || ''));
+      });
+      lines.push('');
+    }
+
+    // Final task prompt
+    lines.push('## Your Task');
+    lines.push('');
+    lines.push('Please review the schedule above and report:');
+    lines.push('');
+    lines.push('1. **Rule violations** — for any game that breaks any of the hard rules listed above, report which rule and which game (day, time, court, teams)');
+    lines.push('2. **Empty-slot opportunities** — any court slot on any day where an unscheduled game could have been placed without breaking the rules');
+    lines.push('3. **Improvement suggestions** — anything you notice about balance (venue distribution, rest gaps, tight back-to-backs, awkward draws)');
+    lines.push('');
+    lines.push('Respond in this format:');
+    lines.push('');
+    lines.push('- **Rule Violations:** (list or "none")');
+    lines.push('- **Optimization Opportunities:** (list or "none")');
+    lines.push('- **Overall Assessment:** PASS / PASS-WITH-NOTES / FAIL');
+    lines.push('');
+
+    var md = lines.join('\n');
+    var date = new Date().toISOString().slice(0, 10);
+    var blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'audit-' + date + '.md'; a.click();
+    URL.revokeObjectURL(url);
+    showToast('Audit File Downloaded', 'Paste <strong>audit-' + date + '.md</strong> into ChatGPT, Claude, or Gemini to get an independent review.', 'warn');
   }
 
   function extractClub(teamName) {
@@ -2240,6 +2786,18 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   document.getElementById('moveGameModal').addEventListener('click', function(e) {
     if (e.target === this) closeMoveGameModal();
   });
+
+  // Audit modal event wiring
+  var _auditCloseEl = document.getElementById('auditClose');
+  var _auditCloseBtnEl = document.getElementById('auditCloseBtn');
+  var _auditOverlayEl = document.getElementById('auditModal');
+  if (_auditCloseEl)    _auditCloseEl.onclick    = closeAuditModal;
+  if (_auditCloseBtnEl) _auditCloseBtnEl.onclick = closeAuditModal;
+  if (_auditOverlayEl) {
+    _auditOverlayEl.addEventListener('click', function(e) {
+      if (e.target === this) closeAuditModal();
+    });
+  }
   document.getElementById('mgDayTabs').addEventListener('click', function(e) {
     var btn = e.target.closest('.mg-day-tab');
     if (!btn) return;
@@ -4124,6 +4682,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // ── Export buttons ────────────────────────────────────
     h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
       + '<button id="editModeBtn" class="btn' + (_editMode ? ' em-on' : '') + '" style="background:' + (_editMode ? '#FF6B00' : '#1e3a5f') + ';color:' + (_editMode ? '#fff' : 'var(--g)') + ';padding:9px 18px;font-weight:700;border:1px solid ' + (_editMode ? '#FF6B00' : 'rgba(255,255,255,.2)') + '">&#9998; ' + (_editMode ? 'Editing&#8202;&#8212;&#8202;click game to move' : 'Edit Schedule') + '</button>'
+      + '<button id="auditBtn" class="btn" style="background:#0ea5e9;color:#fff;padding:9px 18px;font-weight:700">&#128269; Audit Schedule</button>'
+      + '<button id="auditExportBtn" class="btn" style="background:#8B5CF6;color:#fff;padding:9px 18px;font-weight:700">&#128203; Export for AI Review</button>'
       + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
       + '<button id="printGridBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Court Grid</button>'
       + '<button id="printDivBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128203; By Division</button>'
@@ -4233,11 +4793,15 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var jsonExpBtn   = document.getElementById('jsonExportBtn');
     var jsonImpBtn   = document.getElementById('jsonImportBtn');
     var editBtn      = document.getElementById('editModeBtn');
+    var auditBtn     = document.getElementById('auditBtn');
+    var auditExpBtn  = document.getElementById('auditExportBtn');
     if (csvBtn)       csvBtn.onclick      = exportScheduleToCSV;
     if (printGridBtn) printGridBtn.onclick = printCourtGrid;
     if (printDivBtn)  printDivBtn.onclick  = printByDivision;
     if (jsonExpBtn)   jsonExpBtn.onclick   = exportScheduleToJSON;
     if (jsonImpBtn)   jsonImpBtn.onclick   = function() { document.getElementById('jsonImportInput').click(); };
+    if (auditBtn)     auditBtn.onclick    = openAuditModal;
+    if (auditExpBtn)  auditExpBtn.onclick = exportAuditMarkdown;
     if (editBtn) editBtn.onclick = function() {
       _editMode = !_editMode;
       document.getElementById('schedOut').classList.toggle('edit-mode-active', _editMode);
