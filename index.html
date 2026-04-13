@@ -2806,49 +2806,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       }
     })();
 
-    // ── Step 5a: Last-resort — RR overflow onto Day N ────────────────────────
-    // Root cause fixed here: with rest=OFF, venueChangeConflict() always returns
-    // false, so the old code could fill ALL main-venue (Blanes) slots on Day N —
-    // including the afternoon slots Phase A needs for Finals/3rd Place — before
-    // Phase A/B2 ran. This made rest=OFF produce MORE failures than rest=ON.
-    //
-    // Fix: Blanes courts on Day N are only used for the morning/midday portion
-    // (first half of slots). Afternoon Blanes is reserved for Phase A playoffs.
-    // External courts have no such restriction — Phase A never needs them for
-    // Finals/3rd Place, so external can absorb overflow at any time slot.
-    //
-    // courtAllowed is also enforced so Mandatory-division RR stays in main venue.
-    (function runStep5a() {
-      var _5aDay = nDays - 1;
-      var _5aSlots = dayTimeSlots[Math.min(_5aDay, dayTimeSlots.length - 1)];
-      // Blanes may only be used in morning/midday (first half of slots).
-      // External courts may be used in any slot (no afternoon restriction).
-      var _5aMainMaxSi = Math.ceil(_5aSlots.length / 2) - 1;
-      rrItems.forEach(function(fg) {
-        if (fg.placed) return;
-        var fk1 = fg.divName + '\x00' + fg.t1;
-        var fk2 = fg.divName + '\x00' + fg.t2;
-        var placed5a = false;
-        for (var lsi = 0; lsi < _5aSlots.length && !placed5a; lsi++) {
-          if (slotConflict(fk1, _5aDay, lsi) || slotConflict(fk2, _5aDay, lsi)) continue;
-          if (((teamDayCount[fk1] || {})[_5aDay] || 0) >= maxGPD) continue;
-          if (((teamDayCount[fk2] || {})[_5aDay] || 0) >= maxGPD) continue;
-          var eOrder = courtPriorityOrder(fg.divName, crts, undefined, undefined, rules.mainVenue);
-          for (var ei = 0; ei < eOrder.length && !placed5a; ei++) {
-            var eidx = eOrder[ei];
-            if (grid[_5aDay][lsi][eidx]) continue;
-            if (!courtAllowed(fg.divName, eidx)) continue; // respect venue rules
-            // Blanes: morning/midday only — afternoon reserved for Phase A playoffs
-            if (isMainVenue(crts[eidx]) && lsi > _5aMainMaxSi) continue;
-            if (venueChangeConflict(fk1, _5aDay, lsi, crts[eidx].loc)) continue;
-            if (venueChangeConflict(fk2, _5aDay, lsi, crts[eidx].loc)) continue;
-            // maxGPD already guarded above — placement is legitimate, no quota violation
-            recordPlacement(fg, _5aDay, lsi, eidx);
-            placed5a = true;
-          }
-        }
-      });
-    })();
+    // Step 5a moved below — it now runs AFTER Phase B2 so the chronology check
+    // (divEarliestPO) can enforce "all RR before any PO for a division" on Day N.
 
     // ── 4. Playoff Placement (runs after all RR is placed) ────────────────────
     // Phase A: Place Finals & 3rd-Place as anchors — Day N-1 is now clean since
@@ -3446,13 +3405,65 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // ── Chronological Integrity Map (repopulated from PO placements) ────────
     // divEarliestPO and rrSlotOK are defined above (before Phase C).
     // Now that Phase A/B2 have run, update divEarliestPO with PO game positions
-    // so the map is accurate for any post-hoc analysis or debugging.
+    // so Step 5a (below) can enforce causality when placing RR overflow onto Day N.
     poItems.forEach(function(g) {
       if (!g.placed) return;
       var cur = divEarliestPO[g.divName];
       if (!cur || g.day < cur.day || (g.day === cur.day && g.slotIdx < cur.slotIdx))
         divEarliestPO[g.divName] = { day: g.day, slotIdx: g.slotIdx };
     });
+
+    // ── Step 5a: Last-resort — RR overflow onto Day N ────────────────────────
+    // Runs AFTER Phases A+B+B2 so all playoff placements are visible via
+    // divEarliestPO. This lets Step 5a enforce the "all RR before any PO for
+    // this division" chronology rule instead of bypassing it.
+    //
+    // Blanes courts on Day N are only used for the morning/midday portion
+    // (first half of slots). Afternoon Blanes is reserved for Phase A playoffs.
+    // External courts have no such restriction — Phase A never needs them for
+    // Finals/3rd Place, so external can absorb overflow at any time slot.
+    //
+    // courtAllowed is also enforced so Mandatory-division RR stays in main venue.
+    (function runStep5a() {
+      var _5aDay = nDays - 1;
+      var _5aSlots = dayTimeSlots[Math.min(_5aDay, dayTimeSlots.length - 1)];
+      // Blanes may only be used in morning/midday (first half of slots).
+      // External courts may be used in any slot (no afternoon restriction).
+      var _5aMainMaxSi = Math.ceil(_5aSlots.length / 2) - 1;
+      rrItems.forEach(function(fg) {
+        if (fg.placed) return;
+        // Causality gate: the earliest PO for this division constrains where
+        // the RR game may land on Day N.
+        //  - earliest PO on an earlier day → Day N RR is forbidden entirely
+        //  - earliest PO on Day N          → RR must go before that PO's slot
+        //  - no PO for this division       → no restriction
+        var ep = divEarliestPO[fg.divName];
+        if (ep && ep.day < _5aDay) return;
+        var _5aMaxSi = (ep && ep.day === _5aDay) ? ep.slotIdx : _5aSlots.length;
+        var fk1 = fg.divName + '\x00' + fg.t1;
+        var fk2 = fg.divName + '\x00' + fg.t2;
+        var placed5a = false;
+        for (var lsi = 0; lsi < _5aMaxSi && !placed5a; lsi++) {
+          if (slotConflict(fk1, _5aDay, lsi) || slotConflict(fk2, _5aDay, lsi)) continue;
+          if (((teamDayCount[fk1] || {})[_5aDay] || 0) >= maxGPD) continue;
+          if (((teamDayCount[fk2] || {})[_5aDay] || 0) >= maxGPD) continue;
+          var eOrder = courtPriorityOrder(fg.divName, crts, undefined, undefined, rules.mainVenue);
+          for (var ei = 0; ei < eOrder.length && !placed5a; ei++) {
+            var eidx = eOrder[ei];
+            if (grid[_5aDay][lsi][eidx]) continue;
+            if (!courtAllowed(fg.divName, eidx)) continue; // respect venue rules
+            // Blanes: morning/midday only — afternoon reserved for Phase A playoffs
+            if (isMainVenue(crts[eidx]) && lsi > _5aMainMaxSi) continue;
+            if (venueChangeConflict(fk1, _5aDay, lsi, crts[eidx].loc)) continue;
+            if (venueChangeConflict(fk2, _5aDay, lsi, crts[eidx].loc)) continue;
+            // maxGPD already guarded above — placement is legitimate, no quota violation
+            recordPlacement(fg, _5aDay, lsi, eidx);
+            placed5a = true;
+          }
+        }
+      });
+    })();
+
     // ── 5. Collect unplaced games as failures ─────────────────────────────────
     rrItems.forEach(function(g) {
       if (!g.placed) unscheduledGames.push({

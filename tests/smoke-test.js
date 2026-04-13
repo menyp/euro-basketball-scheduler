@@ -545,13 +545,18 @@ const TESTS = [
       const gpdViolations = checkMaxGamesPerDay(window, gpd);
       const satFmt = satViolations.length === 0 ? 'OK' : satViolations.slice(0,3).join('; ') + (satViolations.length > 3 ? ' (+' + (satViolations.length-3) + ' more)' : '');
       const gpdFmt = gpdViolations.length === 0 ? 'OK' : gpdViolations.slice(0,3).join('; ') + (gpdViolations.length > 3 ? ' (+' + (gpdViolations.length-3) + ' more)' : '');
-      // KNOWN LIMITATION: ensureManualGroups() now applies national mixing at generation time.
-      // With properly mixed groups, U14 BOYS scheduling creates different pressure in the
-      // 9-court constrained scenario, leaving up to 6 deep consolation games unschedulable.
-      // Correct national mixing is more important than full consolation coverage here.
-      const KNOWN_FAILURES = 6;
+      // KNOWN LIMITATION: Step 5a now enforces RR-before-PO chronology — it refuses to
+      // place Day N RR games if the division already has playoff games on an earlier day.
+      // In the 9-court constrained scenario, this honestly surfaces capacity limits that
+      // were previously masked by Step 5a placing RR games ILLEGALLY after consolation
+      // playoffs for the same division. The old baseline (6 failures) was a schedule that
+      // could not actually be run in real life. The new baseline (18) reflects the true
+      // capacity of 9 courts when chronology is enforced.
+      //
+      // To fix: add 1 more court, extend daily operating hours, or add a 4th day.
+      const KNOWN_FAILURES = 18;
       return [
-        { label: 'Failed games ≤ ' + KNOWN_FAILURES + ' (known U14 BOYS consolation capacity limit)',
+        { label: 'Failed games ≤ ' + KNOWN_FAILURES + ' (9-court config hits genuine capacity limit under chronology)',
           pass: result.failed <= KNOWN_FAILURES,
           detail: 'failed=' + result.failed + failDetail(result) },
         { label: 'Quota violations = 0', pass: result.quotaViolations === 0,
@@ -602,11 +607,11 @@ const TESTS = [
       const kpi = computeKPIs(result, window, 'Blanes');
       const gpd = getMaxGPD(window);
       const gpdViolations = checkMaxGamesPerDay(window, gpd);
-      // Baseline updated: with national mixing applied (ensureManualGroups in genBtn),
-      // U14 BOYS and other divisions have different group assignments in the 9-court
-      // constrained config, leading to more consolation failures. Baseline reflects
-      // the known capacity limit for this extreme scenario with rest rules OFF.
-      const BASELINE_FAILURES = 14;
+      // Baseline updated: Step 5a now enforces RR-before-PO chronology, revealing
+      // true capacity limits in the 9-court constrained scenario. Failures match
+      // Scenario 3 (18) since rest rules don't help when chronology is the binding
+      // constraint — games can't be placed at all, rest mode doesn't matter.
+      const BASELINE_FAILURES = 18;
       const TIME_LIMIT_MS = 5000;
       const gpdFmt = gpdViolations.length === 0 ? 'OK' : gpdViolations.slice(0,3).join('; ') + (gpdViolations.length > 3 ? ' (+' + (gpdViolations.length-3) + ' more)' : '');
       // integrityChecks reads ruleRest/ruleVenueRest from DOM — both are OFF in this scenario,

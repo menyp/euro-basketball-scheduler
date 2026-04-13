@@ -375,15 +375,13 @@ async function runIntegrationTests() {
   check('Schedule generated (sanity)', result.total > 0, 'total=' + result.total + ', scheduled=' + result.scheduled);
 
   section('INTG 6 — Chronological Integrity (all RR before PO)');
-  // KNOWN LIMITATION: Step 5a (last-resort RR overflow to Day N external courts) bypasses
-  // rrSlotOK and can place RR games AFTER consolation PO games on the same day for small
-  // divisions (e.g. U18 GIRLS with only 2 groups). This is an accepted trade-off: Step 5a
-  // ensures 100% RR placement but at the cost of strict chronological order for overflow games.
-  // Future fix: add rrSlotOK check to Step 5a with a softer fallback.
+  // Step 5a now enforces this invariant by running AFTER Phase B2 and reading
+  // divEarliestPO. RR games that would violate chronology are rejected (reported
+  // as failures in the unscheduled list instead of placed illegally).
   const chronoViolations = checkChronologicalIntegrity(sched);
-  check('All RR games occur before division\'s earliest PO game (Step-5a violations are known)',
-    true, // Always pass — violations are logged below as informational
-    chronoViolations.length === 0 ? 'OK' : 'KNOWN: ' + chronoViolations[0]);
+  check('All RR games occur before division\'s earliest PO game',
+    chronoViolations.length === 0,
+    chronoViolations.length === 0 ? 'OK' : 'VIOLATION: ' + chronoViolations[0]);
 
   section('INTG 7 — Finals Sequencing (SF ≥ 180 min before FINAL)');
   const seqViolations = checkFinalsSequencing(sched);
