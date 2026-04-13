@@ -205,6 +205,35 @@ footer span{color:var(--o)}
 .settings-divider{height:1px;background:rgba(255,255,255,.08);margin:4px 0}
 .settings-item-danger{color:#fc8181!important}
 .settings-item-danger:hover{background:rgba(229,62,62,.12)!important}
+/* Unscheduled-games alert banner — sticky, animated, with smart suggestions */
+.sched-alert{position:sticky;top:0;z-index:50;margin-bottom:14px;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,rgba(255,30,30,.18),rgba(255,107,0,.12));border:2px solid rgba(255,60,60,.7);box-shadow:0 8px 28px rgba(255,30,30,.25),0 0 0 1px rgba(255,60,60,.15);animation:alertShakeIn .55s cubic-bezier(.36,.07,.19,.97)}
+.sched-alert.sched-alert-warn{background:linear-gradient(135deg,rgba(255,107,0,.15),rgba(255,165,0,.08));border-color:rgba(255,120,0,.6);box-shadow:0 6px 22px rgba(255,107,0,.18)}
+.sched-alert-hdr{display:flex;align-items:center;gap:14px;padding:14px 18px;cursor:pointer;user-select:none;background:rgba(0,0,0,.18)}
+.sched-alert-icon{font-size:26px;line-height:1;animation:alertPulse 2s ease-in-out infinite}
+.sched-alert-titleblock{flex:1;min-width:0}
+.sched-alert-count{font-family:Montserrat,sans-serif;font-weight:900;font-size:18px;color:#fff;line-height:1.1}
+.sched-alert-count strong{color:#ff5050;font-size:22px;margin-right:4px}
+.sched-alert-warn .sched-alert-count strong{color:#ff9f40}
+.sched-alert-sub{font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;color:#ffb3b3;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+.sched-alert-warn .sched-alert-sub{color:#ffcf94}
+.sched-alert-toggle{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#fff;padding:6px 14px;border-radius:6px;font-family:Montserrat,sans-serif;font-weight:700;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.5px;transition:background .15s}
+.sched-alert-toggle:hover{background:rgba(255,255,255,.15)}
+.sched-alert-body{padding:14px 18px;max-height:800px;transition:max-height .35s ease,padding .35s ease}
+.sched-alert.collapsed .sched-alert-body{max-height:0;padding-top:0;padding-bottom:0;overflow:hidden}
+.sched-alert-suggestions{background:rgba(0,0,0,.22);border-radius:7px;padding:10px 14px;margin-bottom:12px;border-left:3px solid #FF6B00}
+.sched-alert-suggestions-hdr{font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;color:#FF6B00;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px}
+.sched-alert-suggestions ul{margin:0;padding-left:18px;color:#ffd8a8;font-size:12px;font-family:Montserrat,sans-serif;line-height:1.7}
+.sched-alert-divgroup{border-left:3px solid;padding:4px 0 4px 12px;margin-bottom:10px}
+.sched-alert-divgroup:last-child{margin-bottom:0}
+.sched-alert-divname{font-family:Montserrat,sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+.sched-alert-gameline{display:flex;align-items:baseline;gap:6px;margin-top:4px}
+.sched-alert-gameline .x{color:#ff3030;font-weight:900;font-size:14px}
+.sched-alert-gamename{color:#ffc0c0;font-size:12px;font-family:Montserrat,sans-serif;font-weight:700}
+.sched-alert-warn .sched-alert-gamename{color:#ffd8a8}
+.sched-alert-reason{color:#ff8080;font-size:11px;margin:2px 0 0 20px;font-style:italic}
+.sched-alert-warn .sched-alert-reason{color:#ffb884}
+@keyframes alertShakeIn{0%{opacity:0;transform:translateY(-12px)}15%{opacity:1;transform:translateY(0) translateX(-6px)}30%{transform:translateX(5px)}45%{transform:translateX(-4px)}60%{transform:translateX(3px)}75%{transform:translateX(-2px)}100%{transform:none}}
+@keyframes alertPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 </style>
 </head>
 <body>
@@ -3745,7 +3774,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           : '')
       + '</div>';
 
-    // ── CRITICAL: missed games list ───────────────────────
+    // ── Unscheduled games alert banner ────────────────────
+    // Sticky, animated, with smart suggestions based on failure patterns.
     if (failedCount > 0) {
       // Group by division
       var byDiv = {};
@@ -3753,27 +3783,73 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         if (!byDiv[u.div]) byDiv[u.div] = [];
         byDiv[u.div].push(u);
       });
-      h += '<div style="background:rgba(255,30,30,.13);border:2px solid rgba(255,60,60,.6);border-radius:8px;padding:14px 18px;margin-bottom:14px">'
-        + '<div style="color:#FF3030;font-family:Montserrat,sans-serif;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">'
-        + '\u26A0\uFE0F CRITICAL \u2014 The following games were NOT scheduled</div>';
+
+      // Analyze failures to generate smart suggestions
+      var poFailures = unscheduledGames.filter(function(u) { return !!u.lbl; }).length;
+      var rrFailures = failedCount - poFailures;
+      var affectedDivs = Object.keys(byDiv).length;
+      var severity = failedCount <= 3 ? 'warn' : 'crit';
+      var suggestions = [];
+      if (poFailures > 0 && rrFailures === 0) {
+        suggestions.push('All failures are <strong>playoff games</strong> — extend Day ' + nDays + ' end time or add 1 more court.');
+      } else if (rrFailures > 0 && poFailures === 0) {
+        suggestions.push('All failures are <strong>round-robin games</strong> — increase daily hours or raise <em>Max Games Per Day</em>.');
+      } else if (poFailures > 0 && rrFailures > 0) {
+        suggestions.push('Mixed failures (' + rrFailures + ' RR + ' + poFailures + ' playoff) — adding 1 more court usually resolves both.');
+      }
+      if (affectedDivs === 1) {
+        var onlyDiv = Object.keys(byDiv)[0];
+        suggestions.push('Only <strong>' + onlyDiv + '</strong> is affected — check if its venue rule is too restrictive.');
+      } else if (affectedDivs >= 4) {
+        suggestions.push('<strong>' + affectedDivs + ' divisions</strong> affected — this is a global capacity issue, not a rule problem.');
+      }
+      if (sched.venueRestMandatory) {
+        suggestions.push('<strong>Mandatory 180-min Venue Rest</strong> is ON — switching to <em>High Priority</em> mode often resolves venue-change failures.');
+      }
+      if (!suggestions.length) {
+        suggestions.push('Add more courts, extend daily hours, or add another tournament day — then regenerate.');
+      }
+
+      var headline = failedCount === 1
+        ? '1 game could not be scheduled'
+        : failedCount + ' games could not be scheduled';
+      var subline = (rrFailures ? rrFailures + ' round-robin' : '')
+        + (rrFailures && poFailures ? ' + ' : '')
+        + (poFailures ? poFailures + ' playoff' : '')
+        + ' \u00B7 ' + affectedDivs + ' division' + (affectedDivs === 1 ? '' : 's') + ' affected';
+
+      h += '<div id="schedAlert" class="sched-alert' + (severity === 'warn' ? ' sched-alert-warn' : '') + '">'
+        + '<div class="sched-alert-hdr" id="schedAlertHdr">'
+        +   '<div class="sched-alert-icon">\u26A0\uFE0F</div>'
+        +   '<div class="sched-alert-titleblock">'
+        +     '<div class="sched-alert-count"><strong>' + failedCount + '</strong>' + headline.replace(/^\d+ /, '') + '</div>'
+        +     '<div class="sched-alert-sub">' + subline + '</div>'
+        +   '</div>'
+        +   '<button class="sched-alert-toggle" type="button">Hide \u25B2</button>'
+        + '</div>'
+        + '<div class="sched-alert-body">'
+        +   '<div class="sched-alert-suggestions">'
+        +     '<div class="sched-alert-suggestions-hdr">\uD83D\uDCA1 Suggested Fixes</div>'
+        +     '<ul>' + suggestions.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ul>'
+        +   '</div>';
       Object.keys(byDiv).forEach(function(divName) {
         var divColor = (divisions.find(function(d){ return d.name === divName; }) || {}).color || '#FF6B00';
-        h += '<div style="border-left:3px solid ' + divColor + ';padding:4px 0 4px 12px;margin-bottom:10px">'
-          + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:' + divColor + ';margin-bottom:5px">' + divName + '</div>';
+        h += '<div class="sched-alert-divgroup" style="border-left-color:' + divColor + '">'
+          + '<div class="sched-alert-divname" style="color:' + divColor + '">' + divName + ' (' + byDiv[divName].length + ')</div>';
         byDiv[divName].forEach(function(u) {
           var gameLabel = u.lbl
             ? ('[' + u.lbl + '] ' + (u.t1 || '\u2014') + ' vs ' + (u.t2 || 'TBD'))
             : (u.t1 + ' vs ' + u.t2);
           if (u.group && !u.lbl) gameLabel = u.group.replace(divName + ' ', '') + ' \u2014 ' + gameLabel;
-          h += '<div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">'
-            + '<span style="color:#FF3030;font-weight:900;font-size:14px">\u274C</span>'
-            + '<span style="color:#ffb3b3;font-size:12px;font-family:Montserrat,sans-serif;font-weight:700">' + gameLabel + '</span>'
+          h += '<div class="sched-alert-gameline">'
+            +   '<span class="x">\u274C</span>'
+            +   '<span class="sched-alert-gamename">' + gameLabel + '</span>'
             + '</div>'
-            + '<div style="color:#ff8080;font-size:11px;margin-left:20px;font-style:italic;margin-bottom:2px">' + u.reason + '</div>';
+            + '<div class="sched-alert-reason">' + u.reason + '</div>';
         });
         h += '</div>';
       });
-      h += '</div>';
+      h += '</div></div>';
     }
 
     // ── Amber: rule relaxations and soft-preference violations ──
@@ -3859,6 +3935,18 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       h += renderDayBlock(day.divs, lS, lE, dIdx);
     });
     document.getElementById('schedOut').innerHTML = h;
+
+    // ── Wire up alert banner collapse toggle ──────────────
+    var _alertHdr = document.getElementById('schedAlertHdr');
+    if (_alertHdr) {
+      _alertHdr.addEventListener('click', function() {
+        var banner = document.getElementById('schedAlert');
+        if (!banner) return;
+        banner.classList.toggle('collapsed');
+        var btn = banner.querySelector('.sched-alert-toggle');
+        if (btn) btn.innerHTML = banner.classList.contains('collapsed') ? 'Show \u25BC' : 'Hide \u25B2';
+      });
+    }
 
     // ── Populate team autocomplete ────────────────────────
     var teamNames = {};
