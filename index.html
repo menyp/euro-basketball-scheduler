@@ -4524,12 +4524,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '</div>'
       + (failedCount > 0
           ? '<div style="font-size:11px;color:#ff8080;margin-top:10px;font-family:Montserrat,sans-serif;font-weight:600">'
-            + '\u26A0\uFE0F Fix: increase the court count, extend daily operating hours, or add more tournament days, then regenerate.</div>'
-            + (sched.venueRestMandatory
-                ? '<div style="font-size:11px;color:#fbbf24;margin-top:6px;font-family:Montserrat,sans-serif;font-weight:600">'
-                  + '\uD83D\uDCA1 ' + failedCount + ' game(s) may have failed due to <strong>Mandatory 180-min Venue Rest</strong>. '
-                  + 'Switching to <strong>High Priority</strong> mode may resolve these failures.</div>'
-                : '')
+            + '\u26A0\uFE0F See the suggested fixes in the alert banner below.</div>'
           : '')
       + '</div>';
 
@@ -4548,23 +4543,60 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var rrFailures = failedCount - poFailures;
       var affectedDivs = Object.keys(byDiv).length;
       var severity = failedCount <= 3 ? 'warn' : 'crit';
+      // Use sched.gameDays.length — `nDays` isn't a local in renderSched, so the
+      // bare name would resolve to window.nDays (the HTMLSelectElement), not the
+      // integer day count.
+      var nDayCount = (sched.gameDays || []).length || 3;
+      // Evidence of venue-rest-driven failures: VENUE RELAXED warnings mean the
+      // scheduler had to soften venue rest for OTHER games — so Mandatory mode
+      // could plausibly be refusing similar games elsewhere. Without these
+      // warnings there is no evidence venue rest is the binding constraint.
+      var venueRelaxedCount = scheduleWarnings.filter(function(w) {
+        return w.indexOf('VENUE RELAXED:') === 0;
+      }).length;
+      // Day N end time (for the specific "extend finals day" suggestion)
+      var _dayHours = getDayHours();
+      var finalsDayEnd = (_dayHours[nDayCount - 1] || {}).end || '?';
       var suggestions = [];
+
       if (poFailures > 0 && rrFailures === 0) {
-        suggestions.push('All failures are <strong>playoff games</strong> — extend Day ' + nDays + ' end time or add 1 more court.');
+        // All failures are playoff games. Most common cause: Day N (finals day)
+        // is running out of slots. Give the admin a concrete, specific fix.
+        var dayEndSuggestion = '';
+        if (finalsDayEnd !== '?') {
+          // Recommend a simple extension: add 1.5 hours (one full slot)
+          var endParts = finalsDayEnd.split(':');
+          var endM = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+          var newEndM = Math.min(endM + 90, 22 * 60); // cap at 22:00
+          var newEnd = String(Math.floor(newEndM / 60)).padStart(2, '0') + ':' + String(newEndM % 60).padStart(2, '0');
+          dayEndSuggestion = ' (e.g. from <strong>' + finalsDayEnd + '</strong> to <strong>' + newEnd + '</strong>)';
+        }
+        suggestions.push('All ' + poFailures + ' failures are <strong>playoff games</strong>. Day ' + nDayCount + ' (finals day) is likely running out of time slots. Try one of:<br>'
+          + '&nbsp;&nbsp;• Extend Day ' + nDayCount + ' end time' + dayEndSuggestion + '<br>'
+          + '&nbsp;&nbsp;• Add 1 more court at the main venue<br>'
+          + '&nbsp;&nbsp;• Shorten the lunch break to free an extra slot');
       } else if (rrFailures > 0 && poFailures === 0) {
         suggestions.push('All failures are <strong>round-robin games</strong> — increase daily hours or raise <em>Max Games Per Day</em>.');
       } else if (poFailures > 0 && rrFailures > 0) {
         suggestions.push('Mixed failures (' + rrFailures + ' RR + ' + poFailures + ' playoff) — adding 1 more court usually resolves both.');
       }
+
       if (affectedDivs === 1) {
         var onlyDiv = Object.keys(byDiv)[0];
-        suggestions.push('Only <strong>' + onlyDiv + '</strong> is affected — check if its venue rule is too restrictive.');
+        suggestions.push('Only <strong>' + onlyDiv + '</strong> is affected — its bracket structure may be too large for the available time slots.');
       } else if (affectedDivs >= 4) {
         suggestions.push('<strong>' + affectedDivs + ' divisions</strong> affected — this is a global capacity issue, not a rule problem.');
       }
-      if (sched.venueRestMandatory) {
-        suggestions.push('<strong>Mandatory 180-min Venue Rest</strong> is ON — switching to <em>High Priority</em> mode often resolves venue-change failures.');
+
+      // Evidence-based: only suggest relaxing Mandatory Venue Rest if the scheduler
+      // had to actually relax it for OTHER games. If venueRelaxedCount is 0, venue
+      // rest is NOT the binding constraint — don't mislead the admin.
+      if (sched.venueRestMandatory && venueRelaxedCount > 0) {
+        suggestions.push('<strong>Mandatory 180-min Venue Rest</strong> is ON and the scheduler already had to relax it for '
+          + venueRelaxedCount + ' other game' + (venueRelaxedCount === 1 ? '' : 's')
+          + '. Switching to <em>High Priority</em> mode may help by allowing similar relaxations for the failed games too.');
       }
+
       if (!suggestions.length) {
         suggestions.push('Add more courts, extend daily hours, or add another tournament day — then regenerate.');
       }
