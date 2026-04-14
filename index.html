@@ -3423,9 +3423,12 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
               queue.splice(qi, 1);
               gPlaced = true;
             }
-            // Second pass: relax venue-change rest — RR games must be scheduled even if
-            // venue-rest can't be satisfied (tight configs have no slack for this constraint)
-            if (!gPlaced) {
+            // Second pass: relax venue-change rest. Only runs in High Priority mode.
+            // In Mandatory mode, Rule 7 is a hard constraint — games that can't find a
+            // same-venue slot stay unplaced and surface in the failed-games banner, so
+            // the user can add capacity or switch the mode explicitly. This mirrors
+            // Phase B2's venueRestMandatory guard for playoff games.
+            if (!gPlaced && !rules.venueRestMandatory) {
               for (var coi2 = 0; coi2 < cOrder.length && !gPlaced; coi2++) {
                 var ci2 = cOrder[coi2];
                 if (grid[day][si][ci2]) continue;
@@ -3444,7 +3447,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // ── Phase C2: RR venue-rest fallback (respects maxGPD, skips venue-change constraint) ─
     // Games blocked only by venue-change rest get a second pass without that check.
     // maxGPD is still enforced so these placements are NOT quota violations.
+    // In Mandatory mode this entire pass is skipped — Rule 7 is a hard constraint and
+    // games that can't satisfy it stay unplaced (shown in the failed-games banner).
     (function runPhaseC2() {
+      if (rules.venueRestMandatory) return;
       for (var c2day = 0; c2day < nDays; c2day++) {
         var c2slots = dayTimeSlots[Math.min(c2day, dayTimeSlots.length - 1)];
         for (var c2si = 0; c2si < c2slots.length; c2si++) {
