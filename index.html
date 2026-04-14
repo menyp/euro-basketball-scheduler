@@ -401,8 +401,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             <span class="rule-slider"></span>
           </label>
           <div class="rule-lbl" style="flex:1">
-            <strong>Enforce 180-min Venue Change Rest</strong>
-            <small>When ON, a team switching venues on the same day requires a 3-hour (4-slot) gap between games. Stricter than standard rest — may reduce scheduling density.</small>
+            <strong>Enforce Venue Change Rest</strong>
+            <small>When ON, a team switching venues on the same day must have at least <strong>180 minutes start-to-start</strong> (tip-off to tip-off, a 2-slot gap) — equivalent to 90 minutes of actual rest after a 90-min game. Stricter than standard rest — may reduce scheduling density.</small>
             <div id="venueRestModeWrap" style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
               <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap">Mode:</span>
               <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer">
@@ -1476,7 +1476,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     row('No team plays itself', auditCheckNoSelfPlay());
     row('No team double-booked (same time)', auditCheckNoDoubleBooking());
     if (rules.rest)      row('Team rest \u2265 90 min between games', auditCheckRestBetweenGames(90));
-    if (rules.venueRest) row('Venue-change rest \u2265 180 min', auditCheckVenueChangeRest(180));
+    if (rules.venueRest) row('Venue-change rest \u2265 180 min start-to-start (tip-off to tip-off)', auditCheckVenueChangeRest(180));
     row('Max ' + gpd + ' games per team per day', auditCheckMaxGamesPerDay(gpd));
     row('All RR games before any playoff (per division)', auditCheckChronologicalIntegrity());
     row('Semifinal \u2265 90 min before its Final', auditCheckFinalsSequencing());
@@ -1648,7 +1648,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     lines.push('4. Semifinals must start at least 90 min before their bracket\'s Final');
     lines.push('5. Max **' + gpd + '** games per team per day');
     if (rules.rest)      lines.push('6. At least **90 min** rest between a team\'s consecutive games');
-    if (rules.venueRest) lines.push('7. At least **180 min** rest when a team switches venues');
+    if (rules.venueRest) lines.push('7. At least **180 min start-to-start** (tip-off to tip-off) between a team\'s consecutive games when switching venues — equivalent to 90 min of actual rest after a 90-min game');
     lines.push('8. Lunch break **' + lS + '–' + lE + '** — no games start during this window');
     lines.push('9. Each group has at most 4 teams');
     lines.push('10. Court capacity: no more games per slot than courts available');
@@ -1679,7 +1679,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     lines.push('- **Lunch break:** ' + lS + ' – ' + lE);
     lines.push('- **Max games/team/day:** ' + gpd);
     lines.push('- **Rest rule 90min:** ' + (rules.rest ? 'ON' : 'OFF'));
-    lines.push('- **Venue-change rest 180min:** ' + (rules.venueRest ? 'ON (' + (rules.venueRestMandatory ? 'Mandatory' : 'High Priority') + ')' : 'OFF'));
+    lines.push('- **Venue-change rest (180 min start-to-start):** ' + (rules.venueRest ? 'ON (' + (rules.venueRestMandatory ? 'Mandatory' : 'High Priority') + ')' : 'OFF'));
     lines.push('');
 
     // Divisions
@@ -2410,9 +2410,9 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
             + 'Example: a team playing at 09:00 cannot play again until 12:00.'
           : 'Currently <em>disabled</em> — teams may be scheduled back-to-back. Enable this when player welfare allows it.')
       + '</p>'
-      + '<p style="margin-top:10px"><strong>Venue Change Rest (180 min)</strong> ' + on(ruleVR) + '<br>'
+      + '<p style="margin-top:10px"><strong>Venue Change Rest (180 min start-to-start)</strong> ' + on(ruleVR) + '<br>'
       + (ruleVR
-          ? 'When a team\'s next game is at a <em>different venue</em>, a minimum <strong>3-hour (4-slot) gap</strong> is required on the same day. '
+          ? 'When a team\'s next game is at a <em>different venue</em>, the next game must tip off at least <strong>180 minutes after the previous one tipped off</strong> (start-to-start, a 2-slot gap — equivalent to 90 min of actual rest). '
             + 'Mode: <strong>' + (vrMandatory ? 'Mandatory' : 'High Priority') + '</strong>. '
             + (vrMandatory
                 ? 'Hard constraint — any game that cannot satisfy the gap is left unscheduled rather than violating the rule.'
@@ -2461,7 +2461,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '<li>\u2705 No team ever plays on two courts at the same time (double-booking is impossible).</li>'
       + '<li>\u2705 No team ever plays against itself.</li>'
       + (ruleRest ? '<li>\u2705 Minimum 90-minute gap between a team\'s games on the same day.</li>' : '<li>\u26A0\uFE0F Team rest is currently <strong>OFF</strong> — back-to-back games are allowed.</li>')
-      + (ruleVR   ? '<li>\u2705 Minimum 180-minute gap when a team switches venues on the same day' + (vrMandatory ? ' (hard constraint).' : ' (best-effort).') + '</li>' : '<li>\u26A0\uFE0F Venue-change rest is currently <strong>OFF</strong> — no extra gap is required when switching venues.</li>')
+      + (ruleVR   ? '<li>\u2705 Minimum 180-minute start-to-start gap (tip-off to tip-off) when a team switches venues on the same day' + (vrMandatory ? ' (hard constraint).' : ' (best-effort).') + '</li>' : '<li>\u26A0\uFE0F Venue-change rest is currently <strong>OFF</strong> — no extra gap is required when switching venues.</li>')
       + '<li>\u2705 Divisions set to <strong>Mandatory</strong> in Venue Priority Rules are always at ' + mv + ' — they are never quietly moved to another venue.</li>'
       + (mvFinal ? '<li>\u2705 Championship Final is always at <strong>' + mv + '</strong>.</li>' : '')
       + (mv3rd   ? '<li>\u2705 3rd Place game is always at <strong>' + mv + '</strong>.</li>' : '')
@@ -4822,7 +4822,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       // had to actually relax it for OTHER games. If venueRelaxedCount is 0, venue
       // rest is NOT the binding constraint — don't mislead the admin.
       if (sched.venueRestMandatory && venueRelaxedCount > 0) {
-        suggestions.push('<strong>Mandatory 180-min Venue Rest</strong> is ON and the scheduler already had to relax it for '
+        suggestions.push('<strong>Mandatory Venue Rest</strong> (180 min start-to-start) is ON and the scheduler already had to relax it for '
           + venueRelaxedCount + ' other game' + (venueRelaxedCount === 1 ? '' : 's')
           + '. Switching to <em>High Priority</em> mode may help by allowing similar relaxations for the failed games too.');
       }
