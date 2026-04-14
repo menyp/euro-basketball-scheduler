@@ -2173,6 +2173,13 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var groups = div.manualGroups && div.manualGroups.length
       ? div.manualGroups
       : chunk(div.teams, optimalChunkSize(div.teams.length));
+    // Defensive: drop empty groups before counting. The import sanitizer
+    // strips these, but a live edit (chip-rm of all teams in a group) can
+    // leave empty groups in memory until Apply runs. Without this filter,
+    // a 2-group division with a leftover empty group sees G=3 and falls
+    // through to the generic branch, which only creates floor(G/2)=1 SF
+    // and produces a structurally incomplete bracket.
+    groups = groups.filter(function(g) { return g && g.length > 0; });
     var G = groups.length;
     var maxGrpSize = groups.reduce(function(m, g) { return Math.max(m, g.length); }, 0);
     var L = function(i) { return String.fromCharCode(65 + i); }; // 'A', 'B', …
@@ -3629,6 +3636,32 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     // Step 5a moved below — it now runs AFTER Phase B2 so the chronology check
     // (divEarliestPO) can enforce "all RR before any PO for a division" on Day N.
 
+    // ── STRICT CHRONOLOGY MAP (built after RR phases, used by Phase A+B/B2) ──
+    // divLastRRSlotByDay[divName][dayIdx] = largest RR slot index used by that
+    // division on that day. Used by Phase A Option C, SF pre-pass, and
+    // tryPlacePO to refuse placing PO games at or before a slot where the
+    // same division still has an RR game. Without this, TBD-seeded PO games
+    // ("3rd Group A") can land at the exact slot where one of the Group A
+    // teams is still playing its RR game — a physical impossibility.
+    var divLastRRSlotByDay = {};
+    rrItems.forEach(function(r) {
+      if (!r.placed) return;
+      if (!divLastRRSlotByDay[r.divName]) divLastRRSlotByDay[r.divName] = {};
+      var cur = divLastRRSlotByDay[r.divName][r.day];
+      if (cur === undefined || r.slotIdx > cur) {
+        divLastRRSlotByDay[r.divName][r.day] = r.slotIdx;
+      }
+    });
+    // Returns true if placing a PO game at (pd, psi) for divName would be at
+    // or before a same-day RR game for that division. Strict: RR at slot X
+    // blocks PO placements at slot <= X on the same day.
+    function divHasRRAtOrAfter(divName, pd, psi) {
+      var byDay = divLastRRSlotByDay[divName];
+      if (!byDay) return false;
+      var lastRR = byDay[pd];
+      return (lastRR !== undefined) && (psi <= lastRR);
+    }
+
     // ── 4. Playoff Placement (runs after all RR is placed) ────────────────────
     // Phase A: Place Finals & 3rd-Place as anchors — Day N-1 is now clean since
     //          Phase C above never touched it (rrSlotOK blocks Day N-1 for RR).
@@ -3762,6 +3795,11 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
           if (ad >= 1 && sfDayC > (divLastRRDay[divName] || 0)) {
             var dcSlots = dayTimeSlots[Math.min(sfDayC, dayTimeSlots.length - 1)];
             for (var _dcsi = dcSlots.length - 1; _dcsi >= 0 && !sfCourtList.length; _dcsi--) {
+              // STRICT CHRONOLOGY: refuse slots where this division still has RR games
+              // on the same day. Without this, Option C can land SFs at the same slot
+              // as same-division RR (different courts pass the grid check but TBD
+              // seeds would collide with RR teams).
+              if (divHasRRAtOrAfter(divName, sfDayC, _dcsi)) continue;
               var listC = [];
               for (var bci3 = 0; bci3 < nCourts; bci3++) {
                 if (!grid[sfDayC][_dcsi][bci3]) {
@@ -3928,6 +3966,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
         }
         for (var _soo = 0; _soo < _slotSeq.length && !g.placed; _soo++) {
           var psi = _slotSeq[_soo];
+          // STRICT CHRONOLOGY: refuse slots where same-division RR is still happening.
+          // TBD-seeded SFs ("3rd Group A") and concrete consolation medals would
+          // otherwise collide with the RR teams that haven't finished playing yet.
+          if (divHasRRAtOrAfter(g.divName, pd, psi)) continue;
           // 2-slot minimum between SF start and Final start (180 min).
           // The pre-pass ensures SFs are always placed before Finals, so this guard fires correctly.
           var _sfGap = 2;
@@ -4053,6 +4095,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
         for (var _csi = 0; _csi < _cpSlotSeq.length && !_coPlaced; _csi++) {
           var _cpSi = _cpSlotSeq[_csi];
+          // STRICT CHRONOLOGY: refuse slots where same-division RR is still happening
+          if (divHasRRAtOrAfter(divName, _cpDay, _cpSi)) continue;
           // Must be at least 2 slots before the FINAL (180-min gap)
           var _cpFinal = finalBracketSlot[bk];
           if (_cpFinal && _cpFinal.day === _cpDay && _cpSi > _cpFinal.slotIdx - 2) continue;
