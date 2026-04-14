@@ -3659,7 +3659,12 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       var byDay = divLastRRSlotByDay[divName];
       if (!byDay) return false;
       var lastRR = byDay[pd];
-      return (lastRR !== undefined) && (psi <= lastRR);
+      // +1 buffer: an RR game at slot X ends when slot X+1 starts. Placing a
+      // PO game at slot X+1 means tip-off collides with the RR game's final
+      // buzzer — standings can't be computed in time, so TBD-seeded SFs
+      // ("3rd Group A") would be unresolvable. Require one empty slot of
+      // separation between last RR and first PO for the same division.
+      return (lastRR !== undefined) && (psi <= lastRR + 1);
     }
 
     // ── 4. Playoff Placement (runs after all RR is placed) ────────────────────
