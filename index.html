@@ -234,6 +234,36 @@ footer span{color:var(--o)}
 .sched-alert-warn .sched-alert-reason{color:#ffb884}
 @keyframes alertShakeIn{0%{opacity:0;transform:translateY(-12px)}15%{opacity:1;transform:translateY(0) translateX(-6px)}30%{transform:translateX(5px)}45%{transform:translateX(-4px)}60%{transform:translateX(3px)}75%{transform:translateX(-2px)}100%{transform:none}}
 @keyframes alertPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+/* ── Schedule view mode toggle (List / Grid) ── */
+.view-toggle{display:inline-flex;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:3px;gap:2px;margin-right:10px}
+.view-toggle button{background:transparent;border:none;color:var(--g);padding:7px 14px;font-family:Montserrat,sans-serif;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;cursor:pointer;border-radius:6px;transition:background .15s,color .15s}
+.view-toggle button.active{background:var(--o);color:#fff}
+.view-toggle button:hover:not(.active){background:rgba(255,255,255,.06);color:#fff}
+/* ── Grid view — dark-theme court grid ── */
+.cg-wrap{margin-bottom:18px}
+.cg-day-tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:0}
+.cg-day-tab{background:transparent;border:1px solid rgba(255,255,255,.12);border-bottom:none;color:var(--g);border-radius:7px 7px 0 0;padding:8px 18px;cursor:pointer;font-size:12px;font-weight:700;font-family:Montserrat,sans-serif;transition:background .15s,color .15s}
+.cg-day-tab:hover:not(.active){background:rgba(255,255,255,.06);color:#fff}
+.cg-day-tab.active{background:rgba(255,107,0,.13);border-color:#FF6B00;color:#FF6B00}
+.cg-table{width:100%;border-collapse:separate;border-spacing:0;font-size:11px;background:var(--n2);border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.cg-table th{background:#FF6B00;color:#fff;padding:8px 6px;text-align:center;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.6px;border-right:1px solid rgba(255,255,255,.12);position:sticky;top:0;z-index:5}
+.cg-table th.cg-venue-hdr{background:#1a1a2e;color:#FF6B00;border-bottom:1px solid rgba(255,107,0,.3)}
+.cg-table th.cg-time-col{background:#FF6B00;min-width:50px;width:50px}
+.cg-table td{border:1px solid rgba(255,255,255,.08);padding:6px 7px;vertical-align:top;min-width:90px;background:var(--n)}
+.cg-table td.cg-time-cell{font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;white-space:nowrap;background:rgba(255,107,0,.08);text-align:center;color:#FF6B00;letter-spacing:.5px}
+.cg-table td.cg-game-cell{cursor:default;transition:background .12s,transform .12s}
+.cg-table.cg-editable td.cg-game-cell{cursor:grab}
+.cg-table td.cg-game-cell:hover{background:rgba(255,107,0,.08)}
+.cg-table.cg-editable td.cg-game-cell:hover{outline:2px solid #FF6B00;outline-offset:-2px;transform:translateY(-1px)}
+.cg-cell-div{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--g);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cg-cell-teams{font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;color:#fff;line-height:1.35}
+.cg-cell-teams .cg-vs{color:var(--g);font-weight:400;font-size:10px;margin:0 3px}
+.cg-cell-score{font-size:11px;font-weight:800;color:#FF6B00;margin-top:3px;font-family:Montserrat,sans-serif}
+.cg-cell-label{display:inline-block;background:rgba(255,107,0,.18);color:#FF8C35;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:800;margin-left:3px;text-transform:uppercase}
+.cg-table td.cg-empty-cell{background:rgba(255,255,255,.015);color:rgba(255,255,255,.15);text-align:center;font-size:10px}
+.cg-table td.cg-empty-cell::before{content:'\2014'}
+.cg-table tr.cg-lunch-row td{background:rgba(255,165,0,.1);border-top:1px solid rgba(255,165,0,.4);border-bottom:1px solid rgba(255,165,0,.4);color:#FFB94C;text-align:center;font-weight:800;font-size:11px;letter-spacing:1px;padding:7px;text-transform:uppercase}
+.cg-quota-warn{outline:2px solid #fbbf24;outline-offset:-2px}
 </style>
 </head>
 <body>
@@ -608,6 +638,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   var _agPending = null; // { dayIdx, time, court, loc }
   var _agSelected = null; // selected game from picker
   var _editMode = false;        // edit-mode toggle
+  var _viewMode = 'list';       // 'list' (divisions/days) or 'grid' (time x court matrix)
+  var _gridActiveDay = 0;       // selected day tab in grid view
   var _mgContext = null;        // { dayIdx, divName, gi, gk, t1, t2, time, court, loc }
   var _mgGameRef = null;        // direct object reference in sched
   var _mgSelectedSlot = null;   // { dayIdx, time, court, loc }
@@ -2479,11 +2511,36 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
   // ── Manual Game Placement / Edit Mode ──────────────────
   document.getElementById('schedOut').addEventListener('click', function(e) {
-    // Edit mode: clicking a game card opens the move modal
+    // Edit mode: clicking a game card (list view) or a grid cell opens the move modal.
+    // Grid cells carry the same data-* attributes as .gc cards, so the same
+    // openMoveGameModal() call works for both views.
     if (_editMode) {
       var gc = e.target.closest('.gc');
       if (gc && !e.target.closest('input') && !e.target.closest('button')) {
         openMoveGameModal(gc);
+        return;
+      }
+      var cgCell = e.target.closest('.cg-game-cell');
+      if (cgCell) {
+        openMoveGameModal(cgCell);
+        return;
+      }
+      // Grid view: clicking an empty cell offers to place an unscheduled game there
+      var cgEmpty = e.target.closest('.cg-empty-cell');
+      if (cgEmpty && cgEmpty.hasAttribute('data-empty-time')) {
+        var cCrt = cgEmpty.getAttribute('data-empty-court');
+        // Find the court's location from sched.courts
+        var cCrts = sched.courts || [];
+        var cLoc = '';
+        for (var _i = 0; _i < cCrts.length; _i++) {
+          if (cCrts[_i].court === cCrt) { cLoc = cCrts[_i].loc; break; }
+        }
+        showAddGameModal({
+          dayIdx: +cgEmpty.getAttribute('data-empty-day'),
+          time:   cgEmpty.getAttribute('data-empty-time'),
+          court:  cCrt,
+          loc:    cLoc
+        });
         return;
       }
     }
@@ -2670,12 +2727,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var t1 = gcEl.dataset.t1 || '';
     var t2 = gcEl.dataset.t2 || '';
     var loc = gcEl.dataset.venue || '';
-    // Extract day/gi/gk from a score input child (or score-edit button)
-    var scoreIn = gcEl.querySelector('[data-day][data-gi]');
-    if (!scoreIn) return;
-    var dayIdx = parseInt(scoreIn.dataset.day);
-    var gi = parseInt(scoreIn.dataset.gi);
-    var gk = scoreIn.dataset.gk || '';
+    // Extract day/gi/gk from a child score input (.gc list cards have them
+    // on an inner element) OR from the element itself (grid cells carry the
+    // attrs directly on the TD).
+    var ref = gcEl.querySelector('[data-day][data-gi]') || gcEl;
+    if (ref.dataset.day === undefined || ref.dataset.gi === undefined) return;
+    var dayIdx = parseInt(ref.dataset.day);
+    var gi = parseInt(ref.dataset.gi);
+    var gk = ref.dataset.gk || '';
     // Locate the game object in sched
     var dayObj = sched.gameDays[dayIdx];
     if (!dayObj) return;
@@ -4472,6 +4531,128 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return h;
   }
 
+  // Builds the Grid view HTML for the current sched — a time-x-court matrix
+  // for each day, with day tabs at the top. Reuses the same data model as the
+  // list view; each game cell gets the same data-* attributes as .gc elements
+  // so the existing Move Game modal entry point works unchanged.
+  function renderCourtGridDOM(lunchStart, lunchEnd) {
+    var courts = (sched.courts && sched.courts.length) ? sched.courts : getCourts();
+
+    // Venue grouping for the two-row header
+    var venueOrder = [], venueMap = {};
+    courts.forEach(function(c) {
+      var loc = c.loc || c.court;
+      if (!venueMap[loc]) { venueMap[loc] = []; venueOrder.push(loc); }
+      venueMap[loc].push(c.court);
+    });
+    var courtNames = courts.map(function(c) { return c.court; });
+    var nCols = courtNames.length;
+
+    function escH(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // Guard: clamp active day to the valid range
+    var nDays = sched.gameDays.length;
+    if (_gridActiveDay >= nDays) _gridActiveDay = 0;
+    if (_gridActiveDay < 0) _gridActiveDay = 0;
+
+    // Day tabs
+    var tabsHtml = '<div class="cg-day-tabs">';
+    sched.gameDays.forEach(function(day, di) {
+      var active = (di === _gridActiveDay) ? ' active' : '';
+      tabsHtml += '<button class="cg-day-tab' + active + '" data-grid-day="' + di + '" type="button">' + escH(day.label) + '</button>';
+    });
+    tabsHtml += '</div>';
+
+    // Render the active day only (one grid at a time — keeps the DOM light
+    // and the page scrollable when days have many time slots)
+    var day = sched.gameDays[_gridActiveDay];
+    var editableClass = _editMode ? ' cg-editable' : '';
+
+    // Walk games into a map keyed by time → courtName → {game, divName, dIdx, gi, gk}
+    var gameMap = {};
+    day.divs.forEach(function(d) {
+      function addGame(g, gi, gk) {
+        if (!g.time) return;
+        if (!gameMap[g.time]) gameMap[g.time] = {};
+        gameMap[g.time][g.court] = {
+          divName: d.name,
+          divColor: d.color || '#FF6B00',
+          t1: g.t1 || '', t2: g.t2 || '',
+          lbl: g.lbl || '',
+          locked: !!g.locked,
+          score1: g.score1, score2: g.score2,
+          quotaViolation: !!g.quotaViolation,
+          loc: g.loc || '',
+          dIdx: _gridActiveDay,
+          gi: gi, gk: gk
+        };
+      }
+      if (d.games) d.games.forEach(function(g, gi) { addGame(g, gi, ''); });
+      else if (d.groups) Object.keys(d.groups).forEach(function(gk) {
+        d.groups[gk].games.forEach(function(g, gi) { addGame(g, gi, gk); });
+      });
+    });
+
+    var times = Object.keys(gameMap).sort();
+    if (!times.length) {
+      return tabsHtml + '<div style="padding:30px 20px;text-align:center;color:var(--g);background:var(--n2);border-radius:8px">No games scheduled for this day.</div>';
+    }
+
+    // Two-row header: venue (colspan) + courts
+    var hdr1 = '<tr><th class="cg-time-col" rowspan="2">Time</th>';
+    venueOrder.forEach(function(loc) {
+      hdr1 += '<th class="cg-venue-hdr" colspan="' + venueMap[loc].length + '">' + escH(loc) + '</th>';
+    });
+    hdr1 += '</tr>';
+    var hdr2 = '<tr>';
+    courts.forEach(function(c) { hdr2 += '<th>' + escH(shortCourt(c.court)) + '</th>'; });
+    hdr2 += '</tr>';
+
+    // Body rows
+    var lunchInserted = false;
+    var rows = '';
+    times.forEach(function(t) {
+      if (!lunchInserted && lunchEnd && t >= lunchEnd && lunchStart && lunchStart < lunchEnd) {
+        rows += '<tr class="cg-lunch-row"><td colspan="' + (nCols + 1) + '">&#127860; Lunch Break &nbsp;&middot;&nbsp; ' + escH(lunchStart) + ' – ' + escH(lunchEnd) + '</td></tr>';
+        lunchInserted = true;
+      }
+      rows += '<tr><td class="cg-time-cell">' + escH(t) + '</td>';
+      courtNames.forEach(function(crt) {
+        var gm = gameMap[t] && gameMap[t][crt];
+        if (gm) {
+          var score = (gm.locked && gm.score1 != null && gm.score2 != null)
+            ? (gm.score1 + ' – ' + gm.score2) : '';
+          var divShort = gm.divName.length > 20 ? gm.divName.slice(0, 18) + '…' : gm.divName;
+          // data-* attributes mirror the .gc card so openMoveGameModal works unchanged
+          var quotaClass = gm.quotaViolation ? ' cg-quota-warn' : '';
+          rows += '<td class="cg-game-cell' + quotaClass + '" style="border-left:3px solid ' + gm.divColor + '"'
+            + ' data-div="' + escH(gm.divName) + '"'
+            + ' data-t1="' + escH(gm.t1) + '"'
+            + ' data-t2="' + escH(gm.t2) + '"'
+            + ' data-venue="' + escH(gm.loc) + '"'
+            + ' data-day="' + gm.dIdx + '"'
+            + ' data-gi="' + gm.gi + '"'
+            + ' data-gk="' + escH(gm.gk) + '">'
+            + '<div class="cg-cell-div" style="color:' + gm.divColor + '">' + escH(divShort)
+            +   (gm.lbl ? ' <span class="cg-cell-label">' + escH(gm.lbl) + '</span>' : '') + '</div>'
+            + '<div class="cg-cell-teams">' + escH(gm.t1) + '<span class="cg-vs">vs</span>' + escH(gm.t2) + '</div>'
+            + (score ? '<div class="cg-cell-score">' + escH(score) + '</div>' : '')
+            + '</td>';
+        } else {
+          rows += '<td class="cg-empty-cell"'
+            + ' data-empty-day="' + _gridActiveDay + '"'
+            + ' data-empty-time="' + escH(t) + '"'
+            + ' data-empty-court="' + escH(crt) + '"></td>';
+        }
+      });
+      rows += '</tr>';
+    });
+
+    return tabsHtml
+      + '<div class="cg-wrap"><table class="cg-table' + editableClass + '">'
+      + '<thead>' + hdr1 + hdr2 + '</thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
   function renderSched() {
     var lS = document.getElementById('lS').value || '13:30';
     var lE = document.getElementById('lE').value || '14:30';
@@ -4711,8 +4892,12 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '<div class="stat"><div class="stn" id="emptySlotCount">0</div><div class="stl">Empty Slots</div></div>'
       + '</div>';
 
-    // ── Export buttons ────────────────────────────────────
-    h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">'
+    // ── Export buttons + view toggle ──────────────────────
+    h += '<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">'
+      + '<div class="view-toggle">'
+      +   '<button id="viewListBtn" type="button"' + (_viewMode === 'list' ? ' class="active"' : '') + '>&#128203; List</button>'
+      +   '<button id="viewGridBtn" type="button"' + (_viewMode === 'grid' ? ' class="active"' : '') + '>&#128438; Grid</button>'
+      + '</div>'
       + '<button id="editModeBtn" class="btn' + (_editMode ? ' em-on' : '') + '" style="background:' + (_editMode ? '#FF6B00' : '#1e3a5f') + ';color:' + (_editMode ? '#fff' : 'var(--g)') + ';padding:9px 18px;font-weight:700;border:1px solid ' + (_editMode ? '#FF6B00' : 'rgba(255,255,255,.2)') + '">&#9998; ' + (_editMode ? 'Editing&#8202;&#8212;&#8202;click game to move' : 'Edit Schedule') + '</button>'
       + '<button id="auditBtn" class="btn" style="background:#0ea5e9;color:#fff;padding:9px 18px;font-weight:700">&#128269; Audit Schedule</button>'
       + '<button id="auditExportBtn" class="btn" style="background:#8B5CF6;color:#fff;padding:9px 18px;font-weight:700">&#128203; Export for AI Review</button>'
@@ -4723,10 +4908,14 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       + '<button id="jsonImportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128194; Load JSON</button>'
       + '</div>';
 
-    sched.gameDays.forEach(function(day, dIdx) {
-      h += '<div class="day-hdr">' + day.label + '</div>';
-      h += renderDayBlock(day.divs, lS, lE, dIdx);
-    });
+    if (_viewMode === 'grid') {
+      h += renderCourtGridDOM(lS, lE);
+    } else {
+      sched.gameDays.forEach(function(day, dIdx) {
+        h += '<div class="day-hdr">' + day.label + '</div>';
+        h += renderDayBlock(day.divs, lS, lE, dIdx);
+      });
+    }
     document.getElementById('schedOut').innerHTML = h;
 
     // ── Wire up alert banner collapse toggle ──────────────
@@ -4827,6 +5016,8 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     var editBtn      = document.getElementById('editModeBtn');
     var auditBtn     = document.getElementById('auditBtn');
     var auditExpBtn  = document.getElementById('auditExportBtn');
+    var viewListBtn  = document.getElementById('viewListBtn');
+    var viewGridBtn  = document.getElementById('viewGridBtn');
     if (csvBtn)       csvBtn.onclick      = exportScheduleToCSV;
     if (printGridBtn) printGridBtn.onclick = printCourtGrid;
     if (printDivBtn)  printDivBtn.onclick  = printByDivision;
@@ -4834,11 +5025,33 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (jsonImpBtn)   jsonImpBtn.onclick   = function() { document.getElementById('jsonImportInput').click(); };
     if (auditBtn)     auditBtn.onclick    = openAuditModal;
     if (auditExpBtn)  auditExpBtn.onclick = exportAuditMarkdown;
+    if (viewListBtn)  viewListBtn.onclick = function() {
+      if (_viewMode === 'list') return;
+      _viewMode = 'list';
+      renderSched();
+    };
+    if (viewGridBtn)  viewGridBtn.onclick = function() {
+      if (_viewMode === 'grid') return;
+      _viewMode = 'grid';
+      renderSched();
+    };
     if (editBtn) editBtn.onclick = function() {
       _editMode = !_editMode;
       document.getElementById('schedOut').classList.toggle('edit-mode-active', _editMode);
       renderSched(); // re-render to update button label/style
     };
+
+    // Grid-view day-tab click handlers
+    if (_viewMode === 'grid') {
+      document.querySelectorAll('#schedOut .cg-day-tab').forEach(function(tab) {
+        tab.onclick = function() {
+          var d = parseInt(tab.getAttribute('data-grid-day'));
+          if (isNaN(d) || d === _gridActiveDay) return;
+          _gridActiveDay = d;
+          renderSched();
+        };
+      });
+    }
   }
 
   // ── Export: CSV ───────────────────────────────────────
