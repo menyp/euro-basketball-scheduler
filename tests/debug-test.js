@@ -33,7 +33,7 @@ const dom = new JSDOM(html, {
 
   window._setSites([
     { name: 'Blanes', numCourts: 5 },
-    { name: 'Santa Suzana', numCourts: 2 },
+    { name: 'Santa Susanna', numCourts: 2 },
     { name: 'Palafolls', numCourts: 2 }
   ]);
 

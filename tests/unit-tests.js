@@ -358,7 +358,7 @@ async function runUnitTests() {
 async function runIntegrationTests() {
   const SITES = [
     { name: 'Blanes',       numCourts: 6 },
-    { name: 'Santa Suzana', numCourts: 2 },
+    { name: 'Santa Susanna', numCourts: 2 },
     { name: 'Palafolls',    numCourts: 2 }
   ];
 

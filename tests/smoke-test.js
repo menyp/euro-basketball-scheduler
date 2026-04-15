@@ -23,17 +23,17 @@ const html = fs.readFileSync(htmlPath, 'utf8');
 // ── Venue layouts ─────────────────────────────────────────────────────────────
 const SITES_DEFAULT  = [
   { name: 'Blanes',       numCourts: 6 },
-  { name: 'Santa Suzana', numCourts: 2 },
+  { name: 'Santa Susanna', numCourts: 2 },
   { name: 'Palafolls',    numCourts: 2 }
 ];
 const SITES_BALANCED = [
   { name: 'Blanes',       numCourts: 5 },
-  { name: 'Santa Suzana', numCourts: 3 },
+  { name: 'Santa Susanna', numCourts: 3 },
   { name: 'Palafolls',    numCourts: 2 }
 ];
 const SITES_CONSTRAINED = [
   { name: 'Blanes',       numCourts: 5 },
-  { name: 'Santa Suzana', numCourts: 2 },
+  { name: 'Santa Susanna', numCourts: 2 },
   { name: 'Palafolls',    numCourts: 2 }
 ];
 

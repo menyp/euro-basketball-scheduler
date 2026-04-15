@@ -3,7 +3,7 @@
 /**
  * audit-rule-violations.js — independent verification of AI audit claims
  *
- * Reproduces the user's config (default teams + Blanes=5 + Santa Suzana=2 +
+ * Reproduces the user's config (default teams + Blanes=5 + Santa Susanna=2 +
  * Palafolls=2 + Pineda=1 = 10 courts, default rules) and runs each rule
  * check with both the "loose" interpretation (what the scheduler enforces
  * today) and the "strict" interpretation (what the AI reviewers used).
@@ -66,24 +66,9 @@ dom.virtualConsole.removeAllListeners('jsdomError');
 const w = dom.window;
 const d = w.document;
 
-// 1. Reduce Blanes from 6 → 5
-const firstSnum = d.querySelectorAll('#siteList input.snum')[0];
-firstSnum.value = '5';
-firstSnum.dispatchEvent(new w.Event('input', { bubbles: true }));
-
-// 2. Add Pineda venue via the +Add button
-try { d.getElementById('addSiteBtn').click(); } catch (e) {}
-
-// 3. Rename the new site to 'Pineda' and set courts to 1
-const snameInputs = d.querySelectorAll('#siteList input.sname');
-const snumInputs = d.querySelectorAll('#siteList input.snum');
-const lastIdx = snameInputs.length - 1;
-snameInputs[lastIdx].value = 'Pineda';
-snameInputs[lastIdx].dispatchEvent(new w.Event('input', { bubbles: true }));
-snumInputs[lastIdx].value = '1';
-snumInputs[lastIdx].dispatchEvent(new w.Event('input', { bubbles: true }));
-
-// 4. Click Generate (ignore jsdom scrollTo errors)
+// The default sites in index.html now already match the audit config exactly:
+// Blanes=5 + Santa Susanna=2 + Palafolls=2 + Pineda=1. No site manipulation needed.
+// Click Generate (ignore jsdom scrollTo errors).
 try { d.getElementById('genBtn').click(); } catch (e) {}
 
 const sched = w.sched || {};

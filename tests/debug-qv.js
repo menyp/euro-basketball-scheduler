@@ -20,7 +20,7 @@ const dom = new JSDOM(html, {
     if (document.readyState !== 'loading') { setTimeout(r, 80); }
     else { document.addEventListener('DOMContentLoaded', function() { setTimeout(r, 80); }); }
   });
-  window._setSites([{name:'Blanes',numCourts:5},{name:'Santa Suzana',numCourts:2},{name:'Palafolls',numCourts:2}]);
+  window._setSites([{name:'Blanes',numCourts:5},{name:'Santa Susanna',numCourts:2},{name:'Palafolls',numCourts:2}]);
   document.getElementById('parseBtn').click();
   await new Promise(function(r) { setTimeout(r, 80); });
   document.getElementById('genBtn').click();

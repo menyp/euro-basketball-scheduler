@@ -329,13 +329,13 @@ footer span{color:var(--o)}
     <div class="card">
       <div class="stitle">Teams and Divisions</div>
       <label>Paste your full team list</label>
-      <textarea id="pasteBox">U12 MIXED: VKKM (LIT), GLOUCESTER SAXONS (ENG), PARIS SW (FRA), DEREE C. ATHLETIC (GRE), LIMERICK CELTICS (IRE), LIMITLESS HOOPS (USA), MANCHESTER GIANTS 1 (ENG), St. Josephs Basketball Club (IRE), PORTLAOISE PANTHERS (IRE), MANCHESTER GIANTS 2 (ENG), MANCHESTER GIANTS 3 (ENG), TIGERS (CZE)
-U14 BOYS: KILKENNY STARS (IRE), ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), CORK (IRE), CORK (IRE)1, KCB JALANDHAR (IND), GLOUCESTER SAXONS (ENG), SILVA BACKS (USA), PHD HOOPS (USA), DEREE C. ATHLETIC (GRE), St. Josephs Basketball Club (IRE), LIMERICK CELTICS (IRE), BASKETBALL WALES (WAL), SURREY RAMS (ENG), LEEDS BASKETBALL (ENG)
-U16 BOYS: UMF SINDRI (ICE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), KCB JALANDHAR (IND), Kaiserslautern Thunder (GER), PHD HOOPS (USA), LEEDS BASKETBALL (ENG), SMOOTHHANDLES (GER), KINGS COURT CANADA (CAD), SURREY RAMS (ENG), ALTE KANTI (SWI), MVP (USA), LIMITLESS HOOPS (USA), TIGERS (CZE), FLAMES VIENNA (AUT), MADELENA (COL)
-U18 BOYS: BANTRY BC (IRE), Mhaigh Cuilinn U17 (IRE), Mhaigh Cuilinn U17 (IRE)1, SOLLENTUNA (SWE), SOLLENTUNA (SWE)1, KCB JALANDHAR (IND), PHD HOOPS (USA), FORTROSE ACADEMY (SCO), TINDASTOLL (ICE), BC ALTE KANTI (SWI), LNCA (MEX), SURREY RAMS (ENG)
-U14 GIRLS: KILKENNY STARS (IRE), ST. BRIDGET'S CURROW (IRE), ST. MARYS BASKETBALL (IRE), PARIS SW (FRA), LIMERICK CELTICKS (IRE), BASKETBALL WALES (WAL), BASKETBALL WALES (WAL)1, LNCA (MEX), Eagles (SLK), Madelena (COL), Team11, Team12
-U16 GIRLS: ST. MARYS BASKETBALL (IRE), PORTLAOISE PANTHERS (IRE), PARIS SW (FRA), GLANMIRE BASKETBALL (IRE), GLANMIRE BASKETBALL (IRE)1, LOBAS (SWE), PHD HOOPS (USA), GRASSHOPPER ZURICH (SWI), GRASSHOPPER ZURICH (SWI)1, BASKET CHILE (CHI), LIMERICK CELTICS (IRE), IBAS (SLK)
-U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), Team 5, FALCONS (SWI), MADELENA (COL), LNCA 2 (MEX)</textarea>
+      <textarea id="pasteBox">U12 MIXED: GLOUCESTER SAXONS (ENG), ST. JOSEPHS (IRE), USA ELITE (USA), MANCHESTER GIANTS 1 (ENG), LIMITLESS HOOPS (USA), PARIS SW (FRA), MANCHESTER GIANTS BLACK (ENG), PORTLAOISE PANTHERS (IRE), DEREE C. ATHLETIC (GRE), MANCHESTER GIANTS SILVER (ENG), LIMERICK CELTICS (IRE), VKKM (LIT)
+U14 BOYS: CORK 1 (IRE), KILKENNY STARS (IRE), LEEDS BASKETBALL (ENG), BASKETBALL WALES (WAL), ST. MARYS BASKETBALL (IRE), SURREY RAMS (ENG), KCB JALANDHAR (IND), GLOUCESTER SAXONS (ENG), ST. JOSEPHS (IRE), PHD HOOPS (USA), DEREE C. ATHLETIC (GRE), CORK 2 (IRE), LIMERICK CELTICS (IRE), PORTLAOISE PANTHERS (IRE), SILVA BACKS (USA), PARIS SW (FRA)
+U16 BOYS: LIMITLESS HOOPS (USA), KAISERSLAUTERN (GER), ALTE KANTI (SWI), NORWOOD STARS (CAD), LEEDS BASKETBALL (ENG), SMOOTHHANDLES (GER), ST. MARYS BASKETBALL (IRE), MVP 2 (USA), FLAMES VIENNA (AUT), UMF SINDRI (ICE), SURREY RAMS (ENG), MVP 1 (USA), PHD HOOPS (USA), KINGS COURT CANADA (CAD), MADELENA (COL), PARIS SW (FRA)
+U18 BOYS: KCB JALANDHAR (IND), LNCA (MEX), MHAIGH CUILINN 2 (IRE), MHAIGH CUILINN 1 (IRE), TINDASTOLL (ICE), FORTROSE ACADEMY (SCO), SURREY RAMS (ENG), BC ALTE KANTI (SWI), SOLLENTUNA 1 (SWE), BANTRY BC (IRE), SOLLENTUNA 2 (SWE), PHD HOOPS (USA)
+U14 GIRLS: KILKENNY STARS (IRE), LNCA (MEX), Eagles (SWI), LIMERICK CELTICKS (IRE), PARIS SW (FRA), TEAM 10, ST. BRIDGET'S CURROW (IRE), BASKETBALL WALES 2 (WAL), Team 11, ST. MARYS BASKETBALL (IRE), BASKETBALL WALES 1 (WAL), Team 12
+U16 GIRLS: GLANMIRE BASKETBALL 1 (IRE), BASKET CHILE (CHI), PARIS SW (FRA), GLANMIRE BASKETBALL 2 (IRE), GRASSHOPPER ZURICH 2 (SWI), IBAS (SLK), LIMERICK CELTICS (IRE), GRASSHOPPER ZURICH 1 (SWI), LOBAS (SWE), PORTLAOISE PANTHERS (IRE), ST. MARYS BASKETBALL (IRE), PHD HOOPS (USA)
+U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD HOOPS (USA), BASKET CHILE (CHI), ALTE KANTI (SWI), LNCA 1 (MEX)</textarea>
       <p class="paste-hint">Format: <code>Division Name: Team1, Team2, Team3</code> &mdash; one division per line</p>
       <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
       <div id="divSummary"></div>
@@ -614,9 +614,10 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
 
   var divisions = [];
   var sites = [
-    { name: 'Blanes',       numCourts: 6 },
-    { name: 'Santa Suzana', numCourts: 2 },
-    { name: 'Palafolls',    numCourts: 2 }
+    { name: 'Blanes',        numCourts: 5 },
+    { name: 'Santa Susanna', numCourts: 2 },
+    { name: 'Palafolls',     numCourts: 2 },
+    { name: 'Pineda',        numCourts: 1 }
   ];
   // ── Test hook: allow automated tests to override sites before generation ──
   window._setSites = function(newSites) { sites = newSites.slice(); };
@@ -1831,6 +1832,61 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
       // All other categories start as Flexible (no rule entry)
     });
     renderVenueRules();
+  }
+
+  // Apply the user's preferred default group arrangement on initial load.
+  // Mirrors the manualGroups from the canonical EYBC 2026 tournament JSON.
+  // Only runs once at boot — if the admin edits pasteBox and re-parses later,
+  // the auto-chunker (applyNationalMixing) takes over (intentional).
+  function applyDefaultGroupArrangement() {
+    var DEFAULT_GROUPS = {
+      'U12 MIXED': [
+        ['GLOUCESTER SAXONS (ENG)', 'ST. JOSEPHS (IRE)', 'USA ELITE (USA)'],
+        ['MANCHESTER GIANTS 1 (ENG)', 'LIMITLESS HOOPS (USA)', 'PARIS SW (FRA)'],
+        ['MANCHESTER GIANTS BLACK (ENG)', 'PORTLAOISE PANTHERS (IRE)', 'DEREE C. ATHLETIC (GRE)'],
+        ['MANCHESTER GIANTS SILVER (ENG)', 'LIMERICK CELTICS (IRE)', 'VKKM (LIT)']
+      ],
+      'U14 BOYS': [
+        ['CORK 1 (IRE)', 'KILKENNY STARS (IRE)', 'LEEDS BASKETBALL (ENG)', 'BASKETBALL WALES (WAL)'],
+        ['ST. MARYS BASKETBALL (IRE)', 'SURREY RAMS (ENG)', 'KCB JALANDHAR (IND)', 'GLOUCESTER SAXONS (ENG)'],
+        ['ST. JOSEPHS (IRE)', 'PHD HOOPS (USA)', 'DEREE C. ATHLETIC (GRE)', 'CORK 2 (IRE)'],
+        ['LIMERICK CELTICS (IRE)', 'PORTLAOISE PANTHERS (IRE)', 'SILVA BACKS (USA)', 'PARIS SW (FRA)']
+      ],
+      'U16 BOYS': [
+        ['LIMITLESS HOOPS (USA)', 'KAISERSLAUTERN (GER)', 'ALTE KANTI (SWI)', 'NORWOOD STARS (CAD)'],
+        ['LEEDS BASKETBALL (ENG)', 'SMOOTHHANDLES (GER)', 'ST. MARYS BASKETBALL (IRE)', 'MVP 2 (USA)'],
+        ['FLAMES VIENNA (AUT)', 'UMF SINDRI (ICE)', 'SURREY RAMS (ENG)', 'MVP 1 (USA)'],
+        ['PHD HOOPS (USA)', 'KINGS COURT CANADA (CAD)', 'MADELENA (COL)', 'PARIS SW (FRA)']
+      ],
+      'U18 BOYS': [
+        ['KCB JALANDHAR (IND)', 'LNCA (MEX)', 'MHAIGH CUILINN 2 (IRE)'],
+        ['MHAIGH CUILINN 1 (IRE)', 'TINDASTOLL (ICE)', 'FORTROSE ACADEMY (SCO)'],
+        ['SURREY RAMS (ENG)', 'BC ALTE KANTI (SWI)', 'SOLLENTUNA 1 (SWE)'],
+        ['BANTRY BC (IRE)', 'SOLLENTUNA 2 (SWE)', 'PHD HOOPS (USA)']
+      ],
+      'U14 GIRLS': [
+        ['KILKENNY STARS (IRE)', 'LNCA (MEX)', 'Eagles (SWI)'],
+        ['LIMERICK CELTICKS (IRE)', 'PARIS SW (FRA)', 'TEAM 10'],
+        ["ST. BRIDGET'S CURROW (IRE)", 'BASKETBALL WALES 2 (WAL)', 'Team 11'],
+        ['ST. MARYS BASKETBALL (IRE)', 'BASKETBALL WALES 1 (WAL)', 'Team 12']
+      ],
+      'U16 GIRLS': [
+        ['GLANMIRE BASKETBALL 1 (IRE)', 'BASKET CHILE (CHI)', 'PARIS SW (FRA)'],
+        ['GLANMIRE BASKETBALL 2 (IRE)', 'GRASSHOPPER ZURICH 2 (SWI)', 'IBAS (SLK)'],
+        ['LIMERICK CELTICS (IRE)', 'GRASSHOPPER ZURICH 1 (SWI)', 'LOBAS (SWE)'],
+        ['PORTLAOISE PANTHERS (IRE)', 'ST. MARYS BASKETBALL (IRE)', 'PHD HOOPS (USA)']
+      ],
+      'U18 GIRLS': [
+        ['DUVBO IK (SWE)', 'LNCA 2 (MEX)', 'FALCONS (SWI)', 'SANFELIUNEC (ESP)'],
+        ['PHD HOOPS (USA)', 'BASKET CHILE (CHI)', 'ALTE KANTI (SWI)', 'LNCA 1 (MEX)']
+      ]
+    };
+    divisions.forEach(function(d) {
+      if (DEFAULT_GROUPS[d.name]) {
+        d.manualGroups = DEFAULT_GROUPS[d.name].map(function(g) { return g.slice(); });
+      }
+    });
+    renderDivisions();
   }
 
   // ── Fixed time-slot helpers ────────────────────────────
@@ -6220,6 +6276,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
   renderSites();
   renderDayHours();
   parseTeams();
+  applyDefaultGroupArrangement();
 
 }());
 </script>
