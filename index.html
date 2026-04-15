@@ -240,7 +240,15 @@ footer span{color:var(--o)}
 .view-toggle button.active{background:var(--o);color:#fff}
 .view-toggle button:hover:not(.active){background:rgba(255,255,255,.06);color:#fff}
 /* ── Grid view — dark-theme court grid ── */
-.cg-wrap{margin-bottom:18px}
+.cg-wrap{margin-bottom:18px;
+  /* Break out of .main's 760px max-width so the grid (10 courts × 90px + 50px time
+     = ~950px minimum) uses the full viewport width. On viewports ≤ 760px the
+     negative margins resolve to 0 and the grid stays within the parent. The
+     internal overflow-x fallback handles any remaining narrow-screen cases. */
+  margin-left:calc(50% - 50vw + 16px);
+  margin-right:calc(50% - 50vw + 16px);
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch}
 .cg-day-tabs{display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:0}
 .cg-day-tab{background:transparent;border:1px solid rgba(255,255,255,.12);border-bottom:none;color:var(--g);border-radius:7px 7px 0 0;padding:8px 18px;cursor:pointer;font-size:12px;font-weight:700;font-family:Montserrat,sans-serif;transition:background .15s,color .15s}
 .cg-day-tab:hover:not(.active){background:rgba(255,255,255,.06);color:#fff}
@@ -4720,7 +4728,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     var times = Object.keys(gameMap).sort();
     if (!times.length) {
-      return tabsHtml + '<div style="padding:30px 20px;text-align:center;color:var(--g);background:var(--n2);border-radius:8px">No games scheduled for this day.</div>';
+      return '<div class="cg-wrap">' + tabsHtml + '<div style="padding:30px 20px;text-align:center;color:var(--g);background:var(--n2);border-radius:8px">No games scheduled for this day.</div></div>';
     }
 
     // Two-row header: venue (colspan) + courts
@@ -4773,8 +4781,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       rows += '</tr>';
     });
 
-    return tabsHtml
-      + '<div class="cg-wrap"><table class="cg-table' + editableClass + '">'
+    return '<div class="cg-wrap">' + tabsHtml
+      + '<table class="cg-table' + editableClass + '">'
       + '<thead>' + hdr1 + hdr2 + '</thead><tbody>' + rows + '</tbody></table></div>';
   }
 
