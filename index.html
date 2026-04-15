@@ -1417,28 +1417,35 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     return violations;
   }
 
-  // Check 7: SF → FINAL gap ≥ 90 min per bracket
+  // Check 7: SF → any later bracket game gap ≥ 90 min per bracket.
+  // Covers Championship FINAL + 3rd Place, Silver/Bronze medal games, and any other
+  // playoff game that is structurally downstream of its bracket's semifinals.
+  // IMPORTANT: the bucket key combines division + bracket — different divisions'
+  // brackets must NOT be mixed (e.g., U18 BOYS Silver and U14 GIRLS Silver are
+  // independent). Mixing them would compute a meaningless cross-division latest SF.
   function auditCheckFinalsSequencing() {
     var violations = [];
     var byBracket = {};
     allSchedGames(sched).forEach(function(x) {
       var g = x.g, dIdx = x.dIdx;
       if (!g.lbl) return;
-      var key = g.bracket || 'Championship';
-      if (!byBracket[key]) byBracket[key] = { sfs: [], finals: [] };
-      if (/^SF/.test(g.lbl))  byBracket[key].sfs.push({ day: dIdx, timeM: toM(g.time) });
-      if (g.lbl === 'FINAL')  byBracket[key].finals.push({ day: dIdx, timeM: toM(g.time) });
+      var bracketLbl = g.bracket || 'Championship';
+      var key = (x.divName || 'unknown') + '\x00' + bracketLbl;
+      if (!byBracket[key]) byBracket[key] = { sfs: [], downstream: [], divName: x.divName, bracketLbl: bracketLbl };
+      if (/^SF/.test(g.lbl)) byBracket[key].sfs.push({ day: dIdx, timeM: toM(g.time) });
+      else                   byBracket[key].downstream.push({ day: dIdx, timeM: toM(g.time), label: g.lbl });
     });
     Object.keys(byBracket).forEach(function(key) {
-      var sfs = byBracket[key].sfs, finals = byBracket[key].finals;
-      if (!sfs.length || !finals.length) return;
+      var bucket = byBracket[key];
+      var sfs = bucket.sfs, downstream = bucket.downstream;
+      if (!sfs.length || !downstream.length) return;
       var latestSF = sfs.reduce(function(a, b) {
         return (a.day > b.day || (a.day === b.day && a.timeM > b.timeM)) ? a : b;
       });
-      finals.forEach(function(fin) {
+      downstream.forEach(function(d) {
         var MIN_GAP = 90;
-        var ok = latestSF.day < fin.day || (latestSF.day === fin.day && latestSF.timeM + MIN_GAP <= fin.timeM);
-        if (!ok) violations.push(key + ': SF at Day' + (latestSF.day+1) + ' ' + toT(latestSF.timeM) + ' is < ' + MIN_GAP + 'min before FINAL at Day' + (fin.day+1) + ' ' + toT(fin.timeM));
+        var ok = latestSF.day < d.day || (latestSF.day === d.day && latestSF.timeM + MIN_GAP <= d.timeM);
+        if (!ok) violations.push(bucket.divName + ' ' + bucket.bracketLbl + ': SF at Day' + (latestSF.day+1) + ' ' + toT(latestSF.timeM) + ' is < ' + MIN_GAP + 'min before ' + d.label + ' at Day' + (d.day+1) + ' ' + toT(d.timeM));
       });
     });
     return violations;
@@ -1479,7 +1486,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     if (rules.venueRest) row('Venue-change rest \u2265 180 min of actual rest (270 min start-to-start)', auditCheckVenueChangeRest(180));
     row('Max ' + gpd + ' games per team per day', auditCheckMaxGamesPerDay(gpd));
     row('All RR games before any playoff (per division)', auditCheckChronologicalIntegrity());
-    row('Semifinal \u2265 90 min before its Final', auditCheckFinalsSequencing());
+    row('Semifinal \u2265 90 min before any later game in its bracket', auditCheckFinalsSequencing());
     row('No duplicate RR matchups', auditCheckNoDuplicateMatchups());
 
     // Stats
@@ -1645,7 +1652,7 @@ U18 GIRLS: PHD HOOPS (USA), ALTE KANTI (SWI), LNCA 1 (MEX), BASKET CHILE (CHI), 
     lines.push('1. Every team plays every other team in its group exactly once (round robin)');
     lines.push('2. No team can be in two games at the same time on any day');
     lines.push('3. All round-robin games for a division must complete BEFORE any of that division\'s playoff games');
-    lines.push('4. Semifinals must start at least 90 min before their bracket\'s Final');
+    lines.push('4. Semifinals must start at least 90 min before any later game in their bracket (Final, 3rd Place, or medal games)');
     lines.push('5. Max **' + gpd + '** games per team per day');
     if (rules.rest)      lines.push('6. At least **90 min** rest between a team\'s consecutive games');
     if (rules.venueRest) lines.push('7. At least **180 min of actual rest** (270 min start-to-start, a 3-slot gap) when a team switches venues between consecutive same-day games — time for the team to pack, travel, eat, and warm up at the new venue');
