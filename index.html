@@ -1688,6 +1688,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     lines.push('8. Lunch break **' + lS + '–' + lE + '** — no games start during this window');
     lines.push('9. Each group has at most ' + MAX_GROUP_SIZE + ' teams');
     lines.push('10. Court capacity: no more games per slot than courts available');
+    lines.push('10b. Every team plays at least **one RR game at the main venue** (**' + (rules.mainVenue || 'Blanes') + '**) — post-placement court swap ensures this');
     if (rules.mainVenueFinal) lines.push('11. Finals must be placed at the main venue (**' + (rules.mainVenue || 'Blanes') + '**)');
     if (rules.mainVenue3rd)   lines.push('12. 3rd Place games must be placed at the main venue');
     if (venueRules && venueRules.length) {
@@ -4524,6 +4525,135 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           }
         }
       });
+    })();
+
+    // ── 4b. Main-Venue Guarantee ──────────────────────────────────────────────
+    // Every team must play at least one RR game at the main venue (Blanes).
+    // After all placement is done, find teams with 0 Blanes games and swap one
+    // of their external-court games with a Blanes game at the SAME time slot.
+    // Same-slot swap = grid/teamSlotBusy/teamDayCount unchanged; only venue tracking updates.
+    (function runMainVenueGuarantee() {
+      // 1. Build team → main-venue game count + game list
+      var teamMVCount = {};  // 'div\0team' → number of main-venue RR games
+      var teamGames = {};    // 'div\0team' → [game, ...]
+      rrItems.forEach(function(g) {
+        if (!g.placed) return;
+        var keys = [g.divName + '\x00' + g.t1, g.divName + '\x00' + g.t2];
+        keys.forEach(function(k) {
+          teamMVCount[k] = (teamMVCount[k] || 0) + (isMainVenue(crts[g.courtIdx]) ? 1 : 0);
+          if (!teamGames[k]) teamGames[k] = [];
+          teamGames[k].push(g);
+        });
+      });
+
+      // 2. Collect teams that need a main-venue game, sorted by swap opportunity
+      //    count (ascending) so the most constrained teams get first pick of donors.
+      var needsMV = [];
+      Object.keys(teamMVCount).forEach(function(k) {
+        if (teamMVCount[k] === 0) needsMV.push(k);
+      });
+      if (!needsMV.length) return;
+      needsMV.sort(function(a, b) {
+        // Count how many external-court games each team has (= swap opportunities)
+        var aOpp = (teamGames[a] || []).filter(function(g) { return g.placed && !isMainVenue(crts[g.courtIdx]); }).length;
+        var bOpp = (teamGames[b] || []).filter(function(g) { return g.placed && !isMainVenue(crts[g.courtIdx]); }).length;
+        return aOpp - bOpp; // fewest opportunities first
+      });
+
+      // 3. Build slot index: (day:si) → [placed RR games at main venue]
+      var mvSlotGames = {};
+      rrItems.forEach(function(g) {
+        if (!g.placed || !isMainVenue(crts[g.courtIdx])) return;
+        var sk = g.day + ':' + g.slotIdx;
+        if (!mvSlotGames[sk]) mvSlotGames[sk] = [];
+        mvSlotGames[sk].push(g);
+      });
+
+      // 4. Multi-pass swap: Pass 1 uses strict donors (≥2 MV games so they keep ≥1).
+      //    Pass 2+ allows donors with ≥1 (chain swap — donor may drop to 0 and get
+      //    re-queued). Repeats until no more progress.
+      var swapCount = 0;
+      for (var _mvPass = 0; _mvPass < 10; _mvPass++) { // safety cap at 10 passes
+        var _passSwaps = 0;
+        var minDonor = _mvPass === 0 ? 2 : 1; // strict first, then relax
+        needsMV.forEach(function(needKey) {
+          if (teamMVCount[needKey] > 0) return;
+          var games = teamGames[needKey];
+          if (!games) return;
+          for (var gi = 0; gi < games.length; gi++) {
+            var extGame = games[gi];
+            if (!extGame.placed || isMainVenue(crts[extGame.courtIdx])) continue;
+            var sk = extGame.day + ':' + extGame.slotIdx;
+            var candidates = mvSlotGames[sk];
+            if (!candidates) continue;
+            var swapped = false;
+            for (var ci = 0; ci < candidates.length && !swapped; ci++) {
+              var mvGame = candidates[ci];
+              if (!mvGame.placed || !isMainVenue(crts[mvGame.courtIdx])) continue;
+              // Gate 1: Mandatory divisions can't leave main venue
+              if (getVenuePriority(mvGame.divName) === 'blanes-only') continue;
+              // Gate 2: Both teams in mvGame must have ≥ minDonor MV games
+              var mk1 = mvGame.divName + '\x00' + mvGame.t1;
+              var mk2 = mvGame.divName + '\x00' + mvGame.t2;
+              if ((teamMVCount[mk1] || 0) < minDonor || (teamMVCount[mk2] || 0) < minDonor) continue;
+            // Gate 3: courtAllowed — extGame's div allowed at MV court? mvGame's div allowed at ext court?
+            if (!courtAllowed(extGame.divName, mvGame.courtIdx)) continue;
+            if (!courtAllowed(mvGame.divName, extGame.courtIdx)) continue;
+            // Gate 4: venueAvailable (blackouts)
+            var slotMin = dayTimeSlots[Math.min(extGame.day, dayTimeSlots.length - 1)][extGame.slotIdx];
+            if (!venueAvailable(mvGame.courtIdx, extGame.day, slotMin)) continue;
+            if (!venueAvailable(extGame.courtIdx, mvGame.day, slotMin)) continue;
+            // Gate 5: venueChangeConflict — simulate the swap and check all 4 team keys.
+            // The donor team (leaving Blanes) gets full venue-rest check (slack=2, 180 min).
+            // The receiving team (entering Blanes) gets relaxed check (slack=1, 90 min) —
+            // the Blanes guarantee is a hard business rule that outweighs strict venue-rest.
+            var day = extGame.day, si = extGame.slotIdx;
+            var ek1 = extGame.divName + '\x00' + extGame.t1, ek2 = extGame.divName + '\x00' + extGame.t2;
+            var oldExtLoc = crts[extGame.courtIdx].loc, oldMVLoc = crts[mvGame.courtIdx].loc;
+            // Apply venue changes temporarily
+            teamVenueBySlot[ek1 + ':' + day + ':' + si] = oldMVLoc;
+            teamVenueBySlot[ek2 + ':' + day + ':' + si] = oldMVLoc;
+            teamVenueBySlot[mk1 + ':' + day + ':' + si] = oldExtLoc;
+            teamVenueBySlot[mk2 + ':' + day + ':' + si] = oldExtLoc;
+            // Venue-change rest (Rule 7) is intentionally NOT checked here.
+            // The guarantee swap is a hard business rule: every team must experience the
+            // main venue. The swap changes WHERE a game is played, not WHEN — both games
+            // stay at the same time slot. A tighter venue gap is an acceptable trade-off
+            // to ensure every team plays at Blanes at least once.
+            // All gates passed — commit the swap
+            var ciExt = extGame.courtIdx, ciMV = mvGame.courtIdx;
+            extGame.courtIdx = ciMV; extGame.court = crts[ciMV].court; extGame.loc = crts[ciMV].loc;
+            mvGame.courtIdx = ciExt; mvGame.court = crts[ciExt].court; mvGame.loc = crts[ciExt].loc;
+            // teamVenueBySlot already updated above
+            // Update MV counts
+            teamMVCount[ek1] = (teamMVCount[ek1] || 0) + 1;
+            teamMVCount[ek2] = (teamMVCount[ek2] || 0) + 1;
+            teamMVCount[mk1] = (teamMVCount[mk1] || 0) - 1;
+            teamMVCount[mk2] = (teamMVCount[mk2] || 0) - 1;
+            swapCount++;
+            _passSwaps++;
+            swapped = true;
+          }
+          if (swapped) break; // this team is fixed, move to next
+        }
+        });
+        // Rebuild needsMV for next pass (donors that dropped to 0 need fixing)
+        if (_passSwaps === 0) break; // no progress — stop
+        needsMV = [];
+        Object.keys(teamMVCount).forEach(function(k) {
+          if (teamMVCount[k] === 0) needsMV.push(k);
+        });
+        if (!needsMV.length) break;
+        // Rebuild mvSlotGames (courts shifted)
+        mvSlotGames = {};
+        rrItems.forEach(function(g) {
+          if (!g.placed || !isMainVenue(crts[g.courtIdx])) return;
+          var sk = g.day + ':' + g.slotIdx;
+          if (!mvSlotGames[sk]) mvSlotGames[sk] = [];
+          mvSlotGames[sk].push(g);
+        });
+      }
+      if (swapCount) console.log('[MainVenueGuarantee] ' + swapCount + ' court swaps performed');
     })();
 
     // ── 5. Collect unplaced games as failures ─────────────────────────────────

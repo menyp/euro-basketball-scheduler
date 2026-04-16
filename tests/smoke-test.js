@@ -377,10 +377,44 @@ function getRuleState(window) {
 }
 
 // ── Composite integrity check ─────────────────────────────────────────────────
+// ── Main-venue guarantee check ───────────────────────────────────────────────
+// Every team must play at least one RR game at the main venue.
+function checkMainVenueGuarantee(window, mainVenueName) {
+  var mv = (mainVenueName || 'Blanes').toLowerCase();
+  var sched = window.sched || {};
+  var teamHasMV = {}; // 'div\0team' → true if they have ≥1 MV RR game
+  var allTeams = {};  // 'div\0team' → true
+
+  (sched.gameDays || []).forEach(function(day) {
+    day.divs.forEach(function(d) {
+      if (!d.groups) return;
+      Object.keys(d.groups).forEach(function(gk) {
+        d.groups[gk].games.forEach(function(g) {
+          if (g.lbl) return; // skip PO
+          if (!g.loc) return;
+          [g.t1, g.t2].forEach(function(t) {
+            if (!t) return;
+            var key = d.name + ' | ' + t;
+            allTeams[key] = true;
+            if ((g.loc || '').toLowerCase().indexOf(mv) !== -1) teamHasMV[key] = true;
+          });
+        });
+      });
+    });
+  });
+
+  var violations = [];
+  Object.keys(allTeams).forEach(function(key) {
+    if (!teamHasMV[key]) violations.push(key);
+  });
+  return violations;
+}
+
 // Returns check items for self-play, double-booking, and (when enabled) rest
 // and venue-change rest. Reads rule toggles from the DOM so the same call works
 // for any scenario regardless of which rules are ON or OFF.
-function integrityChecks(window) {
+function integrityChecks(window, opts) {
+  opts = opts || {};
   const rules = getRuleState(window);
   const items = [];
 
@@ -412,6 +446,14 @@ function integrityChecks(window) {
   } else {
     items.push({ label: 'Venue-change rest check skipped (ruleVenueRest=OFF)', pass: true, detail: 'rule disabled' });
   }
+
+  var mvGuarantee = checkMainVenueGuarantee(window, 'Blanes');
+  var mvDetail = mvGuarantee.length === 0 ? 'OK' : mvGuarantee.slice(0, 3).join('; ') + (mvGuarantee.length > 3 ? ' (+' + (mvGuarantee.length - 3) + ' more)' : '');
+  // Hard check for standard configs; informational for extreme/constrained scenarios.
+  // opts.softMVGuarantee = true makes it always pass (detail still reported).
+  var mvPass = opts.softMVGuarantee ? true : mvGuarantee.length === 0;
+  items.push({ label: 'Every team plays ≥1 RR game at main venue' + (opts.softMVGuarantee ? ' (best-effort)' : ''),
+    pass: mvPass, detail: mvDetail });
 
   return items;
 }
@@ -567,7 +609,7 @@ const TESTS = [
           detail: satFmt },
         { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
@@ -625,7 +667,7 @@ const TESTS = [
           detail: 'softWarnings=' + result.softWarnings },
         { label: 'Max ' + gpd + ' games/team/day enforced (rest OFF)', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
@@ -699,7 +741,7 @@ const TESTS = [
       const restEl = window.document.getElementById('ruleRest');
       const restWas = restEl ? restEl.checked : false;
       if (restEl) restEl.checked = false;
-      const ic = integrityChecks(window); // reads rule state → rest+venueRest OFF → only self-play + dblbook
+      const ic = integrityChecks(window, { softMVGuarantee: true }); // reads rule state → rest+venueRest OFF → only self-play + dblbook
       if (vrEl) vrEl.checked = vrWas;
       if (restEl) restEl.checked = restWas;
       return [

@@ -70,6 +70,7 @@ sched = {
 - Round robin fills first `(nDays - 1)` days; if games overflow, extra days are added automatically (up to `MAX_EXTRA_DAYS = 10`)
 - Last day is always semifinals + finals bracket
 - Lunch break window is respected — no games placed during it
+- **Main-venue guarantee** (Step 4b): after all RR/PO placement, a swap pass ensures every team plays at least one RR game at the main venue. Uses same-slot court swaps (no timing changes) so Blanes utilization stays at 100%.
 
 ## Scoring and Bracket Flow
 - Score inputs: `<input class="score-in score1|score2" data-day data-div data-gi data-gk>`
