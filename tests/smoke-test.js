@@ -718,6 +718,85 @@ const TESTS = [
                 + ', quotaViolations=' + result.quotaViolations },
       ]);
     }
+  },
+  {
+    // Scenario 7: 10-team division → 2 groups of 5, direct-seed playoff (FINAL + Semi Final only).
+    // Verifies that MAX_GROUP_SIZE=5 and the new getBracketGames branch work end-to-end.
+    // We trim U18 BOYS to exactly 10 teams and use 4 days (3 RR + 1 finals) so that
+    // 5-team groups (4 games/team, maxGPD=2) have 3 RR days — comfortably avoiding
+    // quota pressure that would occur on just 2 RR days.
+    name: 'Scenario 7 — 10-Team Division (2×5 groups, direct-seed PO, 4 days): 0 failures, correct bracket',
+    sites: SITES_DEFAULT,
+    mainVenue: 'Blanes',
+    setup: function(window) {
+      // Replace U18 BOYS line with exactly 10 teams (trimmed from default 12)
+      var box = window.document.getElementById('pasteBox');
+      var lines = box.value.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i].indexOf('U18 BOYS:') === 0) {
+          lines[i] = 'U18 BOYS: KCB JALANDHAR (IND), LNCA (MEX), MHAIGH CUILINN 2 (IRE), MHAIGH CUILINN 1 (IRE), TINDASTOLL (ICE), FORTROSE ACADEMY (SCO), SURREY RAMS (ENG), BC ALTE KANTI (SWI), SOLLENTUNA 1 (SWE), BANTRY BC (IRE)';
+          break;
+        }
+      }
+      box.value = lines.join('\n');
+      // Use 4 days: 3 RR days + 1 finals day — fits 5-team groups at maxGPD=2
+      var nDaysEl = window.document.getElementById('nDays');
+      if (nDaysEl) nDaysEl.value = '4';
+    },
+    check: function(result, window) {
+      var kpi = computeKPIs(result, window, 'Blanes');
+      var gpd = getMaxGPD(window);
+      var gpdViolations = checkMaxGamesPerDay(window, gpd);
+      var gpdFmt = gpdViolations.length === 0 ? 'OK' : gpdViolations.slice(0,3).join('; ') + (gpdViolations.length > 3 ? ' (+' + (gpdViolations.length-3) + ' more)' : '');
+
+      // Verify bracket structure: U18 BOYS should have exactly 2 PO games (FINAL + Semi Final)
+      var sched = window.sched || {};
+      var poLabels = [];
+      (sched.bracketDays || []).forEach(function(day) {
+        day.divs.forEach(function(d) {
+          if (d.name !== 'U18 BOYS') return;
+          (d.games || []).forEach(function(g) { if (g.lbl) poLabels.push(g.lbl); });
+        });
+      });
+      poLabels.sort();
+      var expectedLabels = ['FINAL', 'Semi Final'];
+      var bracketOK = poLabels.length === 2 && poLabels[0] === expectedLabels[0] && poLabels[1] === expectedLabels[1];
+
+      // Verify RR game count: 2 groups × C(5,2) = 2×10 = 20 RR games for U18 BOYS
+      // Filter to actual RR group keys (contain "Group") — excludes PO group keys like "— Playoffs"
+      var rrGameCount = 0;
+      var rrGroupKeys = {};
+      (sched.gameDays || []).forEach(function(day) {
+        day.divs.forEach(function(d) {
+          if (d.name !== 'U18 BOYS' || !d.groups) return;
+          Object.keys(d.groups).forEach(function(gk) {
+            if (gk.indexOf('Group') === -1) return; // skip PO groups
+            rrGroupKeys[gk] = true;
+            d.groups[gk].games.forEach(function(g) { if (!g.lbl) rrGameCount++; });
+          });
+        });
+      });
+      var numGroups = Object.keys(rrGroupKeys).length;
+      var rrOK = numGroups === 2 && rrGameCount === 20;
+
+      return [
+        { label: 'Failed games = 0',    pass: result.failed === 0,
+          detail: 'failed=' + result.failed + failDetail(result) },
+        { label: 'Quota violations = 0', pass: result.quotaViolations === 0,
+          detail: 'quotaViolations=' + result.quotaViolations },
+        { label: 'All games scheduled', pass: result.scheduled === result.total,
+          detail: 'scheduled=' + result.scheduled + ' / total=' + result.total },
+        { label: 'U18 BOYS: 2 groups, 20 RR games (C(5,2)×2)', pass: rrOK,
+          detail: 'groups=' + numGroups + ', rrGames=' + rrGameCount },
+        { label: 'U18 BOYS bracket = FINAL + Semi Final only', pass: bracketOK,
+          detail: 'poLabels=' + JSON.stringify(poLabels) },
+        { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
+          detail: gpdFmt },
+      ].concat(integrityChecks(window)).concat([
+        { label: 'KPI: Placement', pass: true,
+          detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
+      ]);
+    }
   }
 ];
 

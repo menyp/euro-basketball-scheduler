@@ -1160,10 +1160,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return false;
   }
 
-  // Hard ceiling on manual group size. The scheduler's round-robin math and
-  // safe-start gates are tuned for groups of <= 4 (the standard format).
-  // Larger groups create RR rounds that don't fit within the tournament day window.
-  var MAX_GROUP_SIZE = 4;
+  // Hard ceiling on manual group size. Groups of up to 5 are supported —
+  // a 5-team group plays 4 RR games per team (C(5,2)=10 games), which fits
+  // within a 2-day RR window at maxGPD=2. 10-team divisions (2 groups of 5)
+  // use a direct-seed playoff: Final (1A vs 1B) + Semi Final (2A vs 2B).
+  // Anything larger than 5 creates RR math that doesn't fit the day window.
+  var MAX_GROUP_SIZE = 5;
 
   // Returns an array of offenders: [{ divName, gi, size }, ...] for each
   // manual group that exceeds MAX_GROUP_SIZE. Empty array means all clean.
@@ -1665,7 +1667,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (rules.rest)      lines.push('6. At least **90 min** rest between a team\'s consecutive games');
     if (rules.venueRest) lines.push('7. At least **180 min of actual rest** (270 min start-to-start, a 3-slot gap) when a team switches venues between consecutive same-day games — time for the team to pack, travel, eat, and warm up at the new venue');
     lines.push('8. Lunch break **' + lS + '–' + lE + '** — no games start during this window');
-    lines.push('9. Each group has at most 4 teams');
+    lines.push('9. Each group has at most ' + MAX_GROUP_SIZE + ' teams');
     lines.push('10. Court capacity: no more games per slot than courts available');
     if (rules.mainVenueFinal) lines.push('11. Finals must be placed at the main venue (**' + (rules.mainVenue || 'Blanes') + '**)');
     if (rules.mainVenue3rd)   lines.push('12. 3rd Place games must be placed at the main venue');
@@ -2036,6 +2038,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (n <= 5)  return n;   // 1 group — everyone plays everyone
     if (n === 6) return 3;   // 2 groups of 3 for 6-team divisions
     if (n <= 8)  return 4;   // 2 groups of 4 for 7-8 teams
+    if (n === 10) return 5;  // 10 teams → 2 groups of 5 (direct-seed playoff: Final + Semi Final only)
     if (n <= 12) return 3;   // 3–4 groups of 3
     return 4;                // 4 groups of 4
   }
@@ -2262,6 +2265,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (G <= 1) {
       // Single group — just a final
       matchups.push({ t1: '1st Group A', t2: '2nd Group A', lbl: 'FINAL', bracket: 'Championship' });
+    } else if (G === 2 && maxGrpSize === 5) {
+      // 10-team division: 2 groups of 5 with a direct-seed 2-game playoff.
+      // No cross-bracket SFs. The Final determines 1st/2nd, the Semi Final
+      // determines 3rd/4th. Teams 3–5 in each group finish after RR with
+      // their group-stage ranking (no further matches).
+      matchups.push({ t1: '1st Group A', t2: '1st Group B', lbl: 'FINAL',      bracket: 'Championship' });
+      matchups.push({ t1: '2nd Group A', t2: '2nd Group B', lbl: 'Semi Final', bracket: 'Championship' });
     } else if (G === 2) {
       // 8-team cross-over: 1A vs 2B, 1B vs 2A
       matchups.push({ t1: '1st Group A', t2: '2nd Group B', lbl: 'SF 1',      bracket: 'Championship' });
@@ -3036,7 +3046,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     //  5. Atomic PO   — SF look-ahead: Final slot must exist on same day
     // ══════════════════════════════════════════════════════════════════════════
 
-    var LATE_LBLS = { 'FINAL': 1, '3rd Place': 1 };
+    var LATE_LBLS = { 'FINAL': 1, '3rd Place': 1, 'Semi Final': 1 };
     var PO_GK = function(n) { return n + ' \u2014 Playoffs'; };
 
     // ── 1. Build flat game item queues ────────────────────────────────────────
@@ -5828,7 +5838,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     switchTab('setup');
   }
 
-  // Allow admin to add a team into a group to fill to 4 teams.
+  // Allow admin to add a team into a group to fill to 5 teams (MAX_GROUP_SIZE).
   function addTeamToGroup(divName, gk) {
     var name = window.prompt('Enter team name to add to ' + divName + ' (will be added to division)');
     if (!name) return;
