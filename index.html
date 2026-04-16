@@ -4731,6 +4731,183 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       if (swapCount) console.log('[MainVenueGuarantee] ' + swapCount + ' court swaps performed');
     })();
 
+    // ── 4b.5 Two-Step Cascade for MV Guarantee ───────────────────────────────
+    // For teams still missing Blanes after same-slot swaps: Blanes is 100% full,
+    // so we need to FREE a Blanes court first. Strategy:
+    //   Step A: Find a Blanes game at target slot whose teams can safely move to
+    //           an external court (same slot — just court swap, no timing change)
+    //   Step B: Move the failing team's game from its current slot to the freed
+    //           Blanes court (time-shift — different day to avoid Rule 7)
+    (function runCascadeMVGuarantee() {
+      // Helper: unplace an RR game (inverse of recordPlacement for RR)
+      function _unplaceRR(g) {
+        if (!g.placed) return;
+        var od = g.day, osi = g.slotIdx, oci = g.courtIdx;
+        if (od < 0 || osi < 0 || oci < 0) return;
+        grid[od][osi][oci] = false;
+        var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+        [k1, k2].forEach(function(k) {
+          delete teamSlotBusy[k + ':' + od + ':' + osi];
+          delete teamVenueBySlot[k + ':' + od + ':' + osi];
+          if (teamDayCount[k] && teamDayCount[k][od] > 0) teamDayCount[k][od]--;
+          if (teamPlacedRR[k] > 0) teamPlacedRR[k]--;
+        });
+        if (isMainVenue(crts[oci])) {
+          // Recheck MV status — may need to clear teamHasMVGame
+          [k1, k2].forEach(function(k) {
+            var stillHasMV = false;
+            rrItems.forEach(function(rg) {
+              if (rg !== g && rg.placed && isMainVenue(crts[rg.courtIdx])) {
+                var rk1 = rg.divName + '\x00' + rg.t1, rk2 = rg.divName + '\x00' + rg.t2;
+                if (rk1 === k || rk2 === k) stillHasMV = true;
+              }
+            });
+            if (!stillHasMV) delete teamHasMVGame[k];
+          });
+        }
+        g.placed = false; g.day = -1; g.slotIdx = -1; g.courtIdx = -1;
+        g.court = null; g.loc = null;
+      }
+
+      // Rebuild MV status
+      var _cMVC = {};
+      var _cGames = {};
+      rrItems.forEach(function(g) {
+        if (!g.placed) return;
+        var keys = [g.divName + '\x00' + g.t1, g.divName + '\x00' + g.t2];
+        keys.forEach(function(k) {
+          _cMVC[k] = (_cMVC[k] || 0) + (isMainVenue(crts[g.courtIdx]) ? 1 : 0);
+          if (!_cGames[k]) _cGames[k] = [];
+          _cGames[k].push(g);
+        });
+      });
+      var _cNeeds = [];
+      Object.keys(_cMVC).forEach(function(k) { if (_cMVC[k] === 0) _cNeeds.push(k); });
+      if (!_cNeeds.length) return;
+
+      var _mvCI = [];
+      crts.forEach(function(c, i) { if (isMainVenue(c)) _mvCI.push(i); });
+
+      var cascadeCount = 0;
+      _cNeeds.forEach(function(needKey) {
+        if (_cMVC[needKey] > 0) return;
+        var myGames = (_cGames[needKey] || []).filter(function(g) {
+          return g.placed && !isMainVenue(crts[g.courtIdx]);
+        });
+        if (!myGames.length) return;
+
+        // For each of the failing team's external games, try to find a cascade target
+        var fixed = false;
+        for (var mg = 0; mg < myGames.length && !fixed; mg++) {
+          var srcGame = myGames[mg];
+          var sk1 = srcGame.divName + '\x00' + srcGame.t1;
+          var sk2 = srcGame.divName + '\x00' + srcGame.t2;
+
+          // Try every slot on a DIFFERENT day where both teams are free
+          for (var td = 0; td < nDays - 1 && !fixed; td++) {
+            if (td === srcGame.day) continue; // different day for Rule 7 safety
+            var tdSlots = dayTimeSlots[Math.min(td, dayTimeSlots.length - 1)];
+            for (var tsi = 0; tsi < tdSlots.length && !fixed; tsi++) {
+              if (!rrSlotOK(srcGame.divName, td, tsi)) continue;
+              if (slotConflict(sk1, td, tsi) || slotConflict(sk2, td, tsi)) continue;
+              if (((teamDayCount[sk1] || {})[td] || 0) >= maxGPD) continue;
+              if (((teamDayCount[sk2] || {})[td] || 0) >= maxGPD) continue;
+              // Rule 5 safety
+              var _sk1Div = sk1.split('\x00')[0];
+              if (_r5LimitedDivDay[_sk1Div + ':' + td]) {
+                var _r5g = Math.max(maxGPD - 1, 1);
+                if (((teamDayCount[sk1] || {})[td] || 0) >= _r5g) continue;
+                if (((teamDayCount[sk2] || {})[td] || 0) >= _r5g) continue;
+              }
+
+              // Step A: Find a displaceable Blanes game at this target slot
+              for (var mci = 0; mci < _mvCI.length && !fixed; mci++) {
+                var tgtCi = _mvCI[mci];
+                if (!grid[td][tsi][tgtCi]) {
+                  // Blanes court is ALREADY free — no displacement needed!
+                  // Verify Rule 7 at new slot
+                  if (venueChangeConflict(sk1, td, tsi, crts[tgtCi].loc)) continue;
+                  if (venueChangeConflict(sk2, td, tsi, crts[tgtCi].loc)) continue;
+                  if (!venueAvailable(tgtCi, td, tdSlots[tsi])) continue;
+                  // Direct move — unplace from old, place at new
+                  _unplaceRR(srcGame);
+                  srcGame.type = 'RR'; // ensure type is set for recordPlacement
+                  recordPlacement(srcGame, td, tsi, tgtCi);
+                  _cMVC[sk1] = (_cMVC[sk1] || 0) + 1;
+                  _cMVC[sk2] = (_cMVC[sk2] || 0) + 1;
+                  cascadeCount++;
+                  fixed = true;
+                  continue;
+                }
+                // Blanes court occupied — try to displace the occupant
+                // Find the RR game at this grid position
+                var occupant = null;
+                rrItems.forEach(function(rg) {
+                  if (rg.placed && rg.day === td && rg.slotIdx === tsi && rg.courtIdx === tgtCi) occupant = rg;
+                });
+                if (!occupant) continue; // PO game or not found — skip
+                // Gate: occupant's div not mandatory
+                if (getVenuePriority(occupant.divName) === 'blanes-only') continue;
+                // Gate: both occupant teams have ≥2 MV games
+                var ok1 = occupant.divName + '\x00' + occupant.t1;
+                var ok2 = occupant.divName + '\x00' + occupant.t2;
+                if ((_cMVC[ok1] || 0) < 2 || (_cMVC[ok2] || 0) < 2) continue;
+                // Gate: find a free external court at the SAME slot for the occupant.
+                // Temporarily clear occupant's venue at this slot so venueChangeConflict
+                // doesn't see their own Blanes game as a conflict with the proposed external.
+                var _occOldVenue1 = teamVenueBySlot[ok1 + ':' + td + ':' + tsi];
+                var _occOldVenue2 = teamVenueBySlot[ok2 + ':' + td + ':' + tsi];
+                delete teamVenueBySlot[ok1 + ':' + td + ':' + tsi];
+                delete teamVenueBySlot[ok2 + ':' + td + ':' + tsi];
+                var extCi = -1;
+                for (var eci = 0; eci < nCourts && extCi < 0; eci++) {
+                  if (isMainVenue(crts[eci])) continue;
+                  if (grid[td][tsi][eci]) continue;
+                  if (!courtAllowed(occupant.divName, eci)) continue;
+                  if (!venueAvailable(eci, td, tdSlots[tsi])) continue;
+                  // Occupant Rule 7: moving to external must not conflict
+                  if (venueChangeConflict(ok1, td, tsi, crts[eci].loc)) continue;
+                  if (venueChangeConflict(ok2, td, tsi, crts[eci].loc)) continue;
+                  extCi = eci;
+                }
+                // Restore occupant venue (will be updated if cascade succeeds)
+                if (_occOldVenue1) teamVenueBySlot[ok1 + ':' + td + ':' + tsi] = _occOldVenue1;
+                if (_occOldVenue2) teamVenueBySlot[ok2 + ':' + td + ':' + tsi] = _occOldVenue2;
+                if (extCi < 0) continue; // no safe external court for occupant
+                // Gate: srcGame at new Blanes slot — Rule 7 check
+                // Temporarily pretend tgtCi is free (occupant about to move)
+                grid[td][tsi][tgtCi] = false;
+                var srcR7ok = !venueChangeConflict(sk1, td, tsi, crts[tgtCi].loc)
+                           && !venueChangeConflict(sk2, td, tsi, crts[tgtCi].loc);
+                grid[td][tsi][tgtCi] = true; // restore
+                if (!srcR7ok) continue;
+
+                // === Execute cascade ===
+                // Step A: Move occupant from Blanes to external (same-slot court swap)
+                occupant.courtIdx = extCi; occupant.court = crts[extCi].court; occupant.loc = crts[extCi].loc;
+                teamVenueBySlot[ok1 + ':' + td + ':' + tsi] = crts[extCi].loc;
+                teamVenueBySlot[ok2 + ':' + td + ':' + tsi] = crts[extCi].loc;
+                grid[td][tsi][tgtCi] = false;
+                grid[td][tsi][extCi] = true;
+                _cMVC[ok1] = (_cMVC[ok1] || 0) - 1;
+                _cMVC[ok2] = (_cMVC[ok2] || 0) - 1;
+
+                // Step B: Move srcGame from old slot to freed Blanes court
+                _unplaceRR(srcGame);
+                srcGame.type = 'RR';
+                recordPlacement(srcGame, td, tsi, tgtCi);
+                _cMVC[sk1] = (_cMVC[sk1] || 0) + 1;
+                _cMVC[sk2] = (_cMVC[sk2] || 0) + 1;
+                cascadeCount++;
+                fixed = true;
+              }
+            }
+          }
+        }
+      });
+      if (cascadeCount) console.log('[CascadeMVGuarantee] ' + cascadeCount + ' cascade relocations');
+    })();
+
     // ── 4c. Age-Priority Blanes Rebalancing ───────────────────────────────────
     // Older age groups and boys get priority for Blanes courts. After the guarantee
     // pass (every team has ≥1 Blanes game), swap excess Blanes games from younger/
@@ -4863,6 +5040,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         reason: 'No playoff slot found. Add more courts or extend operating hours.'
       });
     });
+
+    // Test hook: expose rrItems for debugging assembly issues
+    window._rrItems = rrItems;
 
     // ── 6. Assemble gameDays from placed items ────────────────────────────────
     var gameDays = [];
