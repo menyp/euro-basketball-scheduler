@@ -4656,6 +4656,110 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       if (swapCount) console.log('[MainVenueGuarantee] ' + swapCount + ' court swaps performed');
     })();
 
+    // ── 4c. Age-Priority Blanes Rebalancing ───────────────────────────────────
+    // Older age groups and boys get priority for Blanes courts. After the guarantee
+    // pass (every team has ≥1 Blanes game), swap excess Blanes games from younger/
+    // lower-priority divisions to older/higher-priority divisions that have fewer.
+    (function runAgePriorityRebalance() {
+      // Priority score: higher = more deserving of Blanes.
+      // Age is the primary factor (×2), gender is secondary (+1 for boys/mixed).
+      function divPriority(divName) {
+        var age = extractAgeGroup(divName);
+        var n = (divName || '').toUpperCase();
+        var isBoys = n.indexOf('GIRL') === -1 && n.indexOf('WOMEN') === -1;
+        return age * 2 + (isBoys ? 1 : 0);
+      }
+
+      // Rebuild MV counts from current state (after guarantee pass may have changed things)
+      var teamMVC = {};
+      var teamGms = {};
+      rrItems.forEach(function(g) {
+        if (!g.placed) return;
+        var keys = [g.divName + '\x00' + g.t1, g.divName + '\x00' + g.t2];
+        keys.forEach(function(k) {
+          teamMVC[k] = (teamMVC[k] || 0) + (isMainVenue(crts[g.courtIdx]) ? 1 : 0);
+          if (!teamGms[k]) teamGms[k] = [];
+          teamGms[k].push(g);
+        });
+      });
+
+      // Build donors (low-priority teams with ≥2 Blanes games, non-mandatory)
+      // and recipients (high-priority teams with exactly 1 Blanes game)
+      var donors = [], recipients = [];
+      Object.keys(teamMVC).forEach(function(k) {
+        var div = k.split('\x00')[0];
+        var prio = divPriority(div);
+        if (teamMVC[k] >= 2 && getVenuePriority(div) !== 'blanes-only') donors.push({ key: k, div: div, prio: prio });
+        if (teamMVC[k] === 1) recipients.push({ key: k, div: div, prio: prio });
+      });
+      // Sort: donors by priority ascending (lowest donates first), recipients descending (highest receives first)
+      donors.sort(function(a, b) { return a.prio - b.prio; });
+      recipients.sort(function(a, b) { return b.prio - a.prio; });
+
+      // Build slot index of Blanes games from donor teams
+      var donorMVGames = {};
+      rrItems.forEach(function(g) {
+        if (!g.placed || !isMainVenue(crts[g.courtIdx])) return;
+        var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+        // Only index games where at least one team is a donor
+        var isDonorGame = donors.some(function(d) { return d.key === k1 || d.key === k2; });
+        if (!isDonorGame) return;
+        var sk = g.day + ':' + g.slotIdx;
+        if (!donorMVGames[sk]) donorMVGames[sk] = [];
+        donorMVGames[sk].push(g);
+      });
+
+      var rebalCount = 0;
+      recipients.forEach(function(recip) {
+        if (teamMVC[recip.key] >= 2) return; // already improved by earlier swap
+        var games = teamGms[recip.key];
+        if (!games) return;
+        // Find recipient's external-court games to swap to Blanes
+        for (var gi = 0; gi < games.length; gi++) {
+          var extGame = games[gi];
+          if (!extGame.placed || isMainVenue(crts[extGame.courtIdx])) continue;
+          var sk = extGame.day + ':' + extGame.slotIdx;
+          var candidates = donorMVGames[sk];
+          if (!candidates) continue;
+          var swapped = false;
+          for (var ci = 0; ci < candidates.length && !swapped; ci++) {
+            var donorGame = candidates[ci];
+            if (!donorGame.placed || !isMainVenue(crts[donorGame.courtIdx])) continue;
+            // Validate: donor's division must be lower priority than recipient's
+            if (divPriority(donorGame.divName) >= recip.prio) continue;
+            // Both teams in donor game must keep ≥1 Blanes game after donating
+            var dk1 = donorGame.divName + '\x00' + donorGame.t1;
+            var dk2 = donorGame.divName + '\x00' + donorGame.t2;
+            if ((teamMVC[dk1] || 0) < 2 || (teamMVC[dk2] || 0) < 2) continue;
+            // courtAllowed + venueAvailable gates
+            if (!courtAllowed(extGame.divName, donorGame.courtIdx)) continue;
+            if (!courtAllowed(donorGame.divName, extGame.courtIdx)) continue;
+            var slotMin = dayTimeSlots[Math.min(extGame.day, dayTimeSlots.length - 1)][extGame.slotIdx];
+            if (!venueAvailable(donorGame.courtIdx, extGame.day, slotMin)) continue;
+            if (!venueAvailable(extGame.courtIdx, donorGame.day, slotMin)) continue;
+            // Execute swap
+            var day = extGame.day, si = extGame.slotIdx;
+            var ek1 = extGame.divName + '\x00' + extGame.t1, ek2 = extGame.divName + '\x00' + extGame.t2;
+            var ciExt = extGame.courtIdx, ciMV = donorGame.courtIdx;
+            extGame.courtIdx = ciMV; extGame.court = crts[ciMV].court; extGame.loc = crts[ciMV].loc;
+            donorGame.courtIdx = ciExt; donorGame.court = crts[ciExt].court; donorGame.loc = crts[ciExt].loc;
+            teamVenueBySlot[ek1 + ':' + day + ':' + si] = crts[ciMV].loc;
+            teamVenueBySlot[ek2 + ':' + day + ':' + si] = crts[ciMV].loc;
+            teamVenueBySlot[dk1 + ':' + day + ':' + si] = crts[ciExt].loc;
+            teamVenueBySlot[dk2 + ':' + day + ':' + si] = crts[ciExt].loc;
+            teamMVC[ek1] = (teamMVC[ek1] || 0) + 1;
+            teamMVC[ek2] = (teamMVC[ek2] || 0) + 1;
+            teamMVC[dk1] = (teamMVC[dk1] || 0) - 1;
+            teamMVC[dk2] = (teamMVC[dk2] || 0) - 1;
+            rebalCount++;
+            swapped = true;
+          }
+          if (swapped) break;
+        }
+      });
+      if (rebalCount) console.log('[AgePriorityRebalance] ' + rebalCount + ' court swaps performed');
+    })();
+
     // ── 5. Collect unplaced games as failures ─────────────────────────────────
     rrItems.forEach(function(g) {
       if (!g.placed) unscheduledGames.push({
