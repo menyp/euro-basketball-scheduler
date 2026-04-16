@@ -3198,6 +3198,23 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       divLastRRDay[div.name] = (maxGS <= 1) ? 0 : Math.ceil((maxGS - 1) / maxGPD) - 1;
     });
 
+    // ── Rule 5 safety: limit RR on PO days for small groups ─────────────────
+    // For 3-team groups whose RR finishes before Day N-2, SFs can land on Day N-2
+    // (Phase A Option C). If RR also spills there, a team advancing to SF would
+    // play 2 RR + 1 SF = 3 games (Rule 5 violation). Fix: limit those divisions
+    // to maxGPD-1 RR games on Day N-2, enforced in teamCanPlay + Phase D + Phase E.
+    var _r5LimitedDivDay = {};
+    if (nDays >= 3) {
+      var _r5sfDay = nDays - 2;
+      divisions.forEach(function(div) {
+        var maxGS = 0;
+        (div.manualGroups || []).forEach(function(g) { if (g.length > maxGS) maxGS = g.length; });
+        if (maxGS <= 3 && (divLastRRDay[div.name] || 0) < _r5sfDay) {
+          _r5LimitedDivDay[div.name + ':' + _r5sfDay] = true;
+        }
+      });
+    }
+
     // ── 2. 3-D resource grid & scheduling state ───────────────────────────────
     // grid[day][slotIdx][courtIdx] = true when occupied
     var grid = [];
@@ -3284,7 +3301,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     function teamCanPlay(key, day, si) {
       if (slotConflict(key, day, si)) return false;          // rest + exact-slot
-      if (((teamDayCount[key] || {})[day] || 0) >= maxGPD) return false; // daily quota
+      // Rule 5 safety: on PO days for small-group divisions, use maxGPD-1 to
+      // reserve 1 slot for the potential SF (prevents 2 RR + 1 SF = 3 games).
+      var div = key.split('\x00')[0];
+      var effectiveGPD = _r5LimitedDivDay[div + ':' + day] ? Math.max(maxGPD - 1, 1) : maxGPD;
+      if (((teamDayCount[key] || {})[day] || 0) >= effectiveGPD) return false;
       return true;
     }
 
@@ -3724,6 +3745,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         for (var si = 0; si < ds.length; si++) {
           if (!rrSlotOK(game.divName, d, si)) break;
           if (slotConflict(k1, d, si) || slotConflict(k2, d, si)) continue;
+          // Rule 5 safety: skip PO-day slots if team already at limit
+          if (_r5LimitedDivDay[game.divName + ':' + d]) {
+            var _r5e = Math.max(maxGPD - 1, 1);
+            if (((teamDayCount[k1] || {})[d] || 0) >= _r5e || ((teamDayCount[k2] || {})[d] || 0) >= _r5e) continue;
+          }
           var eOrder = courtPriorityOrder(game.divName, crts, undefined, undefined, rules.mainVenue);
           for (var ecoi = 0; ecoi < eOrder.length; ecoi++) {
             if (++_chainIters > _CHAIN_ITER_LIMIT) return null; // abort: iteration limit
@@ -3837,6 +3863,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             if (dg.placed) { dqueue.splice(dqi, 1); continue; }
             var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
             if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) { dqi++; continue; }
+            // Rule 5 safety: even in soft-quota mode, respect the PO-day limit
+            if (_r5LimitedDivDay[dg.divName + ':' + dday]) {
+              var _r5gpd = Math.max(maxGPD - 1, 1);
+              if (((teamDayCount[drk1] || {})[dday] || 0) >= _r5gpd
+               || ((teamDayCount[drk2] || {})[dday] || 0) >= _r5gpd) { dqi++; continue; }
+            }
             var dcOrder = courtPriorityOrder(dg.divName, crts, undefined, undefined, rules.mainVenue);
             var dgPlaced = false;
             for (var dcoi = 0; dcoi < dcOrder.length; dcoi++) {
