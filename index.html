@@ -3198,6 +3198,24 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       divLastRRDay[div.name] = (maxGS <= 1) ? 0 : Math.ceil((maxGS - 1) / maxGPD) - 1;
     });
 
+    // ── Rule 5 safety: limit RR on PO days for small groups ─────────────────
+    // For teams with only 2 RR games (3-team groups) in divisions that have PO
+    // on Day N-2, limit to maxGPD-1 RR games on that day. This prevents a
+    // potential 3-game day if the team advances to the SF on the same day.
+    // Only affects 2-game teams — larger groups naturally spread across days.
+    var _r5LimitedDivDay = {};  // 'divName:day' → true
+    if (nDays >= 3) {
+      var _r5sfDay = nDays - 2;
+      divisions.forEach(function(div) {
+        var maxGS = 0;
+        (div.manualGroups || []).forEach(function(g) { if (g.length > maxGS) maxGS = g.length; });
+        // Only 3-team groups (2 RR games per team) are at risk
+        if (maxGS <= 3 && (divLastRRDay[div.name] || 0) < _r5sfDay) {
+          _r5LimitedDivDay[div.name + ':' + _r5sfDay] = true;
+        }
+      });
+    }
+
     // ── 2. 3-D resource grid & scheduling state ───────────────────────────────
     // grid[day][slotIdx][courtIdx] = true when occupied
     var grid = [];
@@ -3284,7 +3302,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     function teamCanPlay(key, day, si) {
       if (slotConflict(key, day, si)) return false;          // rest + exact-slot
-      if (((teamDayCount[key] || {})[day] || 0) >= maxGPD) return false; // daily quota
+      var div = key.split('\x00')[0];
+      var effectiveGPD = _r5LimitedDivDay[div + ':' + day] ? Math.max(maxGPD - 1, 1) : maxGPD;
+      if (((teamDayCount[key] || {})[day] || 0) >= effectiveGPD) return false;
       return true;
     }
 
@@ -3724,6 +3744,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         for (var si = 0; si < ds.length; si++) {
           if (!rrSlotOK(game.divName, d, si)) break;
           if (slotConflict(k1, d, si) || slotConflict(k2, d, si)) continue;
+          // Rule 5 safety: skip PO-day slots if team already at limit
+          if (_r5LimitedDivDay[game.divName + ':' + d]) {
+            var _r5e = Math.max(maxGPD - 1, 1);
+            if (((teamDayCount[k1] || {})[d] || 0) >= _r5e || ((teamDayCount[k2] || {})[d] || 0) >= _r5e) continue;
+          }
           var eOrder = courtPriorityOrder(game.divName, crts, undefined, undefined, rules.mainVenue);
           for (var ecoi = 0; ecoi < eOrder.length; ecoi++) {
             if (++_chainIters > _CHAIN_ITER_LIMIT) return null; // abort: iteration limit
@@ -3837,6 +3862,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             if (dg.placed) { dqueue.splice(dqi, 1); continue; }
             var drk1 = dg.divName + '\x00' + dg.t1, drk2 = dg.divName + '\x00' + dg.t2;
             if (!teamCanPlaySoft(drk1, dday, dsi) || !teamCanPlaySoft(drk2, dday, dsi)) { dqi++; continue; }
+            // Rule 5 safety: even in soft-quota mode, respect the PO-day limit
+            // to prevent RR+PO = 3 games on the same day for advancing teams.
+            if (_r5LimitedDivDay[dg.divName + ':' + dday]) {
+              var _r5gpd = Math.max(maxGPD - 1, 1);
+              if (((teamDayCount[drk1] || {})[dday] || 0) >= _r5gpd
+               || ((teamDayCount[drk2] || {})[dday] || 0) >= _r5gpd) { dqi++; continue; }
+            }
             var dcOrder = courtPriorityOrder(dg.divName, crts, undefined, undefined, rules.mainVenue);
             var dgPlaced = false;
             for (var dcoi = 0; dcoi < dcOrder.length; dcoi++) {
@@ -4697,6 +4729,189 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         });
       }
       if (swapCount) console.log('[MainVenueGuarantee] ' + swapCount + ' court swaps performed');
+    })();
+
+    // ── 4b.5 Cross-Day Relocation for MV Guarantee ───────────────────────────
+    // Same-slot swaps can't fix 3-team groups where all games are on one day at
+    // the same external venue (middle game blocks both outer games via Rule 7).
+    // Solution: relocate one game to a DIFFERENT day at Blanes. Cross-day venue
+    // changes have no Rule 7 issue (overnight gap > 12 hours).
+    (function runCrossDayMVRelocation() {
+      // Rebuild MV status after same-slot swap pass
+      var _cdMVC = {};
+      var _cdGames = {};
+      rrItems.forEach(function(g) {
+        if (!g.placed) return;
+        var keys = [g.divName + '\x00' + g.t1, g.divName + '\x00' + g.t2];
+        keys.forEach(function(k) {
+          _cdMVC[k] = (_cdMVC[k] || 0) + (isMainVenue(crts[g.courtIdx]) ? 1 : 0);
+          if (!_cdGames[k]) _cdGames[k] = [];
+          _cdGames[k].push(g);
+        });
+      });
+      var _cdNeedsMV = [];
+      Object.keys(_cdMVC).forEach(function(k) { if (_cdMVC[k] === 0) _cdNeedsMV.push(k); });
+      if (!_cdNeedsMV.length) return;
+
+      // Find Blanes court indices
+      var _cdMVCourts = [];
+      crts.forEach(function(c, i) { if (isMainVenue(c)) _cdMVCourts.push(i); });
+
+      var relocCount = 0;
+      _cdNeedsMV.forEach(function(needKey) {
+        if (_cdMVC[needKey] > 0) return; // fixed by earlier relocation
+        var games = _cdGames[needKey];
+        if (!games) return;
+        // Try relocating each of this team's external games to a different day at Blanes
+        for (var gi = 0; gi < games.length; gi++) {
+          var g = games[gi];
+          if (!g.placed || isMainVenue(crts[g.courtIdx])) continue;
+          var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+          var relocated = false;
+          for (var nd = 0; nd < nDays - 1 && !relocated; nd++) { // skip finals day
+            if (nd === g.day) continue; // must be a DIFFERENT day
+            if (!rrSlotOK(g.divName, nd, 0)) continue; // day must allow RR for this div
+            var ndSlots = dayTimeSlots[Math.min(nd, dayTimeSlots.length - 1)];
+            for (var nsi = 0; nsi < ndSlots.length && !relocated; nsi++) {
+              if (!rrSlotOK(g.divName, nd, nsi)) continue;
+              // Both teams must be free at the new slot
+              if (slotConflict(k1, nd, nsi) || slotConflict(k2, nd, nsi)) continue;
+              // maxGPD: both teams must have room on the new day
+              if (((teamDayCount[k1] || {})[nd] || 0) >= maxGPD) continue;
+              if (((teamDayCount[k2] || {})[nd] || 0) >= maxGPD) continue;
+              // Find a free Blanes court at this slot
+              for (var mci = 0; mci < _cdMVCourts.length && !relocated; mci++) {
+                var ci = _cdMVCourts[mci];
+                if (grid[nd][nsi][ci]) continue;
+                if (!courtAllowed(g.divName, ci)) continue;
+                if (!venueAvailable(ci, nd, ndSlots[nsi])) continue;
+                // venueChangeConflict on the NEW day (cross-day = no same-day conflict expected)
+                if (venueChangeConflict(k1, nd, nsi, crts[ci].loc)) continue;
+                if (venueChangeConflict(k2, nd, nsi, crts[ci].loc)) continue;
+                // All gates passed — execute relocation
+                var oldDay = g.day, oldSi = g.slotIdx, oldCi = g.courtIdx;
+                // Unplace from old position
+                grid[oldDay][oldSi][oldCi] = false;
+                [k1, k2].forEach(function(k) {
+                  delete teamSlotBusy[k + ':' + oldDay + ':' + oldSi];
+                  delete teamVenueBySlot[k + ':' + oldDay + ':' + oldSi];
+                  teamDayCount[k] = teamDayCount[k] || {};
+                  if (teamDayCount[k][oldDay] > 0) teamDayCount[k][oldDay]--;
+                });
+                // Place at new position
+                g.day = nd; g.slotIdx = nsi; g.courtIdx = ci;
+                g.court = crts[ci].court; g.loc = crts[ci].loc;
+                grid[nd][nsi][ci] = true;
+                [k1, k2].forEach(function(k) {
+                  teamSlotBusy[k + ':' + nd + ':' + nsi] = true;
+                  teamVenueBySlot[k + ':' + nd + ':' + nsi] = crts[ci].loc;
+                  teamDayCount[k] = teamDayCount[k] || {};
+                  teamDayCount[k][nd] = (teamDayCount[k][nd] || 0) + 1;
+                });
+                // Update MV tracking
+                _cdMVC[k1] = (_cdMVC[k1] || 0) + 1;
+                _cdMVC[k2] = (_cdMVC[k2] || 0) + 1;
+                teamHasMVGame[k1] = true;
+                teamHasMVGame[k2] = true;
+                relocCount++;
+                relocated = true;
+              }
+            }
+          }
+          if (relocated) break;
+        }
+      });
+      if (relocCount) console.log('[CrossDayMVRelocation] ' + relocCount + ' games relocated to main venue');
+    })();
+
+    // ── 4b.6 Rule 5 Safety — Relocate RR games that overlap with PO on same day
+    // After all placement, check: for each team, if they have RR + PO on the same
+    // day and total games > maxGPD, relocate one RR game to a different day.
+    // PO seeds are TBD, so we check conservatively: if ANY team in the division
+    // plays ≥ maxGPD RR games on a day that also has PO games for that division,
+    // move one RR game to a different day.
+    (function runRule5SafetyRelocation() {
+      // Find which days have PO games per division
+      var _divPODays = {};
+      poItems.forEach(function(g) {
+        if (!g.placed) return;
+        _divPODays[g.divName + ':' + g.day] = true;
+      });
+
+      // Find teams with ≥ maxGPD RR games on a PO day
+      var _atRisk = []; // [{key, divName, day, games:[]}]
+      var _teamDayRR = {};
+      rrItems.forEach(function(g) {
+        if (!g.placed) return;
+        var keys = [g.divName + '\x00' + g.t1, g.divName + '\x00' + g.t2];
+        keys.forEach(function(k) {
+          var dk = k + ':' + g.day;
+          if (!_teamDayRR[dk]) _teamDayRR[dk] = { key: k, div: g.divName, day: g.day, games: [] };
+          _teamDayRR[dk].games.push(g);
+        });
+      });
+      Object.keys(_teamDayRR).forEach(function(dk) {
+        var entry = _teamDayRR[dk];
+        if (entry.games.length >= maxGPD && _divPODays[entry.div + ':' + entry.day]) {
+          _atRisk.push(entry);
+        }
+      });
+      if (!_atRisk.length) return;
+
+      var r5Count = 0;
+      _atRisk.forEach(function(entry) {
+        // Try to relocate the LAST RR game on this day to a different day
+        var gamesOnDay = entry.games.sort(function(a, b) {
+          return (dayTimeSlots[Math.min(a.day, dayTimeSlots.length-1)][a.slotIdx] || 0)
+               - (dayTimeSlots[Math.min(b.day, dayTimeSlots.length-1)][b.slotIdx] || 0);
+        });
+        var g = gamesOnDay[gamesOnDay.length - 1]; // latest game on the day
+        if (!g || !g.placed) return;
+        var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+        // Check if this game was already relocated by a previous iteration
+        if (g.day !== entry.day) return;
+
+        var relocated = false;
+        for (var nd = 0; nd < nDays - 1 && !relocated; nd++) {
+          if (nd === g.day) continue;
+          var ndSlots = dayTimeSlots[Math.min(nd, dayTimeSlots.length - 1)];
+          for (var nsi = 0; nsi < ndSlots.length && !relocated; nsi++) {
+            if (slotConflict(k1, nd, nsi) || slotConflict(k2, nd, nsi)) continue;
+            if (((teamDayCount[k1] || {})[nd] || 0) >= maxGPD) continue;
+            if (((teamDayCount[k2] || {})[nd] || 0) >= maxGPD) continue;
+            // Find any free court at this slot
+            for (var ci = 0; ci < nCourts && !relocated; ci++) {
+              if (grid[nd][nsi][ci]) continue;
+              if (!courtAllowed(g.divName, ci)) continue;
+              if (!venueAvailable(ci, nd, ndSlots[nsi])) continue;
+              if (venueChangeConflict(k1, nd, nsi, crts[ci].loc)) continue;
+              if (venueChangeConflict(k2, nd, nsi, crts[ci].loc)) continue;
+              // Execute relocation
+              var oldDay = g.day, oldSi = g.slotIdx, oldCi = g.courtIdx;
+              grid[oldDay][oldSi][oldCi] = false;
+              [k1, k2].forEach(function(k) {
+                delete teamSlotBusy[k + ':' + oldDay + ':' + oldSi];
+                delete teamVenueBySlot[k + ':' + oldDay + ':' + oldSi];
+                if (teamDayCount[k] && teamDayCount[k][oldDay] > 0) teamDayCount[k][oldDay]--;
+              });
+              g.day = nd; g.slotIdx = nsi; g.courtIdx = ci;
+              g.court = crts[ci].court; g.loc = crts[ci].loc;
+              grid[nd][nsi][ci] = true;
+              [k1, k2].forEach(function(k) {
+                teamSlotBusy[k + ':' + nd + ':' + nsi] = true;
+                teamVenueBySlot[k + ':' + nd + ':' + nsi] = crts[ci].loc;
+                teamDayCount[k] = teamDayCount[k] || {};
+                teamDayCount[k][nd] = (teamDayCount[k][nd] || 0) + 1;
+              });
+              // Update MV tracking
+              if (isMainVenue(crts[ci])) { teamHasMVGame[k1] = true; teamHasMVGame[k2] = true; }
+              r5Count++;
+              relocated = true;
+            }
+          }
+        }
+      });
+      if (r5Count) console.log('[Rule5SafetyRelocation] ' + r5Count + ' RR games relocated to avoid PO overlap');
     })();
 
     // ── 4c. Age-Priority Blanes Rebalancing ───────────────────────────────────
