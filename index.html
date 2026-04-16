@@ -1496,6 +1496,28 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return violations;
   }
 
+  function auditCheckMainVenueGuarantee(mainVenueName) {
+    var mv = (mainVenueName || 'Blanes').toLowerCase();
+    var allTeams = {}, teamHasMV = {};
+    allSchedGames(sched).forEach(function(x) {
+      var g = x.g;
+      if (g.lbl) return; // skip PO
+      if (!g.loc) return;
+      var isMV = (g.loc || '').toLowerCase().indexOf(mv) !== -1;
+      [g.t1, g.t2].forEach(function(t) {
+        if (!t) return;
+        var k = x.divName + ' | ' + t;
+        allTeams[k] = true;
+        if (isMV) teamHasMV[k] = true;
+      });
+    });
+    var violations = [];
+    Object.keys(allTeams).forEach(function(k) {
+      if (!teamHasMV[k]) violations.push(k + ' — no RR game at ' + mainVenueName);
+    });
+    return violations;
+  }
+
   // Orchestrator: runs every check and returns a structured report
   function runScheduleAudit() {
     var rules = getRuleToggles();
@@ -1517,6 +1539,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     row('All RR games before any playoff (per division)', auditCheckChronologicalIntegrity());
     row('Semifinal \u2265 90 min before any later game in its bracket', auditCheckFinalsSequencing());
     row('No duplicate RR matchups', auditCheckNoDuplicateMatchups());
+    row('Every team plays \u22651 RR game at main venue (' + rules.mainVenue + ')', auditCheckMainVenueGuarantee(rules.mainVenue));
 
     // Stats
     var scheduledGames = 0;
