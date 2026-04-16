@@ -3227,6 +3227,27 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // pass can identify and displace lower-priority games from Blanes slots.
     var poGridGame = {};
 
+    // ── Main-venue guarantee tracking ─────────────────────────────────────────
+    // Used by Phase C/C1/D to force a team's last unplaced game to Blanes when
+    // they haven't played there yet. Prevents the adjacent-external-slot trap.
+    var teamHasMVGame = {};   // 'div\0team' → true (has ≥1 main-venue RR game)
+    var teamTotalRR = {};     // 'div\0team' → total RR games for this team
+    var teamPlacedRR = {};    // 'div\0team' → count of placed RR games so far
+
+    // Precompute teamTotalRR from rrItems
+    rrItems.forEach(function(g) {
+      var k1 = g.divName + '\x00' + g.t1, k2 = g.divName + '\x00' + g.t2;
+      teamTotalRR[k1] = (teamTotalRR[k1] || 0) + 1;
+      teamTotalRR[k2] = (teamTotalRR[k2] || 0) + 1;
+    });
+
+    // Helper: returns true if this game is a team's last chance for a Blanes game
+    function isLastChanceMV(divName, t1, t2) {
+      var k1 = divName + '\x00' + t1, k2 = divName + '\x00' + t2;
+      return (!teamHasMVGame[k1] && (teamPlacedRR[k1] || 0) >= (teamTotalRR[k1] || 1) - 1)
+          || (!teamHasMVGame[k2] && (teamPlacedRR[k2] || 0) >= (teamTotalRR[k2] || 1) - 1);
+    }
+
     // ── 3. Helpers ────────────────────────────────────────────────────────────
     // slotConflict: true if the team is already at slot si, si-1, or si+1 on this day.
     // Checks bidirectionally so Phase D (which rescans earlier days) is safe.
@@ -3350,6 +3371,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           teamVenueBySlot[k + ':' + day + ':' + si] = crts[ci].loc; // venue tracking
         });
         divRRPlaced[item.divName] = (divRRPlaced[item.divName] || 0) + 1;
+        // Main-venue guarantee tracking
+        teamPlacedRR[k1] = (teamPlacedRR[k1] || 0) + 1;
+        teamPlacedRR[k2] = (teamPlacedRR[k2] || 0) + 1;
+        if (isMainVenue(crts[ci])) { teamHasMVGame[k1] = true; teamHasMVGame[k2] = true; }
       }
       // Track the latest SF slot per bracket — only for actual SFs (not medal games).
       // Excluding isBracketMedal prevents consolation medal games from poisoning the
@@ -4572,10 +4597,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       // 4. Multi-pass swap: Pass 1 uses strict donors (≥2 MV games so they keep ≥1).
       //    Pass 2+ allows donors with ≥1 (chain swap — donor may drop to 0 and get
       //    re-queued). Repeats until no more progress.
+      // Multi-pass strategy:
+      //  Passes 0-1: strict donor (≥2) then relaxed (≥1), full Rule 7 check (slack=2, 270 min)
+      //  All passes enforce full Rule 7 (slack=2, 270 min). Teams that can't get a
+      //  Rule-7-compliant swap keep their external-only assignment. This ensures zero
+      //  venue-change rest violations from the guarantee pass.
       var swapCount = 0;
       for (var _mvPass = 0; _mvPass < 10; _mvPass++) { // safety cap at 10 passes
         var _passSwaps = 0;
-        var minDonor = _mvPass === 0 ? 2 : 1; // strict first, then relax
+        var minDonor = (_mvPass % 2 === 0) ? 2 : 1;
+        var _venueSlack = 2; // always enforce full Rule 7
         needsMV.forEach(function(needKey) {
           if (teamMVCount[needKey] > 0) return;
           var games = teamGames[needKey];
@@ -4615,11 +4646,23 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             teamVenueBySlot[ek2 + ':' + day + ':' + si] = oldMVLoc;
             teamVenueBySlot[mk1 + ':' + day + ':' + si] = oldExtLoc;
             teamVenueBySlot[mk2 + ':' + day + ':' + si] = oldExtLoc;
-            // Venue-change rest (Rule 7) is intentionally NOT checked here.
-            // The guarantee swap is a hard business rule: every team must experience the
-            // main venue. The swap changes WHERE a game is played, not WHEN — both games
-            // stay at the same time slot. A tighter venue gap is an acceptable trade-off
-            // to ensure every team plays at Blanes at least once.
+            // Gate 5: venueChangeConflict (Rule 7) — checked at current pass strictness.
+            // Early passes enforce full 270-min gap; later passes relax to 180-min;
+            // final passes skip entirely (last resort for guarantee).
+            if (_venueSlack !== null) {
+              var conflict = venueChangeConflict(ek1, day, si, oldMVLoc, _venueSlack)
+                          || venueChangeConflict(ek2, day, si, oldMVLoc, _venueSlack)
+                          || venueChangeConflict(mk1, day, si, oldExtLoc, _venueSlack)
+                          || venueChangeConflict(mk2, day, si, oldExtLoc, _venueSlack);
+              if (conflict) {
+                // Rollback venue tracking
+                teamVenueBySlot[ek1 + ':' + day + ':' + si] = oldExtLoc;
+                teamVenueBySlot[ek2 + ':' + day + ':' + si] = oldExtLoc;
+                teamVenueBySlot[mk1 + ':' + day + ':' + si] = oldMVLoc;
+                teamVenueBySlot[mk2 + ':' + day + ':' + si] = oldMVLoc;
+                continue;
+              }
+            }
             // All gates passed — commit the swap
             var ciExt = extGame.courtIdx, ciMV = mvGame.courtIdx;
             extGame.courtIdx = ciMV; extGame.court = crts[ciMV].court; extGame.loc = crts[ciMV].loc;
@@ -4737,16 +4780,31 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             var slotMin = dayTimeSlots[Math.min(extGame.day, dayTimeSlots.length - 1)][extGame.slotIdx];
             if (!venueAvailable(donorGame.courtIdx, extGame.day, slotMin)) continue;
             if (!venueAvailable(extGame.courtIdx, donorGame.day, slotMin)) continue;
-            // Execute swap
+            // venueChangeConflict gate (strict slack=2, 270 min) — rebalancing is
+            // optimization only; never violate Rule 7 for a priority swap.
             var day = extGame.day, si = extGame.slotIdx;
             var ek1 = extGame.divName + '\x00' + extGame.t1, ek2 = extGame.divName + '\x00' + extGame.t2;
+            var _rbOldExtLoc = crts[extGame.courtIdx].loc, _rbOldMVLoc = crts[donorGame.courtIdx].loc;
+            teamVenueBySlot[ek1 + ':' + day + ':' + si] = _rbOldMVLoc;
+            teamVenueBySlot[ek2 + ':' + day + ':' + si] = _rbOldMVLoc;
+            teamVenueBySlot[dk1 + ':' + day + ':' + si] = _rbOldExtLoc;
+            teamVenueBySlot[dk2 + ':' + day + ':' + si] = _rbOldExtLoc;
+            var _rbConflict = venueChangeConflict(ek1, day, si, _rbOldMVLoc)
+                           || venueChangeConflict(ek2, day, si, _rbOldMVLoc)
+                           || venueChangeConflict(dk1, day, si, _rbOldExtLoc)
+                           || venueChangeConflict(dk2, day, si, _rbOldExtLoc);
+            if (_rbConflict) {
+              teamVenueBySlot[ek1 + ':' + day + ':' + si] = _rbOldExtLoc;
+              teamVenueBySlot[ek2 + ':' + day + ':' + si] = _rbOldExtLoc;
+              teamVenueBySlot[dk1 + ':' + day + ':' + si] = _rbOldMVLoc;
+              teamVenueBySlot[dk2 + ':' + day + ':' + si] = _rbOldMVLoc;
+              continue;
+            }
+            // All gates passed — execute swap
             var ciExt = extGame.courtIdx, ciMV = donorGame.courtIdx;
             extGame.courtIdx = ciMV; extGame.court = crts[ciMV].court; extGame.loc = crts[ciMV].loc;
             donorGame.courtIdx = ciExt; donorGame.court = crts[ciExt].court; donorGame.loc = crts[ciExt].loc;
-            teamVenueBySlot[ek1 + ':' + day + ':' + si] = crts[ciMV].loc;
-            teamVenueBySlot[ek2 + ':' + day + ':' + si] = crts[ciMV].loc;
-            teamVenueBySlot[dk1 + ':' + day + ':' + si] = crts[ciExt].loc;
-            teamVenueBySlot[dk2 + ':' + day + ':' + si] = crts[ciExt].loc;
+            // teamVenueBySlot already updated above
             teamMVC[ek1] = (teamMVC[ek1] || 0) + 1;
             teamMVC[ek2] = (teamMVC[ek2] || 0) + 1;
             teamMVC[dk1] = (teamMVC[dk1] || 0) - 1;

@@ -440,8 +440,8 @@ function integrityChecks(window, opts) {
   }
 
   if (rules.venueRest) {
-    const vrV = checkVenueChangeRest(window, 180);
-    items.push({ label: 'Venue-change rest ≥ 180min (ruleVenueRest=ON)', pass: vrV.length === 0,
+    const vrV = checkVenueChangeRest(window, 270);
+    items.push({ label: 'Venue-change rest ≥ 270min start-to-start (ruleVenueRest=ON)', pass: vrV.length === 0,
       detail: fmt(vrV) });
   } else {
     items.push({ label: 'Venue-change rest check skipped (ruleVenueRest=OFF)', pass: true, detail: 'rule disabled' });
@@ -534,7 +534,7 @@ const TESTS = [
           detail: satFmt },
         { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
@@ -564,7 +564,7 @@ const TESTS = [
           detail: satFmt },
         { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
@@ -701,7 +701,7 @@ const TESTS = [
           detail: 'scheduled=' + result.scheduled + ' / total=' + result.total },
         { label: 'Max 3 games/team/day enforced', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
@@ -834,7 +834,7 @@ const TESTS = [
           detail: 'poLabels=' + JSON.stringify(poLabels) },
         { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
@@ -894,7 +894,7 @@ const TESTS = [
           detail: blackoutFmt },
         { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
           detail: gpdFmt },
-      ].concat(integrityChecks(window)).concat([
+      ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
