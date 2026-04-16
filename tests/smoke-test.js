@@ -652,7 +652,6 @@ const TESTS = [
       // when every slot is a candidate — so a slightly higher failure count than
       // rest-ON is expected and acceptable.
       const BASELINE_FAILURES = 4;
-      const BASELINE_QUOTA = 1; // rest-OFF + constrained courts + Rule 5 PO-day limit can cause 1 quota violation
       const TIME_LIMIT_MS = 5000;
       const gpdFmt = gpdViolations.length === 0 ? 'OK' : gpdViolations.slice(0,3).join('; ') + (gpdViolations.length > 3 ? ' (+' + (gpdViolations.length-3) + ' more)' : '');
       // integrityChecks reads ruleRest/ruleVenueRest from DOM — both are OFF in this scenario,
@@ -662,11 +661,11 @@ const TESTS = [
           detail: 'elapsed=' + elapsed + 'ms' },
         { label: 'Failures ≤ rest-ON baseline (' + BASELINE_FAILURES + ')', pass: result.failed <= BASELINE_FAILURES,
           detail: 'failed=' + result.failed + failDetail(result) },
-        { label: 'Quota violations ≤ ' + BASELINE_QUOTA + ' (rest-OFF + Rule 5 PO-day limit)', pass: result.quotaViolations <= BASELINE_QUOTA,
+        { label: 'Quota violations = 0', pass: result.quotaViolations === 0,
           detail: 'quotaViolations=' + result.quotaViolations },
         { label: 'No soft warnings',    pass: result.softWarnings === 0,
           detail: 'softWarnings=' + result.softWarnings },
-        { label: 'Max ' + gpd + ' games/team/day (best-effort, rest OFF)', pass: gpdViolations.length <= 2,
+        { label: 'Max ' + gpd + ' games/team/day enforced (rest OFF)', pass: gpdViolations.length === 0,
           detail: gpdFmt },
       ].concat(integrityChecks(window, { softMVGuarantee: true })).concat([
         { label: 'KPI: Placement', pass: true,
