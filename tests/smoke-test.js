@@ -797,6 +797,66 @@ const TESTS = [
           detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
       ]);
     }
+  },
+  {
+    // Scenario 8: Venue blackout — Palafolls unavailable after 16:00 on Day 1 (index 0).
+    // Verifies that the venueAvailable gate prevents any game from landing at
+    // Palafolls courts at or after 16:00 on day 0.
+    name: 'Scenario 8 — Venue Blackout (Palafolls blocked after 16:00 Day 1): no violations',
+    sites: SITES_DEFAULT,
+    mainVenue: 'Blanes',
+    setup: function(window) {
+      if (window._setVenueBlackouts) {
+        window._setVenueBlackouts([
+          { venue: 'Palafolls', day: 0, afterTime: '16:00', beforeTime: '' }
+        ]);
+      }
+    },
+    check: function(result, window) {
+      var kpi = computeKPIs(result, window, 'Blanes');
+      var gpd = getMaxGPD(window);
+      var gpdViolations = checkMaxGamesPerDay(window, gpd);
+      var gpdFmt = gpdViolations.length === 0 ? 'OK' : gpdViolations.slice(0,3).join('; ');
+
+      // Verify no Palafolls game at 16:00+ on day 0
+      var sched = window.sched || {};
+      var blackoutViolations = [];
+      function toM(t) { var p = (t||'00:00').split(':'); return parseInt(p[0],10)*60 + parseInt(p[1]||0,10); }
+      function checkGames(games, dayIdx) {
+        (games || []).forEach(function(g) {
+          if (!g.time || !g.loc) return;
+          if (dayIdx === 0 && (g.loc||'').toLowerCase().indexOf('palafolls') !== -1 && toM(g.time) >= 960) {
+            blackoutViolations.push(g.loc + ' @ ' + g.time + ' Day 1');
+          }
+        });
+      }
+      (sched.gameDays || []).forEach(function(day, dIdx) {
+        day.divs.forEach(function(d) {
+          if (d.games) checkGames(d.games, dIdx);
+          if (d.groups) Object.keys(d.groups).forEach(function(gk) { checkGames(d.groups[gk].games, dIdx); });
+        });
+      });
+      (sched.bracketDays || []).forEach(function(day) {
+        day.divs.forEach(function(d) { checkGames(d.games, (sched.gameDays||[]).length); });
+      });
+      var blackoutFmt = blackoutViolations.length === 0 ? 'OK' : blackoutViolations.slice(0,3).join('; ');
+
+      return [
+        { label: 'Failed games = 0',    pass: result.failed === 0,
+          detail: 'failed=' + result.failed + failDetail(result) },
+        { label: 'Quota violations = 0', pass: result.quotaViolations === 0,
+          detail: 'quotaViolations=' + result.quotaViolations },
+        { label: 'All games scheduled', pass: result.scheduled === result.total,
+          detail: 'scheduled=' + result.scheduled + ' / total=' + result.total },
+        { label: 'No Palafolls games at 16:00+ on Day 1', pass: blackoutViolations.length === 0,
+          detail: blackoutFmt },
+        { label: 'Max ' + gpd + ' games/team/day enforced', pass: gpdViolations.length === 0,
+          detail: gpdFmt },
+      ].concat(integrityChecks(window)).concat([
+        { label: 'KPI: Placement', pass: true,
+          detail: 'Placement=' + kpi.placementPct + ', MainVenueEfficiency=' + kpi.mainEffPct + ' (' + kpi.mainUsed + '/' + kpi.mainSlots + ' slots used)' },
+      ]);
+    }
   }
 ];
 

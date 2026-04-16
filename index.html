@@ -471,6 +471,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       <button class="add-btn" id="addVenueRuleBtn" style="margin-top:10px">+ Add Priority Rule</button>
     </div>
 
+    <div class="card" style="margin-top:14px">
+      <div class="stitle">Venue Availability Restrictions</div>
+      <p class="help" style="margin-bottom:10px">Block specific venues during certain days or times. By default all venues are available for the full operating day.</p>
+      <div id="venueBlackoutList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="add-btn" id="addBlackoutBtn" style="margin-top:10px">+ Add Restriction</button>
+    </div>
+
   </div>
 
   <div class="page" id="page-groups">
@@ -628,6 +635,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   ];
   // ── Test hook: allow automated tests to override sites before generation ──
   window._setSites = function(newSites) { sites = newSites.slice(); };
+  window._setVenueBlackouts = function(b) { venueBlackouts = b.slice(); };
   // ── Test exports: pure utility functions for unit-test isolation ─────────────
   window._testExports = {
     optimalChunkSize: function(n) { return optimalChunkSize(n); },
@@ -952,6 +960,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     venueRules.push({ divName: firstDiv, prio: 'blanes-only' });
     renderVenueRules();
   });
+  document.getElementById('addBlackoutBtn').addEventListener('click', function () {
+    var firstVenue = sites.length ? sites[0].name : '';
+    venueBlackouts.push({ venue: firstVenue, day: 0, afterTime: '', beforeTime: '' });
+    renderVenueBlackouts();
+  });
   function updateTotal() {
     var t = sites.reduce(function (s, x) { return s + (parseInt(x.numCourts) || 1); }, 0);
     document.getElementById('totalBadge').innerHTML = 'Total courts: <strong>' + t + '</strong>';
@@ -1002,6 +1015,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Any division not listed is implicitly 'any' (Flexible).
   var venueRules = [];
 
+  // venueBlackouts: per-venue, per-day time restrictions.
+  // Each entry: { venue: string, day: number (0-indexed), afterTime: string, beforeTime: string }
+  // Empty string = no restriction on that end. Default: no blackouts (all venues fully available).
+  var venueBlackouts = [];
+
   // ── Per-day operating hours ────────────────────────────
   // Returns [{start:'09:00', end:'19:00'}, ...] for each tournament day.
   // Falls back to defaults when inputs are missing (e.g. before first render).
@@ -1040,6 +1058,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     }
     h += '</div>';
     document.getElementById('dayHoursContainer').innerHTML = h;
+    renderVenueBlackouts(); // refresh day dropdowns when nDays changes
   }
 
   // ── Scheduling helpers ─────────────────────────────────
@@ -1678,6 +1697,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         }
       });
     }
+    if (venueBlackouts && venueBlackouts.length) {
+      venueBlackouts.forEach(function(b) {
+        var parts = [];
+        if (b.beforeTime) parts.push('before ' + b.beforeTime);
+        if (b.afterTime) parts.push('at or after ' + b.afterTime);
+        if (parts.length) {
+          lines.push('14. **' + b.venue + '** is unavailable on Day ' + (b.day + 1) + ' ' + parts.join(' and '));
+        }
+      });
+    }
     lines.push('');
     lines.push('**Note to reviewer:** a team name that appears in multiple divisions (e.g., "PHD HOOPS" in U14 BOYS and U16 BOYS, or "SURREY RAMS" in U14 BOYS and U16 BOYS) represents **separate age-group rosters from the same club**, not the same players. Rules 5 (max games/day), 6 (rest between games), and 7 (venue-change rest) apply **per-team within a division** — games played by different age-group squads that share a club name do **not** constitute a Rule 5/6/7 violation.');
     lines.push('');
@@ -1841,6 +1870,57 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       // All other categories start as Flexible (no rule entry)
     });
     renderVenueRules();
+  }
+
+  // ── Venue Blackout (availability restriction) rendering ──────────────
+  function renderVenueBlackouts() {
+    var el = document.getElementById('venueBlackoutList');
+    if (!el) return;
+    el.innerHTML = '';
+    var nDays = parseInt(document.getElementById('nDays').value) || 3;
+    // Prune entries whose day exceeds current nDays
+    venueBlackouts = venueBlackouts.filter(function(b) { return b.day < nDays; });
+    if (!venueBlackouts.length) {
+      el.innerHTML = '<p class="help" style="opacity:.5;margin:0">No restrictions — all venues available all day.</p>';
+      return;
+    }
+    venueBlackouts.forEach(function(b, idx) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+      // Venue dropdown
+      var venueOpts = sites.map(function(s) {
+        return '<option' + (s.name === b.venue ? ' selected' : '') + '>' + s.name + '</option>';
+      }).join('');
+      // Day dropdown
+      var dayOpts = '';
+      for (var di = 0; di < nDays; di++) {
+        dayOpts += '<option value="' + di + '"' + (b.day === di ? ' selected' : '') + '>Day ' + (di + 1) + '</option>';
+      }
+      row.innerHTML =
+        '<select class="vb-venue" data-idx="' + idx + '" style="flex:1;min-width:100px">' + venueOpts + '</select>'
+        + '<select class="vb-day" data-idx="' + idx + '" style="width:80px">' + dayOpts + '</select>'
+        + '<label style="font-size:12px;color:#aaa;white-space:nowrap">no games before</label>'
+        + '<input type="time" class="vb-before" data-idx="' + idx + '" value="' + (b.beforeTime || '') + '" style="width:110px">'
+        + '<label style="font-size:12px;color:#aaa;white-space:nowrap">or at/after</label>'
+        + '<input type="time" class="vb-after" data-idx="' + idx + '" value="' + (b.afterTime || '') + '" style="width:110px">'
+        + '<button class="rm-btn vb-del" data-idx="' + idx + '">x</button>';
+      el.appendChild(row);
+    });
+    el.querySelectorAll('.vb-venue').forEach(function(s) {
+      s.onchange = function() { venueBlackouts[+this.dataset.idx].venue = this.value; };
+    });
+    el.querySelectorAll('.vb-day').forEach(function(s) {
+      s.onchange = function() { venueBlackouts[+this.dataset.idx].day = +this.value; };
+    });
+    el.querySelectorAll('.vb-before').forEach(function(s) {
+      s.onchange = function() { venueBlackouts[+this.dataset.idx].beforeTime = this.value; };
+    });
+    el.querySelectorAll('.vb-after').forEach(function(s) {
+      s.onchange = function() { venueBlackouts[+this.dataset.idx].afterTime = this.value; };
+    });
+    el.querySelectorAll('.vb-del').forEach(function(b) {
+      b.onclick = function() { venueBlackouts.splice(+this.dataset.idx, 1); renderVenueBlackouts(); };
+    });
   }
 
   // Apply the user's preferred default group arrangement on initial load.
@@ -3215,6 +3295,27 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       return true; // RR games → any court
     }
 
+    // venueAvailable: time-based venue restriction gate.
+    // Returns false if court ci is blacked out on the given day at the given slot minute.
+    var _blackoutMap = {};
+    venueBlackouts.forEach(function(b) {
+      var key = b.venue + ':' + b.day;
+      if (!_blackoutMap[key]) _blackoutMap[key] = [];
+      _blackoutMap[key].push({
+        after: b.afterTime ? toM(b.afterTime) : -1,
+        before: b.beforeTime ? toM(b.beforeTime) : -1
+      });
+    });
+    function venueAvailable(ci, day, slotMinute) {
+      var entries = _blackoutMap[crts[ci].loc + ':' + day];
+      if (!entries) return true;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].after >= 0 && slotMinute >= entries[i].after) return false;
+        if (entries[i].before >= 0 && slotMinute < entries[i].before) return false;
+      }
+      return true;
+    }
+
     // poPriority: numeric scheduling priority for a playoff game.
     // Higher score = eviction-immune. Lower = displaceable by higher-priority games.
     //  150+ : Mandatory FINAL/3rd Place (hardest constraint: Blanes + championship)
@@ -3441,6 +3542,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                 var c1ci = mvCourts[c1mci];
                 if (grid[c1day][c1si][c1ci]) continue;
                 if (!courtAllowed(c1g.divName, c1ci)) continue;
+                if (!venueAvailable(c1ci, c1day, c1slots[c1si])) continue;
                 if (c1p === 0) {
                   if (venueChangeConflict(c1rk1, c1day, c1si, crts[c1ci].loc)) continue;
                   if (venueChangeConflict(c1rk2, c1day, c1si, crts[c1ci].loc)) continue;
@@ -3497,6 +3599,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
               var ci = cOrder[coi];
               if (grid[day][si][ci]) continue;
               if (!courtAllowed(g.divName, ci)) continue;
+              if (!venueAvailable(ci, day, slots[si])) continue;
               if (venueChangeConflict(rk1, day, si, crts[ci].loc)) continue;
               if (venueChangeConflict(rk2, day, si, crts[ci].loc)) continue;
               recordPlacement(g, day, si, ci);
@@ -3513,6 +3616,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                 var ci2 = cOrder[coi2];
                 if (grid[day][si][ci2]) continue;
                 if (!courtAllowed(g.divName, ci2)) continue;
+                if (!venueAvailable(ci2, day, slots[si])) continue;
                 recordPlacement(g, day, si, ci2);
                 queue.splice(qi, 1);
                 gPlaced = true;
@@ -3557,6 +3661,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
               var c2ci = c2cOrder[c2coi];
               if (grid[c2day][c2si][c2ci]) continue;
               if (!courtAllowed(c2g.divName, c2ci)) continue;
+              if (!venueAvailable(c2ci, c2day, c2slots[c2si])) continue;
               // Venue-rest check intentionally skipped — this pass is the venue-rest fallback
               recordPlacement(c2g, c2day, c2si, c2ci);
               c2queue.splice(c2qi, 1);
@@ -3598,6 +3703,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             if (++_chainIters > _CHAIN_ITER_LIMIT) return null; // abort: iteration limit
             var ci = eOrder[ecoi];
             if (!courtAllowed(game.divName, ci)) continue;
+            if (!venueAvailable(ci, d, ds[si])) continue;
             if (!grid[d][si][ci]) {
               if (venueChangeConflict(k1, d, si, crts[ci].loc)) continue;
               if (venueChangeConflict(k2, d, si, crts[ci].loc)) continue;
@@ -3711,6 +3817,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
               var dci = dcOrder[dcoi];
               if (grid[dday][dsi][dci]) continue;
               if (!courtAllowed(dg.divName, dci)) continue;
+              if (!venueAvailable(dci, dday, dslots[dsi])) continue;
               if (venueChangeConflict(drk1, dday, dsi, crts[dci].loc)) continue;
               if (venueChangeConflict(drk2, dday, dsi, crts[dci].loc)) continue;
               // Only flag as quota violation if placement genuinely exceeds the daily limit
@@ -3862,7 +3969,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         for (var _li = 0; _li < b.lates.length; _li++) {
           var _lg = b.lates[_li], _foundC = -1;
           for (var _aci = 0; _aci < nCourts && _foundC < 0; _aci++) {
-            if (!grid[ad][finalSlotIdx][_aci] && !_usedFC[_aci] && courtAllowed(_lg.divName, _aci, _lg.lbl))
+            if (!grid[ad][finalSlotIdx][_aci] && !_usedFC[_aci] && courtAllowed(_lg.divName, _aci, _lg.lbl)
+                && venueAvailable(_aci, ad, adSlots[finalSlotIdx]))
               _foundC = _aci;
           }
           if (_foundC < 0) { _lateOK = false; break; }
@@ -3901,7 +4009,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
               if (divHasRRAtOrAfter(divName, sfDayC, _dcsi)) continue;
               var listC = [];
               for (var bci3 = 0; bci3 < nCourts; bci3++) {
-                if (!grid[sfDayC][_dcsi][bci3]) {
+                if (!grid[sfDayC][_dcsi][bci3] && venueAvailable(bci3, sfDayC, dcSlots[_dcsi])) {
                   // Mandatory SFs: main venue only; non-mandatory: all courts (Blanes indexed first)
                   if (isMandatory ? isMainVenue(crts[bci3]) : true) listC.push(bci3);
                 }
@@ -3916,7 +4024,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           if (!sfCourtList.length && sfSlotA >= 0) {
             var listA = [];
             for (var bci = 0; bci < nCourts; bci++) {
-              if (!grid[ad][sfSlotA][bci]) {
+              if (!grid[ad][sfSlotA][bci] && venueAvailable(bci, ad, adSlots[sfSlotA])) {
                 // Mandatory SFs: main venue only; non-mandatory: all courts (Blanes indexed first)
                 if (isMandatory ? isMainVenue(crts[bci]) : true) listA.push(bci);
               }
@@ -3930,7 +4038,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             var _pcAP = courtPriorityOrder(divName, crts, undefined, b.sfs[0] ? b.sfs[0].lbl : 'SF', rules.mainVenue);
             var _listAP = [];
             for (var _bciAP = 0; _bciAP < _pcAP.length && _listAP.length < b.sfs.length; _bciAP++) {
-              if (!grid[ad][sfSlotA][_pcAP[_bciAP]]) _listAP.push(_pcAP[_bciAP]);
+              if (!grid[ad][sfSlotA][_pcAP[_bciAP]] && venueAvailable(_pcAP[_bciAP], ad, adSlots[sfSlotA])) _listAP.push(_pcAP[_bciAP]);
             }
             if (_listAP.length >= b.sfs.length) {
               sfCourtList = _listAP; sfSlotActual = sfSlotA; sfDayActual = ad; sfUseBlanes = false;
@@ -3941,7 +4049,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           if (!sfCourtList.length && !isMandatory && sfSlotB >= 0) {
             var listB = [];
             for (var bci2 = 0; bci2 < nCourts; bci2++) {
-              if (!grid[ad][sfSlotB][bci2] && isMainVenue(crts[bci2])) listB.push(bci2);
+              if (!grid[ad][sfSlotB][bci2] && isMainVenue(crts[bci2]) && venueAvailable(bci2, ad, adSlots[sfSlotB])) listB.push(bci2);
             }
             if (listB.length >= b.sfs.length) {
               sfCourtList = listB; sfSlotActual = sfSlotB; sfDayActual = ad; sfUseBlanes = true;
@@ -4097,7 +4205,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           if (!_poTeamCanPlay(g, pd, psi)) continue;
           for (var pco = 0; pco < pcOrder.length && !g.placed; pco++) {
             var pci = pcOrder[pco];
-            if (!grid[pd][psi][pci] && courtAllowed(g.divName, pci, g.lbl)) {
+            if (!grid[pd][psi][pci] && courtAllowed(g.divName, pci, g.lbl) && venueAvailable(pci, pd, pdSlots[psi])) {
               var vk1 = g.divName + '\x00' + g.t1, vk2 = g.divName + '\x00' + g.t2;
               if (venueSlack !== null) {
                 if (venueChangeConflict(vk1, pd, psi, crts[pci].loc, venueSlack)) continue;
@@ -4207,7 +4315,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           var _cpFree = [];
           for (var _cpci = 0; _cpci < _cpPcOrd.length && _cpFree.length < grp.length; _cpci++) {
             var _cpIdx = _cpPcOrd[_cpci];
-            if (!grid[_cpDay][_cpSi][_cpIdx] && courtAllowed(divName, _cpIdx, grp[0].lbl))
+            if (!grid[_cpDay][_cpSi][_cpIdx] && courtAllowed(divName, _cpIdx, grp[0].lbl) && venueAvailable(_cpIdx, _cpDay, _cpDaySlots[_cpSi]))
               _cpFree.push(_cpIdx);
           }
           if (_cpFree.length < grp.length) continue;
@@ -4251,7 +4359,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             var _pinDone = false;
             for (var _pci2 = 0; _pci2 < _pinOrd.length && !_pinDone; _pci2++) {
               var _pidx2 = _pinOrd[_pci2];
-              if (!grid[_pinDay][_pinSi][_pidx2] && courtAllowed(g2.divName, _pidx2, g2.lbl)) {
+              if (!grid[_pinDay][_pinSi][_pidx2] && courtAllowed(g2.divName, _pidx2, g2.lbl)
+                  && venueAvailable(_pidx2, _pinDay, dayTimeSlots[Math.min(_pinDay, dayTimeSlots.length-1)][_pinSi])) {
                 g2.placed = true; g2.day = _pinDay; g2.slotIdx = _pinSi;
                 g2.courtIdx = _pidx2; g2.court = crts[_pidx2].court; g2.loc = crts[_pidx2].loc;
                 _recordPOPlacement(g2, _pinDay, _pinSi, _pidx2);
@@ -4305,6 +4414,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             if (sfLE && sfLE.day === adE && esi < sfLE.slotIdx + 2) continue;
             for (var eci = 0; eci < nCourts && !g.placed; eci++) {
               if (!courtAllowed(g.divName, eci, g.lbl)) continue;
+              if (!venueAvailable(eci, adE, adESlots[esi])) continue;
               if (!grid[adE][esi][eci]) continue;
               var victim = poGridGame[adE + ':' + esi + ':' + eci];
               if (!victim || !tryEvictPO(victim, myPrio)) continue;
@@ -4331,6 +4441,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             for (var f6ci = 0; f6ci < nCourts && !g.placed; f6ci++) {
               if (grid[adF6][f6si][f6ci]) continue;
               if (!courtAllowed(g.divName, f6ci, g.lbl)) continue; // HARD gate
+              if (!venueAvailable(f6ci, adF6, adF6Slots[f6si])) continue;
               if (!_poTeamCanPlay(g, adF6, f6si)) continue;
               g.placed = true; g.day = adF6; g.slotIdx = f6si; g.courtIdx = f6ci; g.court = crts[f6ci].court; g.loc = crts[f6ci].loc;
               _recordPOPlacement(g, adF6, f6si, f6ci);
@@ -4404,6 +4515,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             var eidx = eOrder[ei];
             if (grid[_5aDay][lsi][eidx]) continue;
             if (!courtAllowed(fg.divName, eidx)) continue; // respect venue rules
+            if (!venueAvailable(eidx, _5aDay, _5aSlots[lsi])) continue;
             if (venueChangeConflict(fk1, _5aDay, lsi, crts[eidx].loc)) continue;
             if (venueChangeConflict(fk2, _5aDay, lsi, crts[eidx].loc)) continue;
             // maxGPD already guarded above — placement is legitimate, no quota violation
@@ -5510,6 +5622,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       sched: sched,
       divisions: divisions,
       venueRules: venueRules,
+      venueBlackouts: venueBlackouts,
       unscheduledGames: unscheduledGames,
       sites: sites,
       setupFields: {
@@ -5737,6 +5850,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         // Auto-repair any data-integrity drift between teams[] and manualGroups
         var sanitizeFixes = sanitizeDivisionsAfterImport();
         venueRules       = data.venueRules       || [];
+        venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
           sites = data.sites;
@@ -5769,6 +5883,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           }
         }
         renderVenueRules();
+        renderVenueBlackouts();
         renderSched();
         switchTab('schedule');
         // Show any auto-fix summary AFTER render so the toast overlays the schedule
@@ -5804,6 +5919,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     scheduleWarnings = [];
     unscheduledGames = [];
     venueRules       = [];
+    venueBlackouts   = [];
     _agPending       = null;
     _agSelected      = null;
     sites = [
