@@ -1711,7 +1711,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     lines.push('8. Lunch break **' + lS + '–' + lE + '** — no games start during this window');
     lines.push('9. Each group has at most ' + MAX_GROUP_SIZE + ' teams');
     lines.push('10. Court capacity: no more games per slot than courts available');
-    lines.push('10b. Every team plays at least **one RR game at the main venue** (**' + (rules.mainVenue || 'Blanes') + '**) — post-placement court swap ensures this');
+    lines.push('10b. Every team plays at least **one RR game at the main venue** (**' + (rules.mainVenue || 'Blanes') + '**)');
+    lines.push('10c. **PO-day safety:** If a division has playoff games (SFs) on a day, each team in that division should play at most **' + (gpd - 1) + ' RR games** on that day — so an advancing team doesn\'t exceed ' + gpd + ' total games (RR + SF)');
     if (rules.mainVenueFinal) lines.push('11. Finals must be placed at the main venue (**' + (rules.mainVenue || 'Blanes') + '**)');
     if (rules.mainVenue3rd)   lines.push('12. 3rd Place games must be placed at the main venue');
     if (venueRules && venueRules.length) {
@@ -1809,11 +1810,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     lines.push('');
     lines.push('1. **Rule violations** — for any game that breaks any of the hard rules listed above, report which rule and which game (day, time, court, teams)');
     lines.push('2. **Empty-slot opportunities** — any court slot on any day where an unscheduled game could have been placed without breaking the rules');
-    lines.push('3. **Improvement suggestions** — anything you notice about balance (venue distribution, rest gaps, tight back-to-backs, awkward draws)');
+    lines.push('3. **Concrete fix suggestions** — for each violation, suggest a specific fix: which game to move, from where to where, and verify the fix doesn\'t break any other rule. Show the exact day/time/court for both the old and new position.');
+    lines.push('4. **Improvement suggestions** — anything you notice about balance (venue distribution, rest gaps, tight back-to-backs, awkward draws)');
+    lines.push('');
+    lines.push('When suggesting fixes, always verify:');
+    lines.push('- Both teams are free at the new time slot (no double-booking)');
+    lines.push('- maxGPD is not exceeded on the new day');
+    lines.push('- Venue-change rest (270 min start-to-start) is satisfied for both teams at the new venue');
+    lines.push('- The displaced game (if any) also has a valid landing spot');
     lines.push('');
     lines.push('Respond in this format:');
     lines.push('');
     lines.push('- **Rule Violations:** (list or "none")');
+    lines.push('- **Suggested Fixes:** (specific game moves with verification)');
     lines.push('- **Optimization Opportunities:** (list or "none")');
     lines.push('- **Overall Assessment:** PASS / PASS-WITH-NOTES / FAIL');
     lines.push('');
