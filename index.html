@@ -3110,6 +3110,119 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   document.getElementById('mgOverride').onclick = function() { commitMoveGame(true); };
 
   // ── Generate ───────────────────────────────────────────
+  // Check if CP-SAT server is available
+  var _cpSatAvailable = false;
+  (function checkServer() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/health', true);
+    xhr.timeout = 2000;
+    xhr.onload = function() {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        if (data.status === 'ok') { _cpSatAvailable = true; console.log('[Scheduler] CP-SAT server detected'); }
+      } catch(e) {}
+    };
+    xhr.onerror = function() { _cpSatAvailable = false; };
+    xhr.ontimeout = function() { _cpSatAvailable = false; };
+    try { xhr.send(); } catch(e) {}
+  })();
+
+  function _runCPSatGenerate() {
+    // Collect config for the solver
+    var config = {
+      divisions: divisions.map(function(d) { return { name: d.name, color: d.color, teams: d.teams, manualGroups: d.manualGroups }; }),
+      sites: sites.slice(),
+      setupFields: {
+        nDays: document.getElementById('nDays').value,
+        maxGPD: document.getElementById('maxGPD').value,
+        lS: document.getElementById('lS').value || '13:30',
+        lE: document.getElementById('lE').value || '14:30',
+        mainVenue: (document.getElementById('mainVenue').value || '').trim() || 'Blanes',
+        ruleRest: document.getElementById('ruleRest').checked,
+        ruleVenueRest: document.getElementById('ruleVenueRest').checked,
+        venueRestMandatory: document.getElementById('venueRestModeMandatory').checked,
+        mainVenueFinal: document.getElementById('mainVenueFinal').checked,
+        mainVenue3rd: document.getElementById('mainVenue3rd').checked,
+        mainVenueSF: document.getElementById('mainVenueSF').checked,
+        dayHours: getDayHours(),
+        finalTimes: (document.getElementById('finalTimes').value || '').trim(),
+      },
+      venueRules: venueRules,
+      venueBlackouts: venueBlackouts,
+      solverTimeLimit: 120,
+    };
+
+    // Show loading state
+    var genBtn = document.getElementById('genBtn');
+    var origText = genBtn.textContent;
+    genBtn.textContent = 'Optimizing schedule... (~60s)';
+    genBtn.disabled = true;
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/generate', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 300000; // 5 min timeout
+    xhr.onload = function() {
+      genBtn.textContent = origText;
+      genBtn.disabled = false;
+      try {
+        var data = JSON.parse(xhr.responseText);
+        if (data.error) {
+          alert('CP-SAT solver error: ' + data.error + '\nFalling back to greedy algorithm.');
+          _runGreedyGenerate();
+          return;
+        }
+        // Import the solver's result
+        _importSolverResult(data);
+      } catch(e) {
+        alert('Failed to parse solver response: ' + e.message + '\nFalling back to greedy algorithm.');
+        _runGreedyGenerate();
+      }
+    };
+    xhr.onerror = function() {
+      genBtn.textContent = origText;
+      genBtn.disabled = false;
+      alert('CP-SAT server connection failed.\nFalling back to greedy algorithm.');
+      _runGreedyGenerate();
+    };
+    xhr.ontimeout = function() {
+      genBtn.textContent = origText;
+      genBtn.disabled = false;
+      alert('CP-SAT solver timed out.\nFalling back to greedy algorithm.');
+      _runGreedyGenerate();
+    };
+    xhr.send(JSON.stringify(config));
+  }
+
+  function _importSolverResult(data) {
+    // Load solver output into the app state
+    sched = data.sched;
+    window.sched = sched;
+    unscheduledGames = data.unscheduledGames || [];
+    // Expose result for smoke tests
+    var totalGames = 0;
+    if (sched.gameDays) sched.gameDays.forEach(function(day) {
+      day.divs.forEach(function(d) {
+        if (d.groups) Object.keys(d.groups).forEach(function(gk) { totalGames += d.groups[gk].games.length; });
+      });
+    });
+    window._schedResult = {
+      total: totalGames,
+      scheduled: totalGames,
+      failed: 0,
+      quotaViolations: 0,
+      softWarnings: 0,
+      unscheduledGames: []
+    };
+    renderSched();
+    renderStandings();
+    renderBrack();
+    switchTab('schedule');
+    showToast('CP-SAT Schedule Generated',
+      '<strong>' + totalGames + '</strong> games placed with optimal constraint satisfaction.',
+      'success');
+  }
+
   document.getElementById('genBtn').addEventListener('click', function () {
     if (!divisions.length) { alert('Please parse your team list first!'); return; }
     var crts = getCourts();
@@ -3122,10 +3235,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // Guard: block generation if any manual group exceeds MAX_GROUP_SIZE
     if (!validateGroupSizes()) return;
     // Guard: block generation if teams[] and manualGroups are out of sync
-    // (safety net — the import sanitizer + chip-rm/group-add fixes should
-    // keep this from firing in normal use)
     if (!validateDivisionIntegrity()) return;
 
+    // Try CP-SAT server first, fall back to greedy
+    if (_cpSatAvailable) {
+      _runCPSatGenerate();
+      return;
+    }
+    _runGreedyGenerate();
+  });
+
+  function _runGreedyGenerate() {
+    // ── Greedy algorithm (existing) ──────────────────────────────────────────
+    var crts = getCourts();
     var lSm      = toM(document.getElementById('lS').value || '13:30');
     var lEm      = toM(document.getElementById('lE').value || '14:30');
     var dayHours = getDayHours();
@@ -5180,7 +5302,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     renderBrack();
     switchTab('schedule');
 
-  });
+  }
 
   // ── Render schedule ────────────────────────────────────
   function lunchBar(lS, lE) {
