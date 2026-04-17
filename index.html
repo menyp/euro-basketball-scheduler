@@ -3152,19 +3152,38 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       solverTimeLimit: 120,
     };
 
-    // Show loading state
+    // Show loading state with live timer
     var genBtn = document.getElementById('genBtn');
-    var origText = genBtn.textContent;
-    genBtn.textContent = 'Optimizing schedule... (~60s)';
+    var origText = genBtn.innerHTML;
+    var _solveStart = Date.now();
+    var _solveTimer = setInterval(function() {
+      var elapsed = Math.floor((Date.now() - _solveStart) / 1000);
+      genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
+        + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
+        + '<div style="font-size:12px;opacity:.8;margin-top:2px">'
+        + elapsed + 's elapsed — typically takes 60–120s</div>'
+        + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px;overflow:hidden">'
+        + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 120 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
+        + '</div></div>';
+    }, 1000);
+    genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
+      + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
+      + '<div style="font-size:12px;opacity:.8;margin-top:2px">Starting CP-SAT solver...</div>'
+      + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px"></div></div>';
     genBtn.disabled = true;
+
+    function _stopSolveTimer() {
+      clearInterval(_solveTimer);
+      genBtn.innerHTML = origText;
+      genBtn.disabled = false;
+    }
 
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/generate', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.timeout = 300000; // 5 min timeout
     xhr.onload = function() {
-      genBtn.textContent = origText;
-      genBtn.disabled = false;
+      _stopSolveTimer();
       try {
         var data = JSON.parse(xhr.responseText);
         if (data.error) {
@@ -3180,14 +3199,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       }
     };
     xhr.onerror = function() {
-      genBtn.textContent = origText;
-      genBtn.disabled = false;
+      _stopSolveTimer();
       alert('CP-SAT server connection failed.\nFalling back to greedy algorithm.');
       _runGreedyGenerate();
     };
     xhr.ontimeout = function() {
-      genBtn.textContent = origText;
-      genBtn.disabled = false;
+      _stopSolveTimer();
       alert('CP-SAT solver timed out.\nFalling back to greedy algorithm.');
       _runGreedyGenerate();
     };
