@@ -1287,24 +1287,20 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Flattened game list deduplicated by reference — for checks that want a
   // single pass across every placed game regardless of which array it lives in.
   function allSchedGames(s) {
-    var out = [], seen = new Set();
+    // Iterate gameDays only — gameDays already contains all PO games (in the
+    // "Division — Playoffs" group). bracketDays is a merged view for the
+    // Bracket tab and should NOT be counted here to avoid Day 4 phantoms
+    // and double-counting (JSON serialization breaks object-identity dedup).
+    var out = [];
     (s.gameDays || []).forEach(function(day, di) {
       (day.divs || []).forEach(function(d) {
         if (d.groups) Object.keys(d.groups).forEach(function(gk) {
           d.groups[gk].games.forEach(function(g) {
-            if (!seen.has(g)) { seen.add(g); out.push({ g: g, dIdx: di, divName: d.name }); }
+            out.push({ g: g, dIdx: di, divName: d.name });
           });
         });
         if (d.games) d.games.forEach(function(g) {
-          if (!seen.has(g)) { seen.add(g); out.push({ g: g, dIdx: di, divName: d.name }); }
-        });
-      });
-    });
-    (s.bracketDays || []).forEach(function(day, bdIdx) {
-      var dIdx = (s.gameDays || []).length + bdIdx;
-      (day.divs || []).forEach(function(d) {
-        if (d.games) d.games.forEach(function(g) {
-          if (!seen.has(g)) { seen.add(g); out.push({ g: g, dIdx: dIdx, divName: d.name }); }
+          out.push({ g: g, dIdx: di, divName: d.name });
         });
       });
     });
