@@ -1737,6 +1737,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     lines.push('');
     lines.push('**Note on U18 GIRLS bracket seeding:** with only 2 groups, semifinals are intentionally cross-seeded (1st Group A vs 2nd Group B, and 1st Group B vs 2nd Group A) to avoid a Final that would rematch group-stage opponents. This is a deliberate design choice, not a bracket error.');
     lines.push('');
+    lines.push('## Soft Preferences (not hard rules — won\'t fail the audit, but inform what a "good" schedule looks like)');
+    lines.push('');
+    lines.push('1. **Blanes priority by age/gender:** Older age groups and boys should get MORE Blanes games than younger/girls. Priority order (highest to lowest): U18 BOYS > U18 GIRLS > U16 BOYS > U16 GIRLS > U14 BOYS > U14 GIRLS > U12 MIXED');
+    lines.push('2. **Blanes saturation:** ' + (rules.mainVenue || 'Blanes') + ' should be at or near 100% capacity at all times — never send a game to an external venue when ' + (rules.mainVenue || 'Blanes') + ' has an empty court at that time slot');
+    lines.push('3. **Finals day atmosphere:** Championship Finals and 3rd Place games should be at prime ' + (rules.mainVenue || 'Blanes') + ' time slots (late afternoon, e.g. 16:00–17:30), not morning slots');
+    lines.push('');
 
     // Config
     lines.push('## Configuration');
