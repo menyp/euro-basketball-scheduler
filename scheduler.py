@@ -172,29 +172,25 @@ def solve_schedule(config, time_limit=120):
         if n_days > 1:
             rr_slot_mask[1] = set()
 
-    # Divisions with PO on specific days
-    po_days_per_div = defaultdict(set)
-    for d in range(n_days):
-        if d >= po_start_day:
-            for div in divisions:
-                po_days_per_div[div['name']].add(d)
-
-    # Populate group-aware PO day map: only SF-type PO games determine which
-    # teams actually play on PO day. Finals/Medals come from SF winners — they
-    # land on later days/slots and don't create same-day 10c conflicts.
-    for pg in po_games:
-        if pg.get('type') != 'SF':
-            continue  # only SFs matter for 10c
-        for grp_letter in pg.get('groups', []):
-            for d in range(n_days):
-                if d >= po_start_day:
-                    po_days_per_group[(pg['divName'], grp_letter, d)] = True
-
-    # ── Determine divLastRRDay for Rule 10c ───────────────────────────────────
+    # ── Determine divLastRRDay ───────────────────────────────────────────────
     div_last_rr_day = {}
     for div in divisions:
         max_gs = max((len(g) for g in div.get('manualGroups', [[]])), default=1)
         div_last_rr_day[div['name']] = 0 if max_gs <= 1 else (((max_gs - 1) + max_gpd - 1) // max_gpd) - 1
+
+    # Divisions with PO on specific days — division-aware:
+    # Divisions that finish RR before Day N-2 (3-team groups) can have PO on Day N-2.
+    # Divisions that extend RR to Day N-2 (4-team groups) have PO on Day N-1 only.
+    po_days_per_div = defaultdict(set)
+    for div in divisions:
+        div_name = div['name']
+        last_rr = div_last_rr_day.get(div_name, 0)
+        for d in range(n_days):
+            if d >= po_start_day:
+                if last_rr < d:
+                    po_days_per_div[div_name].add(d)
+                elif d == finals_day:
+                    po_days_per_div[div_name].add(d)
 
     # ══════════════════════════════════════════════════════════════════════════
     # PHASE 1: RR PLACEMENT
@@ -260,12 +256,13 @@ def solve_schedule(config, time_limit=120):
                     for c in range(num_courts):
                         terms.append(x[g, d, s, c])
             if terms:
-                # Rule 10c: on PO days for divisions that finish RR before that day,
-                # limit to maxGPD-1 so advancing teams don't exceed maxGPD total.
+                # Rule 10c: on ANY PO day for this division, limit RR to maxGPD-1
+                # so advancing teams don't exceed maxGPD total (RR + SF).
+                # Applied unconditionally — no divLastRRDay gate — to catch all
+                # groups including 4-team groups whose SFs land on Day 2.
                 effective_gpd = max_gpd
                 if d in po_days_per_div.get(div, set()):
-                    if div_last_rr_day.get(div, 0) < d:
-                        effective_gpd = max(max_gpd - 1, 1)
+                    effective_gpd = max(max_gpd - 1, 1)
                 model.add(sum(terms) <= effective_gpd)
 
     # ── Rules 6 & 7: Rest between consecutive games ──────────────────────────
@@ -446,9 +443,10 @@ def solve_schedule(config, time_limit=120):
                         if c not in blanes_courts:
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Rule 4: SF must start ≥ 180 min (2 slots) before later games in same bracket.
-    # 180 min start-to-start = 90 min actual rest after a 90-min game.
-    # Match SFs to ANY later game in the same division+bracket (Final, 3rd, Medal).
+    # Rule 4 + Rule 7 for PO: SF must start before later games in same bracket,
+    # with venue-aware gap:
+    #   Same venue: ≥ 180 min start-to-start (90 min actual rest)
+    #   Different venue: ≥ 270 min start-to-start (180 min actual rest for travel)
     for p1, pg1 in enumerate(po_games):
         if pg1.get('type') != 'SF':
             continue
@@ -465,11 +463,13 @@ def solve_schedule(config, time_limit=120):
                     for d2 in range(n_days):
                         for s2 in range(len(day_slots[d2])):
                             m2 = day_slots[d2][s2]
-                            # 180 min gap: SF at m1, next game at m2 must satisfy m2 - m1 >= 180
-                            ok = (d1 < d2) or (d1 == d2 and m2 - m1 >= 180)
-                            if not ok:
-                                for c1 in range(num_courts):
-                                    for c2 in range(num_courts):
+                            for c1 in range(num_courts):
+                                for c2 in range(num_courts):
+                                    v1 = courts[c1]['venue']
+                                    v2 = courts[c2]['venue']
+                                    required = 180 if v1 == v2 else 270
+                                    ok = (d1 < d2) or (d1 == d2 and m2 - m1 >= required)
+                                    if not ok:
                                         po_model.add(y[p1, d1, s1, c1] + y[p2, d2, s2, c2] <= 1)
 
     # Venue blackouts for PO
