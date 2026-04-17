@@ -143,6 +143,11 @@ def solve_schedule(config, time_limit=120):
     # ── PO structure ──────────────────────────────────────────────────────────
     po_games = _build_po_structure(divisions, groups)
 
+    # ── Group-aware PO day map for Rule 10c ───────────────────────────────────
+    # Only cap teams at maxGPD-1 on days where their SPECIFIC GROUP has a PO game.
+    # This gives the solver more freedom for groups that don't have PO on that day.
+    po_days_per_group = {}  # (div, group_letter, day) → True
+
     # ── Determine PO days and RR slot mask ────────────────────────────────────
     # Reserve last 2 slots of Day N-2 and all of Day N-1 for PO
     # RR gets: Day 1 all slots + Day 2 slots 0..(len-3) for 3-day tournaments
@@ -173,6 +178,17 @@ def solve_schedule(config, time_limit=120):
         if d >= po_start_day:
             for div in divisions:
                 po_days_per_div[div['name']].add(d)
+
+    # Populate group-aware PO day map: only SF-type PO games determine which
+    # teams actually play on PO day. Finals/Medals come from SF winners — they
+    # land on later days/slots and don't create same-day 10c conflicts.
+    for pg in po_games:
+        if pg.get('type') != 'SF':
+            continue  # only SFs matter for 10c
+        for grp_letter in pg.get('groups', []):
+            for d in range(n_days):
+                if d >= po_start_day:
+                    po_days_per_group[(pg['divName'], grp_letter, d)] = True
 
     # ── Determine divLastRRDay for Rule 10c ───────────────────────────────────
     div_last_rr_day = {}
@@ -244,7 +260,8 @@ def solve_schedule(config, time_limit=120):
                     for c in range(num_courts):
                         terms.append(x[g, d, s, c])
             if terms:
-                # Rule 10c: on PO days for this division, limit to maxGPD - 1
+                # Rule 10c: on PO days for divisions that finish RR before that day,
+                # limit to maxGPD-1 so advancing teams don't exceed maxGPD total.
                 effective_gpd = max_gpd
                 if d in po_days_per_div.get(div, set()):
                     if div_last_rr_day.get(div, 0) < d:
