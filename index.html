@@ -3145,7 +3145,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       },
       venueRules: venueRules,
       venueBlackouts: venueBlackouts,
-      solverTimeLimit: 120,
+      solverTimeLimit: 300,
     };
 
     // Show loading state with live timer
@@ -3157,9 +3157,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
         + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
         + '<div style="font-size:12px;opacity:.8;margin-top:2px">'
-        + elapsed + 's elapsed — typically takes 60–120s</div>'
+        + elapsed + 's elapsed — typically takes 60–300s</div>'
         + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px;overflow:hidden">'
-        + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 120 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
+        + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 300 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
         + '</div></div>';
     }, 1000);
     genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'

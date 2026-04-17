@@ -149,19 +149,37 @@ def solve_schedule(config, time_limit=120):
     po_days_per_group = {}  # (div, group_letter, day) → True
 
     # ── Determine PO days and RR slot mask ────────────────────────────────────
-    # Reserve last 2 slots of Day N-2 and all of Day N-1 for PO
-    # RR gets: Day 1 all slots + Day 2 slots 0..(len-3) for 3-day tournaments
+    # Dynamic RR/PO slot budgeting: calculate how many RR slots are needed,
+    # then reserve the minimum for PO. This handles varying tournament sizes.
     finals_day = n_days - 1
     po_start_day = max(0, n_days - 2)
+
+    # Calculate total available slots and needed RR capacity
+    total_rr_slots_needed = (num_rr + num_courts - 1) // num_courts  # ceil(games/courts)
+    day1_slots = len(day_slots[0]) if n_days > 0 else 0
+    day2_slots = len(day_slots[1]) if n_days > 1 else 0
+
+    # Start with max PO reservation (2 slots on Day N-2), reduce if RR doesn't fit
+    if n_days >= 3:
+        rr_capacity_with_2 = day1_slots * num_courts + (day2_slots - 2) * num_courts
+        rr_capacity_with_1 = day1_slots * num_courts + (day2_slots - 1) * num_courts
+        if num_rr <= rr_capacity_with_2:
+            reserve = 2
+        elif num_rr <= rr_capacity_with_1:
+            reserve = 1
+            print(f"[Scheduler] Reduced PO reservation to 1 slot (RR needs {num_rr} games, capacity with 2 reserve = {rr_capacity_with_2})")
+        else:
+            reserve = 0
+            print(f"[Scheduler] WARNING: No PO reservation possible (RR needs {num_rr} games, max capacity = {rr_capacity_with_1})")
+    else:
+        reserve = min(2, day1_slots)
 
     rr_slot_mask = {}
     for d in range(n_days):
         if d < po_start_day:
             rr_slot_mask[d] = set(range(len(day_slots[d])))
         elif d == po_start_day and d < finals_day:
-            # Allow RR on most of this day, reserve tail for PO
             n_slots = len(day_slots[d])
-            reserve = min(2, n_slots)  # reserve last 2 slots for PO
             rr_slot_mask[d] = set(range(n_slots - reserve))
         else:
             rr_slot_mask[d] = set()  # finals day: no RR
@@ -349,7 +367,10 @@ def solve_schedule(config, time_limit=120):
     print(f"[Scheduler] Phase 1 status: {status_name}")
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return {'error': f'RR phase {status_name}. No feasible schedule found.',
+        total_slots = sum(len(s) * num_courts for s in day_slots)
+        rr_slots = sum(len(rr_slot_mask.get(d, set())) * num_courts for d in range(n_days))
+        return {'error': f'RR phase {status_name}. {num_rr} RR games need {rr_slots} court-slots '
+                         f'(total capacity: {total_slots}). Try adding courts, extending hours, or reducing teams.',
                 'status': status_name}
 
     # ── Extract RR assignments ────────────────────────────────────────────────
@@ -535,7 +556,11 @@ def solve_schedule(config, time_limit=120):
     print(f"[Scheduler] Phase 2 status: {po_status_name}")
 
     if po_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return {'error': f'PO phase {po_status_name}. RR placed but PO infeasible.',
+        total_slots = sum(len(s) * num_courts for s in day_slots)
+        po_slots = total_slots - sum(len(rr_slot_mask.get(d, set())) * num_courts for d in range(n_days))
+        return {'error': f'PO phase {po_status_name}. {num_po} PO games need {po_slots} court-slots. '
+                         f'Total games ({num_rr}+{num_po}={num_rr+num_po}) may exceed capacity ({total_slots}). '
+                         f'Try adding courts, extending hours, or adding a tournament day.',
                 'status': po_status_name,
                 'rr_count': len(rr_result)}
 
