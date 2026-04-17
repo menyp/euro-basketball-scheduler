@@ -429,7 +429,9 @@ def solve_schedule(config, time_limit=120):
                         if c not in blanes_courts:
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Rule 4: SF ≥ 90 min before later games in same bracket
+    # Rule 4: SF must start ≥ 180 min (2 slots) before later games in same bracket.
+    # 180 min start-to-start = 90 min actual rest after a 90-min game.
+    # Match SFs to ANY later game in the same division+bracket (Final, 3rd, Medal).
     for p1, pg1 in enumerate(po_games):
         if pg1.get('type') != 'SF':
             continue
@@ -446,7 +448,8 @@ def solve_schedule(config, time_limit=120):
                     for d2 in range(n_days):
                         for s2 in range(len(day_slots[d2])):
                             m2 = day_slots[d2][s2]
-                            ok = (d1 < d2) or (d1 == d2 and m2 - m1 >= 90)
+                            # 180 min gap: SF at m1, next game at m2 must satisfy m2 - m1 >= 180
+                            ok = (d1 < d2) or (d1 == d2 and m2 - m1 >= 180)
                             if not ok:
                                 for c1 in range(num_courts):
                                     for c2 in range(num_courts):
@@ -646,17 +649,17 @@ def _build_po_structure(divisions, groups):
                                      'bracket': 'Silver (5th–8th)', 'groups': ['C', 'D'],
                                      't1': '2nd Group C', 't2': '2nd Group D'})
                     po_games.append({'divName': div_name, 'lbl': '5th/6th', 'type': 'Medal',
-                                     'bracket': '5th–8th Place', 'groups': group_letters,
+                                     'bracket': 'Silver (5th–8th)', 'groups': group_letters,
                                      't1': '', 't2': ''})
                     po_games.append({'divName': div_name, 'lbl': '7th/8th', 'type': 'Medal',
-                                     'bracket': '5th–8th Place', 'groups': group_letters,
+                                     'bracket': 'Silver (5th–8th)', 'groups': group_letters,
                                      't1': '', 't2': ''})
                 else:
                     po_games.append({'divName': div_name, 'lbl': '5th/6th', 'type': 'Medal',
-                                     'bracket': '5th–8th Place', 'groups': group_letters,
+                                     'bracket': 'Silver (5th–8th)', 'groups': group_letters,
                                      't1': '2nd Group A', 't2': '2nd Group B'})
                     po_games.append({'divName': div_name, 'lbl': '7th/8th', 'type': 'Medal',
-                                     'bracket': '5th–8th Place', 'groups': group_letters,
+                                     'bracket': 'Silver (5th–8th)', 'groups': group_letters,
                                      't1': '2nd Group C', 't2': '2nd Group D'})
 
                 # Bronze bracket (9th-12th)
@@ -740,21 +743,24 @@ def _assemble_sched(rr_result, po_result, divisions, courts, day_slots, n_days, 
         divs = list(by_div.values())
         game_days.append({'label': label, 'divs': divs, 'dayIndex': d})
 
-    # Build bracketDays (merged PO view)
+    # Build bracketDays (merged PO view) — games are SHARED references with
+    # gameDays so the dedup in allSchedGames works correctly.
     bracket_div_map = {}
     for de in game_days:
         for d in de['divs']:
             gk = po_gk(d['name'])
             if gk in d.get('groups', {}):
+                # Use the SAME game objects (not copies) so seen-Set dedup works
+                po_game_refs = d['groups'][gk]['games']
                 if d['name'] not in bracket_div_map:
                     div_def = next((dv for dv in divisions if dv['name'] == d['name']), None)
                     bracket_div_map[d['name']] = {
                         'name': d['name'], 'color': d['color'],
                         'teams': div_def.get('teams', []) if div_def else [],
-                        'games': list(d['groups'][gk]['games'])
+                        'games': po_game_refs
                     }
                 else:
-                    bracket_div_map[d['name']]['games'].extend(d['groups'][gk]['games'])
+                    bracket_div_map[d['name']]['games'] = bracket_div_map[d['name']]['games'] + po_game_refs
 
     bracket_days = []
     if bracket_div_map:
