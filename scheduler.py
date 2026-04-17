@@ -117,11 +117,31 @@ def solve_schedule(config, time_limit=120):
 
     num_rr = len(rr_matchups)
 
-    # ── Mandatory divisions ───────────────────────────────────────────────────
+    # ── Division venue restrictions ───────────────────────────────────────────
+    # Build per-division allowed court indices based on venue rules.
+    # 'blanes-only': only main venue courts
+    # 'blanes-pref-1': prefer main venue (soft, handled by objective)
+    # 'any': all courts (default)
+    # Also supports restricting to specific venue names via comma-separated list
+    # in the prio field (e.g., 'Blanes,Pineda' → only courts at those venues).
     mandatory_divs = set()
+    div_allowed_courts = {}  # divName → set of court indices (None = all allowed)
     for vr in venue_rules:
-        if vr.get('prio') == 'blanes-only':
-            mandatory_divs.add(vr['divName'])
+        prio = vr.get('prio', 'any')
+        div_name = vr.get('divName', '')
+        if prio == 'blanes-only':
+            mandatory_divs.add(div_name)
+            div_allowed_courts[div_name] = set(blanes_courts)
+        elif ',' in prio:
+            # Custom venue list: "Blanes,Pineda" → allow courts at those venues
+            allowed_venues = [v.strip().lower() for v in prio.split(',')]
+            allowed = set()
+            for ci, c in enumerate(courts):
+                if c['venue'].lower() in allowed_venues:
+                    allowed.add(ci)
+            if allowed:
+                div_allowed_courts[div_name] = allowed
+                mandatory_divs.add(div_name)  # treat as mandatory for constraint purposes
 
     # ── Venue blackouts ───────────────────────────────────────────────────────
     blackout_map = defaultdict(list)  # (venue, day) -> [(after_min, before_min)]
@@ -317,13 +337,14 @@ def solve_schedule(config, time_limit=120):
         if blanes_terms:
             model.add(sum(blanes_terms) >= 1)
 
-    # ── Rule 13: Mandatory divisions at main venue only ───────────────────────
+    # ── Rule 13: Restricted divisions — only allowed courts ─────────────────
     for g, (div, grp, a, b) in enumerate(rr_matchups):
-        if div in mandatory_divs:
+        if div in div_allowed_courts:
+            allowed = div_allowed_courts[div]
             for d in range(n_days):
                 for s in range(len(day_slots[d])):
                     for c in range(num_courts):
-                        if c not in blanes_courts:
+                        if c not in allowed:
                             model.add(x[g, d, s, c] == 0)
 
     # ── Venue blackouts ───────────────────────────────────────────────────────
@@ -446,13 +467,14 @@ def solve_schedule(config, time_limit=120):
                         for c in range(num_courts):
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Rule 13: U18 BOYS PO at main venue
+    # Rule 13: Restricted divisions PO — only allowed courts
     for p, pg in enumerate(po_games):
-        if pg['divName'] in mandatory_divs:
+        if pg['divName'] in div_allowed_courts:
+            allowed = div_allowed_courts[pg['divName']]
             for d in range(n_days):
                 for s in range(len(day_slots[d])):
                     for c in range(num_courts):
-                        if c not in blanes_courts:
+                        if c not in allowed:
                             po_model.add(y[p, d, s, c] == 0)
 
     # Rules 11, 12: Finals + 3rd Place at main venue
