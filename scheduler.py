@@ -28,9 +28,48 @@ MAX_ITERATIONS = 4
 UNPLACED_WEIGHT = 1_000_000  # dominates any soft-preference penalty
 
 
+# ── Live progress state (read by /api/progress for UI banner) ────────────────
+_progress_state = {
+    'active': False,
+    'iteration': 0,
+    'max_iterations': MAX_ITERATIONS,
+    'phase': '',
+    'last_result': '',
+    'started_at': None,
+    'elapsed': 0,
+}
+
+
+def _progress(phase, **fields):
+    """Update _progress_state and mirror the message to stdout."""
+    _progress_state['phase'] = phase
+    _progress_state.update(fields)
+    if _progress_state.get('started_at'):
+        _progress_state['elapsed'] = int(time.time() - _progress_state['started_at'])
+    print(f"[Scheduler] {phase}")
+
+
+def _progress_reset():
+    _progress_state.update({
+        'active': True,
+        'iteration': 0,
+        'max_iterations': MAX_ITERATIONS,
+        'phase': 'Initializing...',
+        'last_result': '',
+        'started_at': time.time(),
+        'elapsed': 0,
+    })
+
+
+def _progress_done(phase='Done'):
+    _progress_state['active'] = False
+    _progress_state['phase'] = phase
+
+
 def solve_schedule(config, time_limit=120):
     """Iterative two-phase solver. Returns frontend-compatible schedule dict."""
     start_time = time.time()
+    _progress_reset()
     ctx = _build_context(config)
 
     forbidden_cells = set()      # {(day, slot, court)} RR must avoid
@@ -42,9 +81,12 @@ def solve_schedule(config, time_limit=120):
 
     for iteration in range(MAX_ITERATIONS):
         iter_start = time.time()
-        print(f"[Scheduler] === Iteration {iteration+1}/{MAX_ITERATIONS} "
-              f"(forbidden RR: {len(forbidden_cells)}, "
-              f"PO exclusions: {len(po_excluded_cells)}) ===")
+        _progress(
+            f"=== Iteration {iteration+1}/{MAX_ITERATIONS} "
+            f"(forbidden RR: {len(forbidden_cells)}, "
+            f"PO exclusions: {len(po_excluded_cells)}) ===",
+            iteration=iteration + 1,
+        )
 
         rr_result, rr_occupied, p1_status = _solve_phase1(
             ctx, forbidden_cells, time_limit)
@@ -57,6 +99,7 @@ def solve_schedule(config, time_limit=120):
                 total_slots = sum(len(s) * ctx['num_courts'] for s in ctx['day_slots'])
                 rr_slots = sum(len(ctx['rr_slot_mask'].get(d, set())) * ctx['num_courts']
                                for d in range(ctx['n_days']))
+                _progress_done('Infeasible')
                 return {'error': f"RR phase {ctx['status_names'].get(p1_status, 'INFEASIBLE')}. "
                                  f"{ctx['num_rr']} RR games need {rr_slots} court-slots "
                                  f"(total capacity: {total_slots}).",
@@ -69,9 +112,12 @@ def solve_schedule(config, time_limit=120):
         po_result, blocked, p2_status, po_placements = _solve_phase2(
             ctx, rr_result, rr_occupied, time_limit, po_excluded_cells)
 
-        print(f"[Scheduler] Iteration {iteration+1} done in {time.time()-iter_start:.1f}s: "
-              f"{len(rr_result)} RR placed, {len(po_result)} PO placed, "
-              f"{len(blocked)} PO blocked")
+        iter_summary = (f"Iteration {iteration+1} done in {time.time()-iter_start:.1f}s: "
+                        f"{len(rr_result)} RR placed, {len(po_result)} PO placed, "
+                        f"{len(blocked)} PO blocked")
+        _progress(iter_summary,
+                  last_result=f"{len(rr_result)} RR, {len(po_result)} PO, "
+                              f"{len(blocked)} blocked")
 
         last_rr_result = rr_result
         last_rr_occupied = rr_occupied
@@ -81,8 +127,9 @@ def solve_schedule(config, time_limit=120):
         if not blocked:
             # All games placed.
             total_elapsed = time.time() - start_time
-            print(f"[Scheduler] Done: {len(rr_result)} RR + {len(po_result)} PO "
-                  f"in {total_elapsed:.1f}s ({iteration+1} iteration(s))")
+            _progress(f"Done: {len(rr_result)} RR + {len(po_result)} PO "
+                      f"in {total_elapsed:.1f}s ({iteration+1} iteration(s))")
+            _progress_done()
             return _assemble_sched(rr_result, po_result, [], ctx, config)
 
         # Derive feedback: RR cells to free up + PO games to evict from
@@ -93,10 +140,10 @@ def solve_schedule(config, time_limit=120):
         added_po = new_po_exclusions - po_excluded_cells
         if not added_rr and not added_po:
             # No progress possible — bail with current partial schedule.
-            print(f"[Scheduler] No new feedback cells available — bailing out")
+            _progress("No new feedback cells available — bailing out")
             break
-        print(f"[Scheduler] Adding {len(added_rr)} RR-forbid + "
-              f"{len(added_po)} PO-exclusion cell(s) for next iteration")
+        _progress(f"Adding {len(added_rr)} RR-forbid + "
+                  f"{len(added_po)} PO-exclusion cell(s) for next iteration")
         forbidden_cells |= new_forbidden
         po_excluded_cells |= new_po_exclusions
 
@@ -105,8 +152,9 @@ def solve_schedule(config, time_limit=120):
     n_rr = len(last_rr_result or [])
     n_po = len(last_po_result or [])
     n_blocked = len(last_blocked or [])
-    print(f"[Scheduler] Exhausted iterations: {n_rr} RR + {n_po} PO placed, "
-          f"{n_blocked} PO blocked, total {total_elapsed:.1f}s")
+    _progress(f"Exhausted iterations: {n_rr} RR + {n_po} PO placed, "
+              f"{n_blocked} PO blocked, total {total_elapsed:.1f}s")
+    _progress_done()
 
     if last_rr_result is None:
         return {'error': 'Solver produced no schedule after iterative feedback.',
@@ -374,7 +422,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit):
     po_days_per_div = ctx['po_days_per_div']
     div_priority = ctx['div_priority']
 
-    print(f"[Scheduler] Phase 1: placing {num_rr} RR games...")
+    _progress(f"Phase 1: placing {num_rr} RR games...")
     model = cp_model.CpModel()
 
     x = {}
@@ -511,7 +559,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit):
     solver.parameters.max_time_in_seconds = time_limit
     solver.parameters.num_workers = 8
     status = solver.solve(model)
-    print(f"[Scheduler] Phase 1 status: {ctx['status_names'].get(status, status)}")
+    _progress(f"Phase 1 status: {ctx['status_names'].get(status, status)}")
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return [], set(), status
@@ -571,7 +619,7 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     po_games = ctx['po_games']
     num_po = len(po_games)
 
-    print(f"[Scheduler] Phase 2: placing {num_po} PO games...")
+    _progress(f"Phase 2: placing {num_po} PO games...")
     po_model = cp_model.CpModel()
 
     y = {}
@@ -795,7 +843,7 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     po_solver.parameters.max_time_in_seconds = time_limit
     po_solver.parameters.num_workers = 8
     po_status = po_solver.solve(po_model)
-    print(f"[Scheduler] Phase 2 status: {ctx['status_names'].get(po_status, po_status)}")
+    _progress(f"Phase 2 status: {ctx['status_names'].get(po_status, po_status)}")
 
     if po_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         # Model infeasible outright (should be rare with at_most_one).

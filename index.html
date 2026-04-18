@@ -3259,16 +3259,42 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var genBtn = document.getElementById('genBtn');
     var origText = genBtn.innerHTML;
     var _solveStart = Date.now();
+    // Live progress text populated by /api/progress poll (see below).
+    var _solveProgressText = '';
+    var _solveProgressPrev = '';
+    function _escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     var _solveTimer = setInterval(function() {
       var elapsed = Math.floor((Date.now() - _solveStart) / 1000);
+      var progLine = _solveProgressText
+        ? '<div style="font-size:11px;opacity:.85;margin-top:4px;font-weight:600">' + _escHtml(_solveProgressText) + '</div>'
+        : '';
+      var prevLine = _solveProgressPrev
+        ? '<div style="font-size:11px;opacity:.6;margin-top:1px">prev: ' + _escHtml(_solveProgressPrev) + '</div>'
+        : '';
       genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
         + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
         + '<div style="font-size:12px;opacity:.8;margin-top:2px">'
         + elapsed + 's elapsed — typically takes 60–300s</div>'
+        + progLine
+        + prevLine
         + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px;overflow:hidden">'
         + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 300 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
         + '</div></div>';
     }, 1000);
+    // Poll the server every 2s for live iteration/phase info.
+    var _progressPollTimer = setInterval(function() {
+      fetch('/api/progress', { cache: 'no-store' })
+        .then(function(r) { return r.json(); })
+        .then(function(p) {
+          if (!p || !p.active) { _solveProgressText = ''; return; }
+          var parts = [];
+          if (p.iteration) parts.push('Iteration ' + p.iteration + '/' + (p.max_iterations || 4));
+          if (p.phase) parts.push(p.phase);
+          _solveProgressText = parts.join(' • ');
+          _solveProgressPrev = p.last_result || '';
+        })
+        .catch(function() { /* ignore transient poll errors */ });
+    }, 2000);
     genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
       + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
       + '<div style="font-size:12px;opacity:.8;margin-top:2px">Starting CP-SAT solver...</div>'
@@ -3277,6 +3303,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     function _stopSolveTimer() {
       clearInterval(_solveTimer);
+      clearInterval(_progressPollTimer);
       genBtn.innerHTML = origText;
       genBtn.disabled = false;
     }

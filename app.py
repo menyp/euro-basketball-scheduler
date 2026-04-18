@@ -12,6 +12,7 @@ Usage:
 
 from flask import Flask, send_from_directory, request, jsonify
 from scheduler import solve_schedule
+import scheduler as _scheduler_module
 import os
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -53,9 +54,19 @@ def health():
     return jsonify({'status': 'ok', 'solver': 'cp-sat'})
 
 
+@app.route('/api/progress')
+def progress():
+    """Live solver progress. Polled by the UI banner while /api/generate is
+    in flight. Returns the shared dict scheduler._progress_state."""
+    # Copy to avoid any concurrent mutation mid-serialize.
+    return jsonify(dict(_scheduler_module._progress_state))
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"\n  EYBC Tournament Scheduler")
     print(f"  CP-SAT Optimal Solver")
     print(f"  Open http://localhost:{port}\n")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # threaded=True so /api/progress can be served while /api/generate is
+    # running (otherwise the progress poll blocks behind the solver).
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
