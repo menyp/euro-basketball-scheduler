@@ -1,12 +1,15 @@
 """
 EYBC Tournament Scheduler — CP-SAT Constraint Solver
 
-Two-phase constraint programming model using Google OR-Tools CP-SAT:
-  Phase 1: RR placement — assign every RR game to (day, slot, court)
-  Phase 2: PO placement — assign playoff games with RR frozen
+Iterative two-phase model using Google OR-Tools CP-SAT:
+  Phase 1: RR placement — assign every RR game to (day, slot, court).
+  Phase 2: PO placement — assign playoff games with RR frozen.
+           Partial placement allowed; blocked games reported.
 
-All hard rules encoded as simultaneous constraints. Soft preferences
-encoded as objective function terms to minimize.
+If Phase 2 can't place all PO games, the iterative wrapper extracts a
+conflict certificate (which RR-occupied cells block which PO games),
+feeds it back as forbidden cells for Phase 1, and re-solves. Up to 4
+iterations before bailing out with whatever partial schedule we have.
 
 Usage:
   from scheduler import solve_schedule
@@ -18,25 +21,107 @@ from itertools import combinations
 from collections import defaultdict
 import json
 import time
+import re
+
+
+MAX_ITERATIONS = 4
+UNPLACED_WEIGHT = 1_000_000  # dominates any soft-preference penalty
 
 
 def solve_schedule(config, time_limit=120):
-    """
-    Main entry point. Takes a config dict and returns a schedule dict
-    compatible with the frontend's importScheduleFromJSON format.
-
-    config keys:
-      divisions: [{name, color, teams, manualGroups}]
-      sites: [{name, numCourts}]
-      setupFields: {nDays, maxGPD, lS, lE, mainVenue, ruleRest, ruleVenueRest,
-                     venueRestMandatory, mainVenueFinal, mainVenue3rd, mainVenueSF,
-                     dayHours: [{start, end}], finalTimes}
-      venueRules: [{divName, prio}]
-      venueBlackouts: [{venue, day, afterTime, beforeTime}]
-    """
+    """Iterative two-phase solver. Returns frontend-compatible schedule dict."""
     start_time = time.time()
+    ctx = _build_context(config)
 
-    # ── Parse config ──────────────────────────────────────────────────────────
+    forbidden_cells = set()      # {(day, slot, court)} RR must avoid
+    po_excluded_cells = set()    # {(p_idx, day, slot, court)} PO must avoid
+    last_rr_result = None
+    last_rr_occupied = None
+    last_po_result = None
+    last_blocked = None
+
+    for iteration in range(MAX_ITERATIONS):
+        iter_start = time.time()
+        print(f"[Scheduler] === Iteration {iteration+1}/{MAX_ITERATIONS} "
+              f"(forbidden RR: {len(forbidden_cells)}, "
+              f"PO exclusions: {len(po_excluded_cells)}) ===")
+
+        rr_result, rr_occupied, p1_status = _solve_phase1(
+            ctx, forbidden_cells, time_limit)
+
+        if p1_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            # Phase 1 infeasible — can't satisfy RR with these forbidden cells.
+            # If this is the first iteration, it's a genuine infeasibility.
+            # If later, we over-constrained Phase 1 via feedback — fall back.
+            if iteration == 0:
+                total_slots = sum(len(s) * ctx['num_courts'] for s in ctx['day_slots'])
+                rr_slots = sum(len(ctx['rr_slot_mask'].get(d, set())) * ctx['num_courts']
+                               for d in range(ctx['n_days']))
+                return {'error': f"RR phase {ctx['status_names'].get(p1_status, 'INFEASIBLE')}. "
+                                 f"{ctx['num_rr']} RR games need {rr_slots} court-slots "
+                                 f"(total capacity: {total_slots}).",
+                        'status': ctx['status_names'].get(p1_status, 'INFEASIBLE')}
+            # Later iteration: use the last good result we have
+            print(f"[Scheduler] Phase 1 became infeasible at iteration {iteration+1} — "
+                  f"using last good result from iteration {iteration}")
+            break
+
+        po_result, blocked, p2_status, po_placements = _solve_phase2(
+            ctx, rr_result, rr_occupied, time_limit, po_excluded_cells)
+
+        print(f"[Scheduler] Iteration {iteration+1} done in {time.time()-iter_start:.1f}s: "
+              f"{len(rr_result)} RR placed, {len(po_result)} PO placed, "
+              f"{len(blocked)} PO blocked")
+
+        last_rr_result = rr_result
+        last_rr_occupied = rr_occupied
+        last_po_result = po_result
+        last_blocked = blocked
+
+        if not blocked:
+            # All games placed.
+            total_elapsed = time.time() - start_time
+            print(f"[Scheduler] Done: {len(rr_result)} RR + {len(po_result)} PO "
+                  f"in {total_elapsed:.1f}s ({iteration+1} iteration(s))")
+            return _assemble_sched(rr_result, po_result, [], ctx, config)
+
+        # Derive feedback: RR cells to free up + PO games to evict from
+        # cells that block lower/equal-priority PO games.
+        new_forbidden, new_po_exclusions = _extract_conflict_cells(
+            blocked, rr_occupied, po_placements, ctx)
+        added_rr = new_forbidden - forbidden_cells
+        added_po = new_po_exclusions - po_excluded_cells
+        if not added_rr and not added_po:
+            # No progress possible — bail with current partial schedule.
+            print(f"[Scheduler] No new feedback cells available — bailing out")
+            break
+        print(f"[Scheduler] Adding {len(added_rr)} RR-forbid + "
+              f"{len(added_po)} PO-exclusion cell(s) for next iteration")
+        forbidden_cells |= new_forbidden
+        po_excluded_cells |= new_po_exclusions
+
+    # Exhausted iterations (or bailed) with blocked games — return best attempt.
+    total_elapsed = time.time() - start_time
+    n_rr = len(last_rr_result or [])
+    n_po = len(last_po_result or [])
+    n_blocked = len(last_blocked or [])
+    print(f"[Scheduler] Exhausted iterations: {n_rr} RR + {n_po} PO placed, "
+          f"{n_blocked} PO blocked, total {total_elapsed:.1f}s")
+
+    if last_rr_result is None:
+        return {'error': 'Solver produced no schedule after iterative feedback.',
+                'status': 'INFEASIBLE'}
+
+    unscheduled = [_blocked_to_unsched(pg) for pg in (last_blocked or [])]
+    return _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONTEXT BUILDER — shared setup used by both phases
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _build_context(config):
+    """Parse config once; return a context dict used by both phases."""
     divisions = config.get('divisions', [])
     sites_cfg = config.get('sites', [])
     sf = config.get('setupFields', {})
@@ -58,21 +143,19 @@ def solve_schedule(config, time_limit=120):
         day_hours = [{'start': '09:00', 'end': '19:00' if i < n_days - 1 else '17:30'}
                      for i in range(n_days)]
 
-    # ── Build courts ──────────────────────────────────────────────────────────
-    courts = []  # [{name, venue}]
+    courts = []
     for site in sites_cfg:
         n = int(site.get('numCourts', 1))
         name = site.get('name', 'Unnamed')
         for i in range(n):
             court_name = f"{name} Court {i+1}" if n > 1 else name
             courts.append({'name': court_name, 'venue': name})
-
     num_courts = len(courts)
     main_venue_lower = main_venue.lower()
-    blanes_courts = [i for i, c in enumerate(courts) if c['venue'].lower().find(main_venue_lower) != -1]
+    blanes_courts = [i for i, c in enumerate(courts)
+                     if c['venue'].lower().find(main_venue_lower) != -1]
 
-    # ── Build time slots per day ──────────────────────────────────────────────
-    day_slots = []  # day_slots[d] = [minutes, minutes, ...]
+    day_slots = []
     for d in range(n_days):
         if d < len(day_hours):
             start_m = _time_to_min(day_hours[d].get('start', '09:00'))
@@ -82,7 +165,6 @@ def solve_schedule(config, time_limit=120):
         slots = []
         t = start_m
         while t <= end_m:
-            # Skip lunch window
             if t < lunch_end and t + 90 > lunch_start:
                 t = lunch_end
                 continue
@@ -90,18 +172,14 @@ def solve_schedule(config, time_limit=120):
             t += 90
         day_slots.append(slots)
 
-    # ── Build groups and matchups ─────────────────────────────────────────────
-    groups = {}       # (div_name, group_letter) -> [team_names]
-    team_div = {}     # (div_name, team_name) -> group_letter
-    all_teams = []    # [(div_name, team_name)]
-
+    groups = {}
+    team_div = {}
+    all_teams = []
     for div in divisions:
         mg = div.get('manualGroups', [])
         if not mg:
-            # Fallback: chunk teams into groups of 4
             teams = div.get('teams', [])
-            size = 4
-            mg = [teams[i:i+size] for i in range(0, len(teams), size)]
+            mg = [teams[i:i+4] for i in range(0, len(teams), 4)]
         for gi, grp in enumerate(mg):
             letter = chr(65 + gi)
             groups[(div['name'], letter)] = list(grp)
@@ -109,23 +187,14 @@ def solve_schedule(config, time_limit=120):
                 team_div[(div['name'], t)] = letter
                 all_teams.append((div['name'], t))
 
-    # RR matchups
-    rr_matchups = []  # [(div, group_letter, team1, team2)]
+    rr_matchups = []
     for (div, grp), teams in groups.items():
         for a, b in combinations(teams, 2):
             rr_matchups.append((div, grp, a, b))
-
     num_rr = len(rr_matchups)
 
-    # ── Division venue restrictions ───────────────────────────────────────────
-    # Build per-division allowed court indices based on venue rules.
-    # 'blanes-only': only main venue courts
-    # 'blanes-pref-1': prefer main venue (soft, handled by objective)
-    # 'any': all courts (default)
-    # Also supports restricting to specific venue names via comma-separated list
-    # in the prio field (e.g., 'Blanes,Pineda' → only courts at those venues).
     mandatory_divs = set()
-    div_allowed_courts = {}  # divName → set of court indices (None = all allowed)
+    div_allowed_courts = {}
     for vr in venue_rules:
         prio = vr.get('prio', 'any')
         div_name = vr.get('divName', '')
@@ -133,7 +202,6 @@ def solve_schedule(config, time_limit=120):
             mandatory_divs.add(div_name)
             div_allowed_courts[div_name] = set(blanes_courts)
         elif ',' in prio:
-            # Custom venue list: "Blanes,Pineda" → allow courts at those venues
             allowed_venues = [v.strip().lower() for v in prio.split(',')]
             allowed = set()
             for ci, c in enumerate(courts):
@@ -141,45 +209,24 @@ def solve_schedule(config, time_limit=120):
                     allowed.add(ci)
             if allowed:
                 div_allowed_courts[div_name] = allowed
-                mandatory_divs.add(div_name)  # treat as mandatory for constraint purposes
+                mandatory_divs.add(div_name)
 
-    # ── Venue blackouts ───────────────────────────────────────────────────────
-    blackout_map = defaultdict(list)  # (venue, day) -> [(after_min, before_min)]
+    blackout_map = defaultdict(list)
     for bo in venue_blackouts:
         key = (bo['venue'], bo['day'])
         after = _time_to_min(bo['afterTime']) if bo.get('afterTime') else -1
         before = _time_to_min(bo['beforeTime']) if bo.get('beforeTime') else -1
         blackout_map[key].append((after, before))
 
-    def is_blacked_out(court_idx, day_idx, slot_min):
-        venue = courts[court_idx]['venue']
-        for after, before in blackout_map.get((venue, day_idx), []):
-            if after >= 0 and slot_min >= after:
-                return True
-            if before >= 0 and slot_min < before:
-                return True
-        return False
-
-    # ── PO structure ──────────────────────────────────────────────────────────
     po_games = _build_po_structure(divisions, groups)
 
-    # ── Group-aware PO day map for Rule 10c ───────────────────────────────────
-    # Only cap teams at maxGPD-1 on days where their SPECIFIC GROUP has a PO game.
-    # This gives the solver more freedom for groups that don't have PO on that day.
-    po_days_per_group = {}  # (div, group_letter, day) → True
-
-    # ── Determine PO days and RR slot mask ────────────────────────────────────
-    # Dynamic RR/PO slot budgeting: calculate how many RR slots are needed,
-    # then reserve the minimum for PO. This handles varying tournament sizes.
     finals_day = n_days - 1
     po_start_day = max(0, n_days - 2)
 
-    # Calculate total available slots and needed RR capacity
-    total_rr_slots_needed = (num_rr + num_courts - 1) // num_courts  # ceil(games/courts)
+    total_rr_slots_needed = (num_rr + num_courts - 1) // num_courts
     day1_slots = len(day_slots[0]) if n_days > 0 else 0
     day2_slots = len(day_slots[1]) if n_days > 1 else 0
 
-    # Start with max PO reservation (2 slots on Day N-2), reduce if RR doesn't fit
     if n_days >= 3:
         rr_capacity_with_2 = day1_slots * num_courts + (day2_slots - 2) * num_courts
         rr_capacity_with_1 = day1_slots * num_courts + (day2_slots - 1) * num_courts
@@ -187,10 +234,10 @@ def solve_schedule(config, time_limit=120):
             reserve = 2
         elif num_rr <= rr_capacity_with_1:
             reserve = 1
-            print(f"[Scheduler] Reduced PO reservation to 1 slot (RR needs {num_rr} games, capacity with 2 reserve = {rr_capacity_with_2})")
+            print(f"[Scheduler] Reduced PO reservation to 1 slot")
         else:
             reserve = 0
-            print(f"[Scheduler] WARNING: No PO reservation possible (RR needs {num_rr} games, max capacity = {rr_capacity_with_1})")
+            print(f"[Scheduler] WARNING: No PO reservation possible")
     else:
         reserve = min(2, day1_slots)
 
@@ -202,23 +249,17 @@ def solve_schedule(config, time_limit=120):
             n_slots = len(day_slots[d])
             rr_slot_mask[d] = set(range(n_slots - reserve))
         else:
-            rr_slot_mask[d] = set()  # finals day: no RR
-
-    # For 2-day tournaments, adjust
+            rr_slot_mask[d] = set()
     if n_days <= 2:
         rr_slot_mask[0] = set(range(len(day_slots[0]) - 2)) if len(day_slots[0]) > 2 else set()
         if n_days > 1:
             rr_slot_mask[1] = set()
 
-    # ── Determine divLastRRDay ───────────────────────────────────────────────
     div_last_rr_day = {}
     for div in divisions:
         max_gs = max((len(g) for g in div.get('manualGroups', [[]])), default=1)
         div_last_rr_day[div['name']] = 0 if max_gs <= 1 else (((max_gs - 1) + max_gpd - 1) // max_gpd) - 1
 
-    # Divisions with PO on specific days — division-aware:
-    # Divisions that finish RR before Day N-2 (3-team groups) can have PO on Day N-2.
-    # Divisions that extend RR to Day N-2 (4-team groups) have PO on Day N-1 only.
     po_days_per_div = defaultdict(set)
     for div in divisions:
         div_name = div['name']
@@ -230,14 +271,83 @@ def solve_schedule(config, time_limit=120):
                 elif d == finals_day:
                     po_days_per_div[div_name].add(d)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # PHASE 1: RR PLACEMENT
-    # ══════════════════════════════════════════════════════════════════════════
-    print(f"[Scheduler] Phase 1: placing {num_rr} RR games...")
+    # Rank divisions (oldest → youngest, boys before girls on ties) and assign
+    # exponentially-growing weights so the solver strongly favors Blanes for
+    # top-priority divisions. Linear formula (age*2+boys) gave range 25..37,
+    # which is too flat to overcome the search's other preferences.
+    def _age_num(d):
+        m = re.search(r'[Uu](\d+)', d['name'])
+        return int(m.group(1)) if m else 0
+    def _is_girls(d):
+        n = d['name'].upper()
+        return 'GIRL' in n or 'WOMEN' in n
+    ranked = sorted(divisions, key=lambda d: (-_age_num(d), 1 if _is_girls(d) else 0))
+    n_div = max(1, len(ranked))
+    div_priority = {d['name']: 2 ** (n_div - 1 - idx) for idx, d in enumerate(ranked)}
 
+    return {
+        'config': config, 'divisions': divisions, 'sites_cfg': sites_cfg,
+        'courts': courts, 'num_courts': num_courts,
+        'blanes_courts': blanes_courts, 'main_venue': main_venue,
+        'day_slots': day_slots, 'n_days': n_days,
+        'max_gpd': max_gpd,
+        'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
+        'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
+        'lunch_start': lunch_start, 'lunch_end': lunch_end,
+        'groups': groups, 'team_div': team_div, 'all_teams': all_teams,
+        'rr_matchups': rr_matchups, 'num_rr': num_rr,
+        'mandatory_divs': mandatory_divs, 'div_allowed_courts': div_allowed_courts,
+        'blackout_map': blackout_map,
+        'po_games': po_games,
+        'div_last_rr_day': div_last_rr_day, 'po_days_per_div': po_days_per_div,
+        'rr_slot_mask': rr_slot_mask, 'finals_day': finals_day,
+        'po_start_day': po_start_day, 'reserve': reserve,
+        'div_priority': div_priority,
+        'status_names': {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE',
+                         cp_model.INFEASIBLE: 'INFEASIBLE', cp_model.UNKNOWN: 'UNKNOWN',
+                         cp_model.MODEL_INVALID: 'MODEL_INVALID'},
+    }
+
+
+def _is_blacked_out(ctx, court_idx, day_idx, slot_min):
+    venue = ctx['courts'][court_idx]['venue']
+    for after, before in ctx['blackout_map'].get((venue, day_idx), []):
+        if after >= 0 and slot_min >= after:
+            return True
+        if before >= 0 and slot_min < before:
+            return True
+    return False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 1 — RR PLACEMENT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _solve_phase1(ctx, forbidden_cells, time_limit):
+    """
+    Place RR games. forbidden_cells is a set of (day, slot, court) triples
+    RR must avoid (passed from the iterative feedback loop).
+    Returns (rr_result, rr_occupied, status).
+    """
+    divisions = ctx['divisions']
+    courts = ctx['courts']
+    num_courts = ctx['num_courts']
+    blanes_courts = ctx['blanes_courts']
+    day_slots = ctx['day_slots']
+    n_days = ctx['n_days']
+    max_gpd = ctx['max_gpd']
+    rule_rest = ctx['rule_rest']
+    rule_venue_rest = ctx['rule_venue_rest']
+    rr_matchups = ctx['rr_matchups']
+    num_rr = ctx['num_rr']
+    div_allowed_courts = ctx['div_allowed_courts']
+    rr_slot_mask = ctx['rr_slot_mask']
+    po_days_per_div = ctx['po_days_per_div']
+    div_priority = ctx['div_priority']
+
+    print(f"[Scheduler] Phase 1: placing {num_rr} RR games...")
     model = cp_model.CpModel()
 
-    # Decision variables: x[g, d, s, c] = 1 iff game g at day d, slot s, court c
     x = {}
     for g in range(num_rr):
         for d in range(n_days):
@@ -245,14 +355,13 @@ def solve_schedule(config, time_limit=120):
                 for c in range(num_courts):
                     x[g, d, s, c] = model.new_bool_var(f'x_{g}_{d}_{s}_{c}')
 
-    # ── Rule 1: Each RR game placed exactly once ──────────────────────────────
     for g in range(num_rr):
         model.add_exactly_one([
             x[g, d, s, c]
             for d in range(n_days) for s in range(len(day_slots[d])) for c in range(num_courts)
         ])
 
-    # ── RR slot mask: ban RR from PO-reserved slots ───────────────────────────
+    # Ban RR from PO-reserved slots AND from forbidden cells (feedback loop).
     for g in range(num_rr):
         for d in range(n_days):
             allowed = rr_slot_mask.get(d, set())
@@ -260,15 +369,19 @@ def solve_schedule(config, time_limit=120):
                 if s not in allowed:
                     for c in range(num_courts):
                         model.add(x[g, d, s, c] == 0)
+                else:
+                    for c in range(num_courts):
+                        if (d, s, c) in forbidden_cells:
+                            model.add(x[g, d, s, c] == 0)
 
-    # ── Rule 10: Court capacity (at most 1 game per court per slot) ───────────
+    # Court capacity.
     for d in range(n_days):
         for s in range(len(day_slots[d])):
             for c in range(num_courts):
                 model.add_at_most_one([x[g, d, s, c] for g in range(num_rr)])
 
-    # ── Rule 2: No team in two games at same (day, slot) ──────────────────────
-    team_games = defaultdict(list)  # (div, team) -> [game_indices]
+    # No team in two games at same (day, slot).
+    team_games = defaultdict(list)
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         team_games[(div, a)].append(g)
         team_games[(div, b)].append(g)
@@ -278,32 +391,25 @@ def solve_schedule(config, time_limit=120):
             for (div, team), g_list in team_games.items():
                 if len(g_list) < 2:
                     continue
-                terms = []
-                for g in g_list:
-                    for c in range(num_courts):
-                        terms.append(x[g, d, s, c])
+                terms = [x[g, d, s, c] for g in g_list for c in range(num_courts)]
                 if terms:
                     model.add_at_most_one(terms)
 
-    # ── Rule 5 + 10c: Max games per team per day ──────────────────────────────
+    # Max games per team per day (Rule 10c on PO days).
     for d in range(n_days):
         for (div, team), g_list in team_games.items():
-            terms = []
-            for g in g_list:
-                for s in range(len(day_slots[d])):
-                    for c in range(num_courts):
-                        terms.append(x[g, d, s, c])
-            if terms:
-                # Rule 10c: on ANY PO day for this division, limit RR to maxGPD-1
-                # so advancing teams don't exceed maxGPD total (RR + SF).
-                # Applied unconditionally — no divLastRRDay gate — to catch all
-                # groups including 4-team groups whose SFs land on Day 2.
-                effective_gpd = max_gpd
-                if d in po_days_per_div.get(div, set()):
-                    effective_gpd = max(max_gpd - 1, 1)
-                model.add(sum(terms) <= effective_gpd)
+            terms = [x[g, d, s, c]
+                     for g in g_list
+                     for s in range(len(day_slots[d]))
+                     for c in range(num_courts)]
+            if not terms:
+                continue
+            effective_gpd = max_gpd
+            if d in po_days_per_div.get(div, set()):
+                effective_gpd = max(max_gpd - 1, 1)
+            model.add(sum(terms) <= effective_gpd)
 
-    # ── Rules 6 & 7: Rest between consecutive games ──────────────────────────
+    # Rest between games (Rules 6 & 7).
     for (div, team), g_list in team_games.items():
         if len(g_list) < 2:
             continue
@@ -318,26 +424,22 @@ def solve_schedule(config, time_limit=120):
                         gap = abs(m2 - m1)
                         for c1 in range(num_courts):
                             for c2 in range(num_courts):
-                                v1 = courts[c1]['venue']
-                                v2 = courts[c2]['venue']
-                                same_venue = v1 == v2
-                                if rule_rest and same_venue and gap < 180:
+                                same_v = courts[c1]['venue'] == courts[c2]['venue']
+                                if rule_rest and same_v and gap < 180:
                                     model.add(x[g1, d, s1, c1] + x[g2, d, s2, c2] <= 1)
-                                elif rule_venue_rest and not same_venue and gap < 270:
+                                elif rule_venue_rest and not same_v and gap < 270:
                                     model.add(x[g1, d, s1, c1] + x[g2, d, s2, c2] <= 1)
 
-    # ── Rule 10b: Every team ≥ 1 RR at main venue ────────────────────────────
+    # Every team ≥ 1 RR at main venue.
     for (div, team), g_list in team_games.items():
-        blanes_terms = []
-        for g in g_list:
-            for d in range(n_days):
-                for s in range(len(day_slots[d])):
-                    for c in blanes_courts:
-                        blanes_terms.append(x[g, d, s, c])
+        blanes_terms = [x[g, d, s, c]
+                        for g in g_list
+                        for d in range(n_days) for s in range(len(day_slots[d]))
+                        for c in blanes_courts]
         if blanes_terms:
             model.add(sum(blanes_terms) >= 1)
 
-    # ── Rule 13: Restricted divisions — only allowed courts ─────────────────
+    # Division venue restrictions.
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         if div in div_allowed_courts:
             allowed = div_allowed_courts[div]
@@ -347,25 +449,15 @@ def solve_schedule(config, time_limit=120):
                         if c not in allowed:
                             model.add(x[g, d, s, c] == 0)
 
-    # ── Venue blackouts ───────────────────────────────────────────────────────
+    # Venue blackouts.
     for g in range(num_rr):
         for d in range(n_days):
             for s in range(len(day_slots[d])):
                 for c in range(num_courts):
-                    if is_blacked_out(c, d, day_slots[d][s]):
+                    if _is_blacked_out(ctx, c, d, day_slots[d][s]):
                         model.add(x[g, d, s, c] == 0)
 
-    # ── Objective: soft preferences ───────────────────────────────────────────
-    div_priority = {}
-    for div in divisions:
-        age = 0
-        import re
-        m = re.search(r'[Uu](\d+)', div['name'])
-        if m:
-            age = int(m.group(1))
-        is_boys = 'GIRL' not in div['name'].upper() and 'WOMEN' not in div['name'].upper()
-        div_priority[div['name']] = age * 2 + (1 if is_boys else 0)
-
+    # Soft objective: prefer main venue for RR.
     outer_courts = [i for i in range(num_courts) if i not in blanes_courts]
     penalty_terms = []
     for g, (div, grp, a, b) in enumerate(rr_matchups):
@@ -374,29 +466,20 @@ def solve_schedule(config, time_limit=120):
             for s in range(len(day_slots[d])):
                 for c in outer_courts:
                     penalty_terms.append(w * x[g, d, s, c])
-
     if penalty_terms:
         model.minimize(sum(penalty_terms))
 
-    # ── Solve Phase 1 ─────────────────────────────────────────────────────────
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit
     solver.parameters.num_workers = 8
     status = solver.solve(model)
-
-    status_name = solver.status_name(status)
-    print(f"[Scheduler] Phase 1 status: {status_name}")
+    print(f"[Scheduler] Phase 1 status: {ctx['status_names'].get(status, status)}")
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        total_slots = sum(len(s) * num_courts for s in day_slots)
-        rr_slots = sum(len(rr_slot_mask.get(d, set())) * num_courts for d in range(n_days))
-        return {'error': f'RR phase {status_name}. {num_rr} RR games need {rr_slots} court-slots '
-                         f'(total capacity: {total_slots}). Try adding courts, extending hours, or reducing teams.',
-                'status': status_name}
+        return [], set(), status
 
-    # ── Extract RR assignments ────────────────────────────────────────────────
     rr_result = []
-    rr_occupied = set()  # (d, s, c) occupied by RR
+    rr_occupied = set()
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         for d in range(n_days):
             for s in range(len(day_slots[d])):
@@ -412,19 +495,47 @@ def solve_schedule(config, time_limit=120):
                             't1': a, 't2': b,
                         })
                         rr_occupied.add((d, s, c))
+    return rr_result, rr_occupied, status
 
-    rr_elapsed = time.time() - start_time
-    print(f"[Scheduler] Phase 1 done: {len(rr_result)} RR games in {rr_elapsed:.1f}s")
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # PHASE 2: PO PLACEMENT
-    # ══════════════════════════════════════════════════════════════════════════
-    print(f"[Scheduler] Phase 2: placing {len(po_games)} PO games...")
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 2 — PO PLACEMENT (partial-placement allowed)
+# ══════════════════════════════════════════════════════════════════════════════
 
-    po_model = cp_model.CpModel()
+def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=None):
+    """
+    Place PO games given frozen RR. Uses at-most-one per PO (partial allowed)
+    with a dominant placement-reward objective so the solver only skips a
+    game when placement is strictly infeasible.
+
+    po_excluded_cells: optional set of (p_idx, d, s, c) tuples — specific
+    (PO game, cell) combinations that must NOT be used. Populated across
+    iterations by the conflict-extraction feedback loop to force reshuffle
+    when a blocked low-priority PO's legal cells are saturated by other PO
+    games of same-or-lower priority.
+
+    Returns (po_result, blocked, status, po_placements) where `blocked` is
+    a list of po_games dicts that could not be placed, and `po_placements`
+    is a dict mapping placed p_idx → (d, s, c).
+    """
+    divisions = ctx['divisions']
+    courts = ctx['courts']
+    num_courts = ctx['num_courts']
+    blanes_courts = ctx['blanes_courts']
+    day_slots = ctx['day_slots']
+    n_days = ctx['n_days']
+    finals_day = ctx['finals_day']
+    div_allowed_courts = ctx['div_allowed_courts']
+    rr_slot_mask = ctx['rr_slot_mask']
+    po_days_per_div = ctx['po_days_per_div']
+    div_priority = ctx['div_priority']
+    groups = ctx['groups']
+    po_games = ctx['po_games']
     num_po = len(po_games)
 
-    # Decision variables
+    print(f"[Scheduler] Phase 2: placing {num_po} PO games...")
+    po_model = cp_model.CpModel()
+
     y = {}
     for p in range(num_po):
         for d in range(n_days):
@@ -432,14 +543,21 @@ def solve_schedule(config, time_limit=120):
                 for c in range(num_courts):
                     y[p, d, s, c] = po_model.new_bool_var(f'po_{p}_{d}_{s}_{c}')
 
-    # Each PO placed exactly once
+    # Each PO placed at most once (partial placement allowed).
     for p in range(num_po):
-        po_model.add_exactly_one([
+        po_model.add_at_most_one([
             y[p, d, s, c]
             for d in range(n_days) for s in range(len(day_slots[d])) for c in range(num_courts)
         ])
 
-    # Court capacity: no conflict with RR or other PO
+    # PO-level cell exclusions from iterative feedback (PO-blocks-PO fix).
+    if po_excluded_cells:
+        for (p_idx, d, s, c) in po_excluded_cells:
+            if 0 <= p_idx < num_po and 0 <= d < n_days \
+                    and 0 <= s < len(day_slots[d]) and 0 <= c < num_courts:
+                po_model.add(y[p_idx, d, s, c] == 0)
+
+    # Court capacity: no conflict with RR or other PO.
     for d in range(n_days):
         for s in range(len(day_slots[d])):
             for c in range(num_courts):
@@ -449,7 +567,7 @@ def solve_schedule(config, time_limit=120):
                 else:
                     po_model.add_at_most_one(terms)
 
-    # PO only in PO window (after RR boundary for each division)
+    # PO only in PO window (after RR boundary for each division).
     for p, pg in enumerate(po_games):
         div = pg['divName']
         for d in range(n_days):
@@ -458,16 +576,13 @@ def solve_schedule(config, time_limit=120):
                     for c in range(num_courts):
                         po_model.add(y[p, d, s, c] == 0)
             else:
-                # On PO days, only allow slots outside the RR mask
                 allowed_rr = rr_slot_mask.get(d, set())
                 for s in range(len(day_slots[d])):
                     if s in allowed_rr:
-                        # This slot is for RR, ban PO (unless it's also in the PO window)
-                        # Actually: if the slot is NOT in the RR mask, it's for PO
                         for c in range(num_courts):
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Rule 13: Restricted divisions PO — only allowed courts
+    # Restricted divisions PO — only allowed courts.
     for p, pg in enumerate(po_games):
         if pg['divName'] in div_allowed_courts:
             allowed = div_allowed_courts[pg['divName']]
@@ -477,7 +592,7 @@ def solve_schedule(config, time_limit=120):
                         if c not in allowed:
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Rules 11, 12: Finals + 3rd Place at main venue
+    # Finals + 3rd Place at main venue.
     for p, pg in enumerate(po_games):
         if pg.get('type') in ('Final', '3rd'):
             for d in range(n_days):
@@ -486,10 +601,10 @@ def solve_schedule(config, time_limit=120):
                         if c not in blanes_courts:
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Rule 4 + Rule 7 for PO: SF must start before later games in same bracket,
-    # with venue-aware gap:
-    #   Same venue: ≥ 180 min start-to-start (90 min actual rest)
-    #   Different venue: ≥ 270 min start-to-start (180 min actual rest for travel)
+    # SF before Final/3rd with venue-aware gap (Rule 4 + 7).
+    # Only enforced WHEN BOTH ARE PLACED: if SF is placed late, only Final cells
+    # that are valid after it can be placed. If SF is unplaced, the constraint
+    # collapses (both terms 0, sum<=1 trivially holds).
     for p1, pg1 in enumerate(po_games):
         if pg1.get('type') != 'SF':
             continue
@@ -515,22 +630,21 @@ def solve_schedule(config, time_limit=120):
                                     if not ok:
                                         po_model.add(y[p1, d1, s1, c1] + y[p2, d2, s2, c2] <= 1)
 
-    # Venue blackouts for PO
+    # Venue blackouts for PO.
     for p in range(num_po):
         for d in range(n_days):
             for s in range(len(day_slots[d])):
                 for c in range(num_courts):
-                    if is_blacked_out(c, d, day_slots[d][s]):
+                    if _is_blacked_out(ctx, c, d, day_slots[d][s]):
                         po_model.add(y[p, d, s, c] == 0)
 
-    # Rest between RR and PO (conservative: any team in PO groups)
-    rr_by_team_day = defaultdict(list)  # (div, team, day) -> [(slot, minutes, court, venue)]
+    # Rest between RR and PO for candidate teams.
+    rr_by_team_day = defaultdict(list)
     for rg in rr_result:
         for t in (rg['t1'], rg['t2']):
             rr_by_team_day[(rg['divName'], t, rg['day'])].append(
                 (rg['slotIdx'], rg['minutes'], rg['courtIdx'], rg['loc'])
             )
-
     for p, pg in enumerate(po_games):
         candidate_teams = []
         for grp_letter in pg.get('groups', []):
@@ -550,47 +664,108 @@ def solve_schedule(config, time_limit=120):
                                 if gap < required:
                                     po_model.add(y[p, d, po_s, po_c] == 0)
 
-    # PO soft objective: Finals prime-time + Blanes priority
-    po_penalty = []
-    prime_slots = {870, 960, 1050}  # 14:30, 16:00, 17:30
+    # Objective: one placement indicator per PO (dominant), plus soft prefs on
+    # cell-level y vars. Per-game indicators keep the objective compact and
+    # give the solver a simple "maximize placements" signal.
+    # Soft-pref 3 "late afternoon" = 16:00 / 17:30 only. 14:30 (870) is post-
+    # lunch, not prime — excluding it nudges Finals/3rd to the real showcase slots.
+    prime_slots = {960, 1050}
+    placed_vars = []
+    for p in range(num_po):
+        cell_vars = [y[p, d, s, c]
+                     for d in range(n_days) for s in range(len(day_slots[d]))
+                     for c in range(num_courts)]
+        placed_p = po_model.new_bool_var(f'placed_{p}')
+        po_model.add(sum(cell_vars) == placed_p)
+        placed_vars.append(placed_p)
+
+    obj_terms = []
     for p, pg in enumerate(po_games):
+        w = UNPLACED_WEIGHT
+        t = pg.get('type')
+        if t in ('Final', '3rd'):
+            w *= 100
+        elif t == 'SF':
+            w *= 10
+        # Minimize -w * placed_p  ≡  reward placement.
+        obj_terms.append(-w * placed_vars[p])
+
+    for p, pg in enumerate(po_games):
+        t = pg.get('type')
         for d in range(n_days):
             for s in range(len(day_slots[d])):
                 m = day_slots[d][s]
                 for c in range(num_courts):
-                    w = 0
+                    soft = 0
                     if c not in blanes_courts:
-                        w += div_priority.get(pg['divName'], 1)
-                    if pg.get('type') in ('Final', '3rd') and d == finals_day and m not in prime_slots:
-                        w += 50
-                    if w:
-                        po_penalty.append(w * y[p, d, s, c])
-    if po_penalty:
-        po_model.minimize(sum(po_penalty))
+                        soft += div_priority.get(pg['divName'], 1)
+                    if t in ('Final', '3rd') and d == finals_day and m not in prime_slots:
+                        # Graded penalty: earlier slots cost more. 09:00 → 42,
+                        # 10:30 → 33, 12:00 → 24, 14:30 → 9. Nudges Finals away
+                        # from morning when prime (16:00/17:30) is saturated.
+                        soft += max(0, (960 - m) // 10)
+                    if soft:
+                        obj_terms.append(soft * y[p, d, s, c])
 
-    # ── Solve Phase 2 ─────────────────────────────────────────────────────────
+    # Soft: 3rd Place before Final (convention — Final is the tournament
+    # climax). Uses global-slot int vars channeled to y; penalty fires only
+    # when both games end up placed AND third's slot >= final's slot.
+    slot_global = {}
+    _gi = 0
+    for d in range(n_days):
+        for s in range(len(day_slots[d])):
+            slot_global[(d, s)] = _gi
+            _gi += 1
+    max_global = _gi
+    div_bracket_ft = {}
+    for p, pg in enumerate(po_games):
+        t = pg.get('type')
+        if t in ('Final', '3rd'):
+            key = (pg['divName'], pg.get('bracket', ''))
+            div_bracket_ft.setdefault(key, {})[t] = p
+    PENALTY_3RD_AFTER_FINAL = 100
+    for key, pair in div_bracket_ft.items():
+        pf = pair.get('Final')
+        pt = pair.get('3rd')
+        if pf is None or pt is None:
+            continue
+        final_g = po_model.new_int_var(0, max_global - 1, f'final_g_{pf}')
+        third_g = po_model.new_int_var(0, max_global - 1, f'third_g_{pt}')
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                gi_val = slot_global[(d, s)]
+                for c in range(num_courts):
+                    po_model.add(final_g == gi_val).only_enforce_if(y[pf, d, s, c])
+                    po_model.add(third_g == gi_val).only_enforce_if(y[pt, d, s, c])
+        bad_order = po_model.new_bool_var(f'bad_order_{pf}_{pt}')
+        po_model.add(third_g >= final_g).only_enforce_if(bad_order)
+        po_model.add(third_g < final_g).only_enforce_if(bad_order.Not())
+        obj_terms.append(PENALTY_3RD_AFTER_FINAL * bad_order)
+
+    if obj_terms:
+        po_model.minimize(sum(obj_terms))
+
     po_solver = cp_model.CpSolver()
     po_solver.parameters.max_time_in_seconds = time_limit
     po_solver.parameters.num_workers = 8
     po_status = po_solver.solve(po_model)
-
-    po_status_name = po_solver.status_name(po_status)
-    print(f"[Scheduler] Phase 2 status: {po_status_name}")
+    print(f"[Scheduler] Phase 2 status: {ctx['status_names'].get(po_status, po_status)}")
 
     if po_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        total_slots = sum(len(s) * num_courts for s in day_slots)
-        po_slots = total_slots - sum(len(rr_slot_mask.get(d, set())) * num_courts for d in range(n_days))
-        return {'error': f'PO phase {po_status_name}. {num_po} PO games need {po_slots} court-slots. '
-                         f'Total games ({num_rr}+{num_po}={num_rr+num_po}) may exceed capacity ({total_slots}). '
-                         f'Try adding courts, extending hours, or adding a tournament day.',
-                'status': po_status_name,
-                'rr_count': len(rr_result)}
+        # Model infeasible outright (should be rare with at_most_one).
+        return [], list(po_games), po_status, {}
 
-    # ── Extract PO assignments ────────────────────────────────────────────────
     po_result = []
+    blocked = []
+    po_placements = {}
     for p, pg in enumerate(po_games):
+        placed = False
         for d in range(n_days):
+            if placed:
+                break
             for s in range(len(day_slots[d])):
+                if placed:
+                    break
                 for c in range(num_courts):
                     if po_solver.value(y[p, d, s, c]):
                         m = day_slots[d][s]
@@ -598,16 +773,110 @@ def solve_schedule(config, time_limit=120):
                             'day': d, 'slotIdx': s, 'courtIdx': c,
                             'time': _min_to_time(m), 'minutes': m,
                             'court': courts[c]['name'], 'loc': courts[c]['venue'],
-                            'divName': pg['divName'], 'color': _div_color(pg['divName'], divisions),
+                            'divName': pg['divName'],
+                            'color': _div_color(pg['divName'], divisions),
                             'lbl': pg['lbl'], 'bracket': pg.get('bracket', ''),
                             't1': pg.get('t1', ''), 't2': pg.get('t2', ''),
                         })
+                        po_placements[p] = (d, s, c)
+                        placed = True
+                        break
+        if not placed:
+            blocked.append(pg)
+    return po_result, blocked, po_status, po_placements
 
-    total_elapsed = time.time() - start_time
-    print(f"[Scheduler] Done: {len(rr_result)} RR + {len(po_result)} PO in {total_elapsed:.1f}s")
 
-    # ── Assemble output in frontend-compatible format ─────────────────────────
-    return _assemble_sched(rr_result, po_result, divisions, courts, day_slots, n_days, config)
+# ══════════════════════════════════════════════════════════════════════════════
+# CONFLICT EXTRACTION — derive RR cells to forbid from blocked PO games
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _po_priority_rank(pg):
+    """Higher number = higher priority. Final/3rd > SF > Medal."""
+    t = pg.get('type')
+    if t in ('Final', '3rd'):
+        return 3
+    if t == 'SF':
+        return 2
+    return 1  # Medal / consolation
+
+
+def _extract_conflict_cells(blocked, rr_occupied, po_placements, ctx):
+    """
+    Derive two feedback sets from the blocked PO games:
+
+    1. `new_forbidden` — (day, slot, court) cells Phase 1 should free up in
+       the next iteration (RR currently sits there, blocking PO legal cells).
+
+    2. `new_po_exclusions` — (p_idx, day, slot, court) tuples of OTHER PO
+       games that are currently placed in cells a blocked PO would legally
+       use. Only flagged when the occupying PO is same-or-lower priority
+       than the blocked one, so we never displace a Final for a Medal.
+
+    Priority ordering of the blocked list: Final / 3rd → SF → Medal so the
+    highest-stakes games get their feedback applied first.
+    """
+    divisions = ctx['divisions']
+    num_courts = ctx['num_courts']
+    blanes_courts_set = set(ctx['blanes_courts'])
+    day_slots = ctx['day_slots']
+    n_days = ctx['n_days']
+    div_allowed_courts = ctx['div_allowed_courts']
+    po_days_per_div = ctx['po_days_per_div']
+    rr_slot_mask = ctx['rr_slot_mask']
+    po_games = ctx['po_games']
+
+    # Reverse-index placements: cell → p_idx (so we can ask "who's in this cell?").
+    cell_to_po = {cell: p_idx for p_idx, cell in po_placements.items()}
+
+    # Sort blocked by priority DESC (highest first).
+    blocked_sorted = sorted(blocked, key=lambda g: -_po_priority_rank(g))
+
+    new_forbidden = set()
+    new_po_exclusions = set()
+
+    for pg in blocked_sorted:
+        div = pg['divName']
+        allowed_courts = div_allowed_courts.get(div, set(range(num_courts)))
+        allowed_days = po_days_per_div.get(div, set())
+        is_final_or_3rd = pg.get('type') in ('Final', '3rd')
+        blocked_prio = _po_priority_rank(pg)
+
+        for d in allowed_days:
+            rr_only = rr_slot_mask.get(d, set())
+            for s in range(len(day_slots[d])):
+                if s in rr_only:
+                    continue  # PO can't use RR-masked slots anyway
+                for c in range(num_courts):
+                    if c not in allowed_courts:
+                        continue
+                    if is_final_or_3rd and c not in blanes_courts_set:
+                        continue
+                    if _is_blacked_out(ctx, c, d, day_slots[d][s]):
+                        continue
+                    cell = (d, s, c)
+                    if cell in rr_occupied:
+                        new_forbidden.add(cell)
+                    elif cell in cell_to_po:
+                        occupying_p = cell_to_po[cell]
+                        occupying_pg = po_games[occupying_p]
+                        # Only evict same-or-lower priority. Never displace a
+                        # Final to accommodate a Medal — that risks losing the
+                        # higher-value game if it has no other legal cell.
+                        if _po_priority_rank(occupying_pg) <= blocked_prio:
+                            new_po_exclusions.add((occupying_p, d, s, c))
+    return new_forbidden, new_po_exclusions
+
+
+def _blocked_to_unsched(pg):
+    """Convert a blocked PO game dict to the frontend 'unscheduledGames' shape."""
+    return {
+        'divName': pg['divName'],
+        'lbl': pg.get('lbl', ''),
+        'bracket': pg.get('bracket', ''),
+        't1': pg.get('t1', ''),
+        't2': pg.get('t2', ''),
+        'reason': 'No legal (day, slot, court) cell after iterative feedback',
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -620,14 +889,17 @@ def _time_to_min(t):
     parts = str(t).split(':')
     return int(parts[0]) * 60 + int(parts[1] if len(parts) > 1 else 0)
 
+
 def _min_to_time(m):
     return f"{m // 60:02d}:{m % 60:02d}"
+
 
 def _div_color(div_name, divisions):
     for d in divisions:
         if d['name'] == div_name:
             return d.get('color', '#666')
     return '#666'
+
 
 def _build_po_structure(divisions, groups):
     """Build PO game list from division structure."""
@@ -638,17 +910,14 @@ def _build_po_structure(divisions, groups):
         n_groups = len(mg)
         if n_groups == 0:
             continue
-
         max_grp_size = max(len(g) for g in mg) if mg else 0
         group_letters = [chr(65 + i) for i in range(n_groups)]
 
         if n_groups <= 1:
-            # Single group: just a final
             po_games.append({'divName': div_name, 'lbl': 'FINAL', 'type': 'Final',
                              'bracket': 'Championship', 'groups': group_letters,
                              't1': '1st Group A', 't2': '2nd Group A'})
         elif n_groups == 2 and max_grp_size == 5:
-            # 10-team: direct-seed
             po_games.append({'divName': div_name, 'lbl': 'FINAL', 'type': 'Final',
                              'bracket': 'Championship', 'groups': group_letters,
                              't1': '1st Group A', 't2': '1st Group B'})
@@ -656,7 +925,6 @@ def _build_po_structure(divisions, groups):
                              'bracket': 'Championship', 'groups': group_letters,
                              't1': '2nd Group A', 't2': '2nd Group B'})
         elif n_groups == 2 and max_grp_size <= 4:
-            # 2 groups: cross-seeded SFs
             is_u18_girls = 'GIRL' in div_name.upper() and '18' in div_name
             if is_u18_girls:
                 po_games.append({'divName': div_name, 'lbl': 'SF 1', 'type': 'SF',
@@ -678,7 +946,6 @@ def _build_po_structure(divisions, groups):
             po_games.append({'divName': div_name, 'lbl': 'FINAL', 'type': 'Final',
                              'bracket': 'Championship', 'groups': group_letters,
                              't1': '', 't2': ''})
-            # Consolation
             if max_grp_size >= 3:
                 po_games.append({'divName': div_name, 'lbl': '5th Place', 'type': 'Medal',
                                  'bracket': '5th Place', 'groups': group_letters,
@@ -688,8 +955,6 @@ def _build_po_structure(divisions, groups):
                                  'bracket': '7th Place', 'groups': group_letters,
                                  't1': '4th Group A', 't2': '4th Group B'})
         elif n_groups == 4:
-            # 4 groups: Championship + Silver + Bronze brackets
-            # Championship SFs
             po_games.append({'divName': div_name, 'lbl': 'SF 1', 'type': 'SF',
                              'bracket': 'Championship (1st–4th)', 'groups': ['A', 'B'],
                              't1': '1st Group A', 't2': '1st Group B'})
@@ -702,9 +967,7 @@ def _build_po_structure(divisions, groups):
             po_games.append({'divName': div_name, 'lbl': 'FINAL', 'type': 'Final',
                              'bracket': 'Championship (1st–4th)', 'groups': group_letters,
                              't1': '', 't2': ''})
-
             if max_grp_size >= 3:
-                # Silver bracket (5th-8th)
                 if max_grp_size >= 4:
                     po_games.append({'divName': div_name, 'lbl': 'SF 1', 'type': 'SF',
                                      'bracket': 'Silver (5th–8th)', 'groups': ['A', 'B'],
@@ -725,8 +988,6 @@ def _build_po_structure(divisions, groups):
                     po_games.append({'divName': div_name, 'lbl': '7th/8th', 'type': 'Medal',
                                      'bracket': 'Silver (5th–8th)', 'groups': group_letters,
                                      't1': '2nd Group C', 't2': '2nd Group D'})
-
-                # Bronze bracket (9th-12th)
                 po_games.append({'divName': div_name, 'lbl': 'SF 1', 'type': 'SF',
                                  'bracket': 'Bronze (9th–12th)', 'groups': ['A', 'B'],
                                  't1': '3rd Group A', 't2': '3rd Group B'})
@@ -739,22 +1000,23 @@ def _build_po_structure(divisions, groups):
                 po_games.append({'divName': div_name, 'lbl': '11th/12th', 'type': 'Medal',
                                  'bracket': 'Bronze (9th–12th)', 'groups': group_letters,
                                  't1': '', 't2': ''})
-
             if max_grp_size >= 4:
-                # Placement bracket (13th-16th)
                 po_games.append({'divName': div_name, 'lbl': '13th/14th', 'type': 'Medal',
                                  'bracket': '13th–16th Place', 'groups': group_letters,
                                  't1': '4th Group A', 't2': '4th Group B'})
                 po_games.append({'divName': div_name, 'lbl': '15th/16th', 'type': 'Medal',
                                  'bracket': '13th–16th Place', 'groups': group_letters,
                                  't1': '4th Group C', 't2': '4th Group D'})
-
     return po_games
 
 
-def _assemble_sched(rr_result, po_result, divisions, courts, day_slots, n_days, config):
+def _assemble_sched(rr_result, po_result, unscheduled, ctx, config):
     """Assemble the schedule in the format the frontend expects."""
-    # Build gameDays
+    divisions = ctx['divisions']
+    courts = ctx['courts']
+    day_slots = ctx['day_slots']
+    n_days = ctx['n_days']
+
     game_days = []
     for d in range(n_days):
         is_last = d == n_days - 1
@@ -807,14 +1069,12 @@ def _assemble_sched(rr_result, po_result, divisions, courts, day_slots, n_days, 
         divs = list(by_div.values())
         game_days.append({'label': label, 'divs': divs, 'dayIndex': d})
 
-    # Build bracketDays (merged PO view) — games are SHARED references with
-    # gameDays so the dedup in allSchedGames works correctly.
     bracket_div_map = {}
+    po_gk = lambda dn: f"{dn} — Playoffs"
     for de in game_days:
         for d in de['divs']:
             gk = po_gk(d['name'])
             if gk in d.get('groups', {}):
-                # Use the SAME game objects (not copies) so seen-Set dedup works
                 po_game_refs = d['groups'][gk]['games']
                 if d['name'] not in bracket_div_map:
                     div_def = next((dv for dv in divisions if dv['name'] == d['name']), None)
@@ -846,14 +1106,15 @@ def _assemble_sched(rr_result, po_result, divisions, courts, day_slots, n_days, 
         'divisions': divisions,
         'venueRules': config.get('venueRules', []),
         'venueBlackouts': config.get('venueBlackouts', []),
-        'unscheduledGames': [],
+        'unscheduledGames': unscheduled,
         'sites': config.get('sites', []),
         'setupFields': config.get('setupFields', {}),
-        'status': 'optimal',
+        'status': 'optimal' if not unscheduled else 'partial',
         'stats': {
             'rr_games': len(rr_result),
             'po_games': len(po_result),
             'total': len(rr_result) + len(po_result),
+            'unscheduled': len(unscheduled),
         }
     }
 
@@ -861,7 +1122,7 @@ def _assemble_sched(rr_result, po_result, divisions, courts, day_slots, n_days, 
 if __name__ == '__main__':
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python scheduler.py config.json")
+        print("Usage: python scheduler.py config.json [out.json]")
         sys.exit(1)
     with open(sys.argv[1]) as f:
         config = json.load(f)
