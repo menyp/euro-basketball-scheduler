@@ -193,23 +193,51 @@ def _build_context(config):
             rr_matchups.append((div, grp, a, b))
     num_rr = len(rr_matchups)
 
+    # ── Division venue rules (Mandatory hard-gate + High Priority soft-pref) ──
+    # Supports two shapes:
+    #   NEW: {divName, venues: [...], mode: 'mandatory' | 'high-priority'}
+    #   LEGACY: {divName, prio: 'blanes-only' | 'blanes-pref-1' | 'any' | 'V1,V2,...'}
+    # Legacy rules are migrated transparently.
     mandatory_divs = set()
-    div_allowed_courts = {}
-    for vr in venue_rules:
+    div_allowed_courts = {}      # hard gate (Mandatory)
+    div_preferred_courts = {}    # soft preference (High Priority)
+
+    def _migrate_rule(vr):
+        """Return a dict {divName, venues, mode} or None to drop the rule."""
+        if 'venues' in vr and 'mode' in vr:
+            return vr
         prio = vr.get('prio', 'any')
-        div_name = vr.get('divName', '')
+        dn = vr.get('divName', '')
+        if not dn:
+            return None
         if prio == 'blanes-only':
-            mandatory_divs.add(div_name)
-            div_allowed_courts[div_name] = set(blanes_courts)
-        elif ',' in prio:
-            allowed_venues = [v.strip().lower() for v in prio.split(',')]
-            allowed = set()
-            for ci, c in enumerate(courts):
-                if c['venue'].lower() in allowed_venues:
-                    allowed.add(ci)
-            if allowed:
-                div_allowed_courts[div_name] = allowed
-                mandatory_divs.add(div_name)
+            return {'divName': dn, 'venues': [main_venue], 'mode': 'mandatory'}
+        if prio == 'blanes-pref-1':
+            return {'divName': dn, 'venues': [main_venue], 'mode': 'high-priority'}
+        if isinstance(prio, str) and ',' in prio:
+            return {'divName': dn,
+                    'venues': [v.strip() for v in prio.split(',') if v.strip()],
+                    'mode': 'mandatory'}
+        return None  # 'any' or unknown → flexible (no rule)
+
+    for raw in venue_rules:
+        vr = _migrate_rule(raw)
+        if vr is None:
+            continue
+        dn = vr['divName']
+        venues_lower = {v.lower() for v in vr.get('venues', []) if v}
+        if not venues_lower:
+            continue
+        court_set = {ci for ci, c in enumerate(courts)
+                     if c['venue'].lower() in venues_lower}
+        if not court_set:
+            continue
+        mode = vr.get('mode', 'high-priority')
+        if mode == 'mandatory':
+            div_allowed_courts[dn] = court_set
+            mandatory_divs.add(dn)
+        elif mode == 'high-priority':
+            div_preferred_courts[dn] = court_set
 
     blackout_map = defaultdict(list)
     for bo in venue_blackouts:
@@ -297,6 +325,7 @@ def _build_context(config):
         'groups': groups, 'team_div': team_div, 'all_teams': all_teams,
         'rr_matchups': rr_matchups, 'num_rr': num_rr,
         'mandatory_divs': mandatory_divs, 'div_allowed_courts': div_allowed_courts,
+        'div_preferred_courts': div_preferred_courts,
         'blackout_map': blackout_map,
         'po_games': po_games,
         'div_last_rr_day': div_last_rr_day, 'po_days_per_div': po_days_per_div,
@@ -459,12 +488,21 @@ def _solve_phase1(ctx, forbidden_cells, time_limit):
 
     # Soft objective: prefer main venue for RR.
     outer_courts = [i for i in range(num_courts) if i not in blanes_courts]
+    div_preferred_courts = ctx['div_preferred_courts']
     penalty_terms = []
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         w = div_priority.get(div, 1)
+        preferred = div_preferred_courts.get(div)
+        if preferred is not None:
+            # Division has an explicit High-Priority venue set — penalize
+            # placements outside it.
+            non_pref = [c for c in range(num_courts) if c not in preferred]
+        else:
+            # Default: penalize placements off the main venue.
+            non_pref = outer_courts
         for d in range(n_days):
             for s in range(len(day_slots[d])):
-                for c in outer_courts:
+                for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
     if penalty_terms:
         model.minimize(sum(penalty_terms))
@@ -690,15 +728,23 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
         # Minimize -w * placed_p  ≡  reward placement.
         obj_terms.append(-w * placed_vars[p])
 
+    div_preferred_courts = ctx['div_preferred_courts']
     for p, pg in enumerate(po_games):
         t = pg.get('type')
+        dn = pg['divName']
+        preferred = div_preferred_courts.get(dn)
         for d in range(n_days):
             for s in range(len(day_slots[d])):
                 m = day_slots[d][s]
                 for c in range(num_courts):
                     soft = 0
-                    if c not in blanes_courts:
-                        soft += div_priority.get(pg['divName'], 1)
+                    # Venue soft-pref: honor division's High-Priority venue set
+                    # when present; otherwise penalize non-main-venue.
+                    if preferred is not None:
+                        if c not in preferred:
+                            soft += div_priority.get(dn, 1)
+                    elif c not in blanes_courts:
+                        soft += div_priority.get(dn, 1)
                     if t in ('Final', '3rd') and d == finals_day and m not in prime_slots:
                         # Graded penalty: earlier slots cost more. 09:00 → 42,
                         # 10:30 → 33, 12:00 → 24, 14:30 → 9. Nudges Finals away
