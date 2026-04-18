@@ -3177,7 +3177,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/generate', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.timeout = 900000; // 15 min timeout (solver may need 300s per phase × 2 phases)
+    xhr.timeout = 1800000; // 30 min — iterative two-phase solver can run up to 4 iterations × (P1 + P2 at 300s each)
     xhr.onload = function() {
       _stopSolveTimer();
       try {
