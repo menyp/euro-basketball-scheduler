@@ -466,7 +466,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     <div class="card" style="margin-top:14px">
       <div class="stitle">Venue Priority Rules</div>
-      <p class="help" style="margin-bottom:10px">Set Blanes court priority per category. Categories not listed are treated as <strong>Flexible</strong> (any court).</p>
+      <p class="help" style="margin-bottom:10px">Per category, pick one or more venues and choose <strong>Mandatory</strong> (MUST play there) or <strong>High Priority</strong> (SHOULD prefer there). Categories without a rule are <strong>Flexible</strong> (any court).</p>
       <div id="venueRulesList" style="display:flex;flex-direction:column;gap:8px"></div>
       <button class="add-btn" id="addVenueRuleBtn" style="margin-top:10px">+ Add Priority Rule</button>
     </div>
@@ -957,7 +957,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   });
   document.getElementById('addVenueRuleBtn').addEventListener('click', function () {
     var firstDiv = divisions.length ? divisions[0].name : '';
-    venueRules.push({ divName: firstDiv, prio: 'blanes-only' });
+    var mvEl = document.getElementById('mainVenue');
+    var main = (mvEl && mvEl.value) ? mvEl.value.trim() : 'Blanes';
+    venueRules.push({ divName: firstDiv, venues: [main], mode: 'mandatory' });
     renderVenueRules();
   });
   document.getElementById('addBlackoutBtn').addEventListener('click', function () {
@@ -1712,9 +1714,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (rules.mainVenueFinal) lines.push('11. Finals must be placed at the main venue (**' + (rules.mainVenue || 'Blanes') + '**)');
     if (rules.mainVenue3rd)   lines.push('12. 3rd Place games must be placed at the main venue');
     if (venueRules && venueRules.length) {
+      var ruleCounter = 13;
       venueRules.forEach(function(vr) {
-        if (vr.prio === 'blanes-only') {
-          lines.push('13. **' + vr.divName + '** is Mandatory — ALL games (RR + playoffs) must be at the main venue');
+        var r = migrateLegacyVenueRule(vr) || vr;
+        var venues = Array.isArray(r.venues) ? r.venues : [];
+        if (!venues.length) return;
+        var venueList = venues.join(', ');
+        if (r.mode === 'mandatory') {
+          lines.push(ruleCounter++ + '. **' + r.divName + '** is Mandatory — ALL games (RR + playoffs) must be at: ' + venueList);
+        } else if (r.mode === 'high-priority') {
+          lines.push(ruleCounter++ + '. **' + r.divName + '** is High Priority — games SHOULD prefer: ' + venueList);
         }
       });
     }
@@ -1859,11 +1868,47 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   // ── Venue Priority Rules UI ─────────────────────────────
+  // Rule shape: { divName, venues: [string...], mode: 'mandatory' | 'high-priority' }
+  // Legacy shape { divName, prio } is migrated on render.
+  function _currentMainVenue() {
+    var el = document.getElementById('mainVenue');
+    return (el && el.value) ? el.value.trim() : 'Blanes';
+  }
+  function migrateLegacyVenueRule(r) {
+    if (!r) return null;
+    if (Array.isArray(r.venues) && r.mode) return r;
+    var main = _currentMainVenue();
+    var dn = r.divName || '';
+    if (!dn) return null;
+    if (r.prio === 'blanes-only') return { divName: dn, venues: [main], mode: 'mandatory' };
+    if (r.prio === 'blanes-pref-1') return { divName: dn, venues: [main], mode: 'high-priority' };
+    if (typeof r.prio === 'string' && r.prio.indexOf(',') !== -1) {
+      var vs = r.prio.split(',').map(function(v) { return v.trim(); }).filter(Boolean);
+      return { divName: dn, venues: vs, mode: 'mandatory' };
+    }
+    return null; // 'any' or unknown → drop (division becomes flexible)
+  }
+  function migrateAllVenueRules() {
+    var out = [];
+    for (var i = 0; i < venueRules.length; i++) {
+      var m = migrateLegacyVenueRule(venueRules[i]);
+      if (m) out.push(m);
+    }
+    venueRules = out;
+  }
+
   function renderVenueRules() {
     var el = document.getElementById('venueRulesList');
     if (!el) return;
+    // Migrate in-place so the UI always reflects the new shape.
+    for (var i = 0; i < venueRules.length; i++) {
+      var mig = migrateLegacyVenueRule(venueRules[i]);
+      if (mig) venueRules[i] = mig;
+    }
     el.innerHTML = '';
+    var siteNames = sites.map(function(s) { return s.name; }).filter(Boolean);
     venueRules.forEach(function(rule, idx) {
+      // Division dropdown
       var catOpts = '';
       if (divisions.length) {
         divisions.forEach(function(d) {
@@ -1871,22 +1916,64 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             + (d.name === rule.divName ? ' selected' : '') + '>' + d.name + '</option>';
         });
       } else {
-        catOpts += '<option value="' + rule.divName.replace(/"/g,'&quot;') + '" selected>' + rule.divName + '</option>';
+        catOpts += '<option value="' + (rule.divName||'').replace(/"/g,'&quot;') + '" selected>' + (rule.divName||'') + '</option>';
       }
-      var prioOpts = '<option value="blanes-only"'  + (rule.prio==='blanes-only'  ? ' selected':'') + '>Mandatory (Blanes Only)</option>'
-                   + '<option value="blanes-pref-1"' + (rule.prio==='blanes-pref-1' ? ' selected':'') + '>High Priority</option>';
+      // Venue checkboxes (built from sites[])
+      var venuesList = rule.venues || [];
+      var venueChecks = siteNames.length
+        ? siteNames.map(function(v) {
+            var esc = v.replace(/"/g,'&quot;');
+            var checked = venuesList.indexOf(v) !== -1 ? ' checked' : '';
+            return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:pointer">'
+              + '<input type="checkbox" class="vr-venue" data-idx="' + idx + '" data-venue="' + esc + '"' + checked + '>'
+              + v + '</label>';
+          }).join('')
+        : '<span style="opacity:0.6;font-size:12px">Add at least one venue above to pick from.</span>';
+      // Mode radios (Mandatory / High Priority)
+      var modeRadios =
+          '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:16px;cursor:pointer">'
+        +   '<input type="radio" name="vr-mode-' + idx + '" class="vr-mode" data-idx="' + idx + '" value="mandatory"'
+        +     (rule.mode === 'mandatory' ? ' checked' : '') + '>'
+        +   '<span><strong>Mandatory</strong> <span style="opacity:0.7;font-size:12px">&mdash; MUST play at these venues</span></span>'
+        + '</label>'
+        + '<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">'
+        +   '<input type="radio" name="vr-mode-' + idx + '" class="vr-mode" data-idx="' + idx + '" value="high-priority"'
+        +     (rule.mode === 'high-priority' ? ' checked' : '') + '>'
+        +   '<span><strong>High Priority</strong> <span style="opacity:0.7;font-size:12px">&mdash; SHOULD prefer these venues</span></span>'
+        + '</label>';
+      // Card layout
       var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap';
-      row.innerHTML = '<select class="vr-cat" data-idx="' + idx + '" style="flex:1;min-width:140px">' + catOpts + '</select>'
-        + '<select class="vr-prio" data-idx="' + idx + '" style="min-width:180px">' + prioOpts + '</select>'
-        + '<button class="rm-btn vr-del" data-idx="' + idx + '">x</button>';
+      row.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #334;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.02)';
+      row.innerHTML =
+          '<div style="display:flex;align-items:center;gap:10px">'
+        +   '<select class="vr-cat" data-idx="' + idx + '" style="flex:1;min-width:140px">' + catOpts + '</select>'
+        +   '<button class="rm-btn vr-del" data-idx="' + idx + '" title="Remove this rule">x</button>'
+        + '</div>'
+        + '<div style="font-size:12px;opacity:0.75">Venues (pick at least one):</div>'
+        + '<div style="display:flex;flex-wrap:wrap">' + venueChecks + '</div>'
+        + '<div style="font-size:12px;opacity:0.75">Rule type:</div>'
+        + '<div style="display:flex;flex-wrap:wrap">' + modeRadios + '</div>';
       el.appendChild(row);
     });
+    // Wire events
     el.querySelectorAll('.vr-cat').forEach(function(s) {
       s.onchange = function() { venueRules[+this.dataset.idx].divName = this.value; };
     });
-    el.querySelectorAll('.vr-prio').forEach(function(s) {
-      s.onchange = function() { venueRules[+this.dataset.idx].prio = this.value; };
+    el.querySelectorAll('.vr-venue').forEach(function(cb) {
+      cb.onchange = function() {
+        var idx = +this.dataset.idx;
+        var v = this.dataset.venue;
+        var rule = venueRules[idx];
+        if (!Array.isArray(rule.venues)) rule.venues = [];
+        if (this.checked) {
+          if (rule.venues.indexOf(v) === -1) rule.venues.push(v);
+        } else {
+          rule.venues = rule.venues.filter(function(x) { return x !== v; });
+        }
+      };
+    });
+    el.querySelectorAll('.vr-mode').forEach(function(rb) {
+      rb.onchange = function() { venueRules[+this.dataset.idx].mode = this.value; };
     });
     el.querySelectorAll('.vr-del').forEach(function(b) {
       b.onclick = function() { venueRules.splice(+this.dataset.idx, 1); renderVenueRules(); };
@@ -1894,13 +1981,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   // Apply sensible defaults for newly parsed divisions (never overwrites user edits).
+  // Seeds U18 BOYS → Mandatory at main venue. Every other category starts flexible.
   function applyDefaultVenueRules() {
+    var main = _currentMainVenue();
     divisions.forEach(function(d) {
       var already = venueRules.some(function(r) { return r.divName === d.name; });
       if (already) return;
       var n = d.name.toUpperCase(), isGirls = /GIRL|WOMEN/.test(n);
       if (!isGirls && n.indexOf('18') !== -1) {
-        venueRules.push({ divName: d.name, prio: 'blanes-only' }); // Boys U18 → Mandatory
+        venueRules.push({ divName: d.name, venues: [main], mode: 'mandatory' });
       }
       // All other categories start as Flexible (no rule entry)
     });
@@ -2032,9 +2121,24 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Any category not in venueRules defaults to 'any' (Flexible).
   function getVenuePriority(divName) {
     for (var i = 0; i < venueRules.length; i++) {
-      if (venueRules[i].divName === divName) return venueRules[i].prio;
+      var r = venueRules[i];
+      if (r.divName !== divName) continue;
+      // New shape → bucket for legacy callers (JS greedy fallback).
+      if (r.mode === 'mandatory') return 'blanes-only';
+      if (r.mode === 'high-priority') return 'blanes-pref-1';
+      // Legacy shape (pre-migration).
+      if (r.prio) return r.prio;
     }
     return 'any';
+  }
+  // New-shape accessors for callers that need the full venue list.
+  function getVenueRule(divName) {
+    for (var i = 0; i < venueRules.length; i++) {
+      var r = venueRules[i];
+      if (r.divName !== divName) continue;
+      return (Array.isArray(r.venues) && r.mode) ? r : migrateLegacyVenueRule(r);
+    }
+    return null;
   }
   function venueTierNum(divName) {
     var p = getVenuePriority(divName);
@@ -2557,10 +2661,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     // Venue Priority Rules summary (read live from venueRules[])
     var vrRows = '';
-    (window.venueRules || []).forEach(function(r) {
-      var badge = r.prio === 'blanes-only'
-        ? '<span style="color:#fc8181;font-weight:700">Mandatory (' + mv + ' only)</span>'
-        : '<span style="color:#f6ad55;font-weight:700">High Priority (' + mv + ' preferred)</span>';
+    (window.venueRules || []).forEach(function(raw) {
+      var r = migrateLegacyVenueRule(raw) || raw;
+      var venues = Array.isArray(r.venues) && r.venues.length ? r.venues : [mv];
+      var venueList = esc(venues.join(', '));
+      var badge = r.mode === 'mandatory'
+        ? '<span style="color:#fc8181;font-weight:700">Mandatory (' + venueList + ')</span>'
+        : '<span style="color:#f6ad55;font-weight:700">High Priority (' + venueList + ' preferred)</span>';
       vrRows += '<li><strong>' + esc(r.divName) + '</strong> \u2014 ' + badge + '</li>';
     });
     var vrSection = vrRows
@@ -6527,6 +6634,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         // Auto-repair any data-integrity drift between teams[] and manualGroups
         var sanitizeFixes = sanitizeDivisionsAfterImport();
         venueRules       = data.venueRules       || [];
+        migrateAllVenueRules();
         venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
