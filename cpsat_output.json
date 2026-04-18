@@ -1,0 +1,4153 @@
+{
+  "divisions": [
+    {
+      "color": "#FF6B00",
+      "manualGroups": [
+        [
+          "GLOUCESTER SAXONS (ENG)",
+          "ST. JOSEPHS (IRE)",
+          "USA ELITE (USA)"
+        ],
+        [
+          "MANCHESTER GIANTS 1 (ENG)",
+          "LIMITLESS HOOPS (USA)",
+          "PARIS SW (FRA)"
+        ],
+        [
+          "MANCHESTER GIANTS BLACK (ENG)",
+          "PORTLAOISE PANTHERS (IRE)",
+          "DEREE C. ATHLETIC (GRE)"
+        ],
+        [
+          "MANCHESTER GIANTS SILVER (ENG)",
+          "LIMERICK CELTICS (IRE)",
+          "VKKM (LIT)"
+        ]
+      ],
+      "name": "U12 MIXED",
+      "teams": [
+        "GLOUCESTER SAXONS (ENG)",
+        "ST. JOSEPHS (IRE)",
+        "USA ELITE (USA)",
+        "MANCHESTER GIANTS 1 (ENG)",
+        "LIMITLESS HOOPS (USA)",
+        "PARIS SW (FRA)",
+        "MANCHESTER GIANTS BLACK (ENG)",
+        "PORTLAOISE PANTHERS (IRE)",
+        "DEREE C. ATHLETIC (GRE)",
+        "MANCHESTER GIANTS SILVER (ENG)",
+        "LIMERICK CELTICS (IRE)",
+        "VKKM (LIT)"
+      ]
+    },
+    {
+      "color": "#3B82F6",
+      "manualGroups": [
+        [
+          "CORK 1 (IRE)",
+          "KILKENNY STARS (IRE)",
+          "LEEDS BASKETBALL (ENG)",
+          "BASKETBALL WALES (WAL)"
+        ],
+        [
+          "ST. MARYS BASKETBALL (IRE)",
+          "SURREY RAMS (ENG)",
+          "KCB JALANDHAR (IND)",
+          "GLOUCESTER SAXONS (ENG)"
+        ],
+        [
+          "ST. JOSEPHS (IRE)",
+          "PHD HOOPS (USA)",
+          "DEREE C. ATHLETIC (GRE)",
+          "CORK 2 (IRE)"
+        ],
+        [
+          "LIMERICK CELTICS (IRE)",
+          "PORTLAOISE PANTHERS (IRE)",
+          "SILVA BACKS (USA)",
+          "PARIS SW (FRA)"
+        ]
+      ],
+      "name": "U14 BOYS",
+      "teams": [
+        "CORK 1 (IRE)",
+        "KILKENNY STARS (IRE)",
+        "LEEDS BASKETBALL (ENG)",
+        "BASKETBALL WALES (WAL)",
+        "ST. MARYS BASKETBALL (IRE)",
+        "SURREY RAMS (ENG)",
+        "KCB JALANDHAR (IND)",
+        "GLOUCESTER SAXONS (ENG)",
+        "ST. JOSEPHS (IRE)",
+        "PHD HOOPS (USA)",
+        "DEREE C. ATHLETIC (GRE)",
+        "CORK 2 (IRE)",
+        "LIMERICK CELTICS (IRE)",
+        "PORTLAOISE PANTHERS (IRE)",
+        "SILVA BACKS (USA)",
+        "PARIS SW (FRA)"
+      ]
+    },
+    {
+      "color": "#10B981",
+      "manualGroups": [
+        [
+          "LIMITLESS HOOPS (USA)",
+          "KAISERSLAUTERN (GER)",
+          "ALTE KANTI (SWI)",
+          "NORWOOD STARS (CAD)"
+        ],
+        [
+          "LEEDS BASKETBALL (ENG)",
+          "SMOOTHHANDLES (GER)",
+          "ST. MARYS BASKETBALL (IRE)",
+          "MVP 2 (USA)"
+        ],
+        [
+          "FLAMES VIENNA (AUT)",
+          "UMF SINDRI (ICE)",
+          "SURREY RAMS (ENG)",
+          "MVP 1 (USA)"
+        ],
+        [
+          "PHD HOOPS (USA)",
+          "KINGS COURT CANADA (CAD)",
+          "MADELENA (COL)",
+          "PARIS SW (FRA)"
+        ]
+      ],
+      "name": "U16 BOYS",
+      "teams": [
+        "LIMITLESS HOOPS (USA)",
+        "KAISERSLAUTERN (GER)",
+        "ALTE KANTI (SWI)",
+        "NORWOOD STARS (CAD)",
+        "LEEDS BASKETBALL (ENG)",
+        "SMOOTHHANDLES (GER)",
+        "ST. MARYS BASKETBALL (IRE)",
+        "MVP 2 (USA)",
+        "FLAMES VIENNA (AUT)",
+        "UMF SINDRI (ICE)",
+        "SURREY RAMS (ENG)",
+        "MVP 1 (USA)",
+        "PHD HOOPS (USA)",
+        "KINGS COURT CANADA (CAD)",
+        "MADELENA (COL)",
+        "PARIS SW (FRA)"
+      ]
+    },
+    {
+      "color": "#8B5CF6",
+      "manualGroups": [
+        [
+          "KCB JALANDHAR (IND)",
+          "LNCA (MEX)",
+          "MHAIGH CUILINN 2 (IRE)"
+        ],
+        [
+          "MHAIGH CUILINN 1 (IRE)",
+          "TINDASTOLL (ICE)",
+          "FORTROSE ACADEMY (SCO)"
+        ],
+        [
+          "SURREY RAMS (ENG)",
+          "BC ALTE KANTI (SWI)",
+          "SOLLENTUNA 1 (SWE)"
+        ],
+        [
+          "BANTRY BC (IRE)",
+          "SOLLENTUNA 2 (SWE)",
+          "PHD HOOPS (USA)"
+        ]
+      ],
+      "name": "U18 BOYS",
+      "teams": [
+        "KCB JALANDHAR (IND)",
+        "LNCA (MEX)",
+        "MHAIGH CUILINN 2 (IRE)",
+        "MHAIGH CUILINN 1 (IRE)",
+        "TINDASTOLL (ICE)",
+        "FORTROSE ACADEMY (SCO)",
+        "SURREY RAMS (ENG)",
+        "BC ALTE KANTI (SWI)",
+        "SOLLENTUNA 1 (SWE)",
+        "BANTRY BC (IRE)",
+        "SOLLENTUNA 2 (SWE)",
+        "PHD HOOPS (USA)"
+      ]
+    },
+    {
+      "color": "#F59E0B",
+      "manualGroups": [
+        [
+          "KILKENNY STARS (IRE)",
+          "LNCA (MEX)",
+          "Eagles (SWI)"
+        ],
+        [
+          "LIMERICK CELTICKS (IRE)",
+          "PARIS SW (FRA)",
+          "TEAM 10"
+        ],
+        [
+          "ST. BRIDGET'S CURROW (IRE)",
+          "BASKETBALL WALES 2 (WAL)",
+          "Team 11"
+        ],
+        [
+          "ST. MARYS BASKETBALL (IRE)",
+          "BASKETBALL WALES 1 (WAL)",
+          "Team 12"
+        ]
+      ],
+      "name": "U14 GIRLS",
+      "teams": [
+        "KILKENNY STARS (IRE)",
+        "LNCA (MEX)",
+        "Eagles (SWI)",
+        "LIMERICK CELTICKS (IRE)",
+        "PARIS SW (FRA)",
+        "TEAM 10",
+        "ST. BRIDGET'S CURROW (IRE)",
+        "BASKETBALL WALES 2 (WAL)",
+        "Team 11",
+        "ST. MARYS BASKETBALL (IRE)",
+        "BASKETBALL WALES 1 (WAL)",
+        "Team 12"
+      ]
+    },
+    {
+      "color": "#EF4444",
+      "manualGroups": [
+        [
+          "GLANMIRE BASKETBALL 1 (IRE)",
+          "BASKET CHILE (CHI)",
+          "PARIS SW (FRA)"
+        ],
+        [
+          "GLANMIRE BASKETBALL 2 (IRE)",
+          "GRASSHOPPER ZURICH 2 (SWI)",
+          "IBAS (SLK)"
+        ],
+        [
+          "LIMERICK CELTICS (IRE)",
+          "GRASSHOPPER ZURICH 1 (SWI)",
+          "LOBAS (SWE)"
+        ],
+        [
+          "PORTLAOISE PANTHERS (IRE)",
+          "ST. MARYS BASKETBALL (IRE)",
+          "PHD HOOPS (USA)"
+        ]
+      ],
+      "name": "U16 GIRLS",
+      "teams": [
+        "GLANMIRE BASKETBALL 1 (IRE)",
+        "BASKET CHILE (CHI)",
+        "PARIS SW (FRA)",
+        "GLANMIRE BASKETBALL 2 (IRE)",
+        "GRASSHOPPER ZURICH 2 (SWI)",
+        "IBAS (SLK)",
+        "LIMERICK CELTICS (IRE)",
+        "GRASSHOPPER ZURICH 1 (SWI)",
+        "LOBAS (SWE)",
+        "PORTLAOISE PANTHERS (IRE)",
+        "ST. MARYS BASKETBALL (IRE)",
+        "PHD HOOPS (USA)"
+      ]
+    },
+    {
+      "color": "#06B6D4",
+      "manualGroups": [
+        [
+          "DUVBO IK (SWE)",
+          "LNCA 2 (MEX)",
+          "FALCONS (SWI)",
+          "SANFELIUNEC (ESP)"
+        ],
+        [
+          "PHD HOOPS (USA)",
+          "BASKET CHILE (CHI)",
+          "ALTE KANTI (SWI)",
+          "LNCA 1 (MEX)"
+        ]
+      ],
+      "name": "U18 GIRLS",
+      "teams": [
+        "DUVBO IK (SWE)",
+        "LNCA 2 (MEX)",
+        "FALCONS (SWI)",
+        "SANFELIUNEC (ESP)",
+        "PHD HOOPS (USA)",
+        "BASKET CHILE (CHI)",
+        "ALTE KANTI (SWI)",
+        "LNCA 1 (MEX)"
+      ]
+    }
+  ],
+  "sched": {
+    "bracketDays": [
+      {
+        "divs": [
+          {
+            "color": "#FF6B00",
+            "games": [
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Pineda",
+                "dayLabel": "Day 2",
+                "lbl": "SF 1",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "1st Group B",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 2",
+                "lbl": "SF 2",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group C",
+                "t2": "1st Group D",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 2",
+                "dayLabel": "Day 2",
+                "lbl": "SF 2",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group C",
+                "t2": "3rd Group D",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "14:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "14:30"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "5th/6th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group A",
+                "t2": "2nd Group B",
+                "time": "14:30"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Pineda",
+                "dayLabel": "Day 3",
+                "lbl": "7th/8th",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group C",
+                "t2": "2nd Group D",
+                "time": "14:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "09:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "9th/10th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "11th/12th",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              }
+            ],
+            "name": "U12 MIXED",
+            "teams": [
+              "GLOUCESTER SAXONS (ENG)",
+              "ST. JOSEPHS (IRE)",
+              "USA ELITE (USA)",
+              "MANCHESTER GIANTS 1 (ENG)",
+              "LIMITLESS HOOPS (USA)",
+              "PARIS SW (FRA)",
+              "MANCHESTER GIANTS BLACK (ENG)",
+              "PORTLAOISE PANTHERS (IRE)",
+              "DEREE C. ATHLETIC (GRE)",
+              "MANCHESTER GIANTS SILVER (ENG)",
+              "LIMERICK CELTICS (IRE)",
+              "VKKM (LIT)"
+            ]
+          },
+          {
+            "color": "#3B82F6",
+            "games": [
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 2",
+                "lbl": "SF 1",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "1st Group B",
+                "time": "09:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group C",
+                "t2": "1st Group D",
+                "time": "09:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Silver (5th\u20138th)",
+                "court": "Santa Susanna Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group A",
+                "t2": "2nd Group B",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Silver (5th\u20138th)",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group C",
+                "t2": "2nd Group D",
+                "time": "10:30"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Pineda",
+                "dayLabel": "Day 3",
+                "lbl": "5th/6th",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "10:30"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "7th/8th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "12:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Pineda",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group C",
+                "t2": "3rd Group D",
+                "time": "09:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "9th/10th",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "11th/12th",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              },
+              {
+                "bracket": "13th\u201316th Place",
+                "court": "Pineda",
+                "dayLabel": "Day 3",
+                "lbl": "13th/14th",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "4th Group A",
+                "t2": "4th Group B",
+                "time": "12:00"
+              },
+              {
+                "bracket": "13th\u201316th Place",
+                "court": "Pineda",
+                "dayLabel": "Day 3",
+                "lbl": "15th/16th",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "4th Group C",
+                "t2": "4th Group D",
+                "time": "17:30"
+              }
+            ],
+            "name": "U14 BOYS",
+            "teams": [
+              "CORK 1 (IRE)",
+              "KILKENNY STARS (IRE)",
+              "LEEDS BASKETBALL (ENG)",
+              "BASKETBALL WALES (WAL)",
+              "ST. MARYS BASKETBALL (IRE)",
+              "SURREY RAMS (ENG)",
+              "KCB JALANDHAR (IND)",
+              "GLOUCESTER SAXONS (ENG)",
+              "ST. JOSEPHS (IRE)",
+              "PHD HOOPS (USA)",
+              "DEREE C. ATHLETIC (GRE)",
+              "CORK 2 (IRE)",
+              "LIMERICK CELTICS (IRE)",
+              "PORTLAOISE PANTHERS (IRE)",
+              "SILVA BACKS (USA)",
+              "PARIS SW (FRA)"
+            ]
+          },
+          {
+            "color": "#8B5CF6",
+            "games": [
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 2",
+                "lbl": "SF 1",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "1st Group B",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 2",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group C",
+                "t2": "1st Group D",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 2",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "19:00"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 2",
+                "lbl": "5th/6th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group A",
+                "t2": "2nd Group B",
+                "time": "19:00"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 2",
+                "lbl": "7th/8th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group C",
+                "t2": "2nd Group D",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 2",
+                "lbl": "SF 1",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 2",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group C",
+                "t2": "3rd Group D",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 2",
+                "lbl": "9th/10th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "11th/12th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "12:00"
+              }
+            ],
+            "name": "U18 BOYS",
+            "teams": [
+              "KCB JALANDHAR (IND)",
+              "LNCA (MEX)",
+              "MHAIGH CUILINN 2 (IRE)",
+              "MHAIGH CUILINN 1 (IRE)",
+              "TINDASTOLL (ICE)",
+              "FORTROSE ACADEMY (SCO)",
+              "SURREY RAMS (ENG)",
+              "BC ALTE KANTI (SWI)",
+              "SOLLENTUNA 1 (SWE)",
+              "BANTRY BC (IRE)",
+              "SOLLENTUNA 2 (SWE)",
+              "PHD HOOPS (USA)"
+            ]
+          },
+          {
+            "color": "#F59E0B",
+            "games": [
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 2",
+                "lbl": "SF 1",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "1st Group B",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Santa Susanna Court 2",
+                "dayLabel": "Day 2",
+                "lbl": "SF 2",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group C",
+                "t2": "1st Group D",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 2",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "5th/6th",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group A",
+                "t2": "2nd Group B",
+                "time": "17:30"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "7th/8th",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group C",
+                "t2": "2nd Group D",
+                "time": "12:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Santa Susanna Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "14:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group C",
+                "t2": "3rd Group D",
+                "time": "16:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "9th/10th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "11th/12th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              }
+            ],
+            "name": "U14 GIRLS",
+            "teams": [
+              "KILKENNY STARS (IRE)",
+              "LNCA (MEX)",
+              "Eagles (SWI)",
+              "LIMERICK CELTICKS (IRE)",
+              "PARIS SW (FRA)",
+              "TEAM 10",
+              "ST. BRIDGET'S CURROW (IRE)",
+              "BASKETBALL WALES 2 (WAL)",
+              "Team 11",
+              "ST. MARYS BASKETBALL (IRE)",
+              "BASKETBALL WALES 1 (WAL)",
+              "Team 12"
+            ]
+          },
+          {
+            "color": "#EF4444",
+            "games": [
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 2",
+                "lbl": "SF 1",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 2",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group C",
+                "t2": "3rd Group D",
+                "time": "19:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "1st Group B",
+                "time": "12:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Santa Susanna Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Santa Susanna",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group C",
+                "t2": "1st Group D",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 3",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Palafolls Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "5th/6th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group A",
+                "t2": "2nd Group B",
+                "time": "16:00"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Pineda",
+                "dayLabel": "Day 3",
+                "lbl": "7th/8th",
+                "loc": "Pineda",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group C",
+                "t2": "2nd Group D",
+                "time": "16:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Palafolls Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "9th/10th",
+                "loc": "Palafolls",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "14:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "11th/12th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "09:00"
+              }
+            ],
+            "name": "U16 GIRLS",
+            "teams": [
+              "GLANMIRE BASKETBALL 1 (IRE)",
+              "BASKET CHILE (CHI)",
+              "PARIS SW (FRA)",
+              "GLANMIRE BASKETBALL 2 (IRE)",
+              "GRASSHOPPER ZURICH 2 (SWI)",
+              "IBAS (SLK)",
+              "LIMERICK CELTICS (IRE)",
+              "GRASSHOPPER ZURICH 1 (SWI)",
+              "LOBAS (SWE)",
+              "PORTLAOISE PANTHERS (IRE)",
+              "ST. MARYS BASKETBALL (IRE)",
+              "PHD HOOPS (USA)"
+            ]
+          },
+          {
+            "color": "#10B981",
+            "games": [
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "1st Group B",
+                "time": "12:00"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group C",
+                "t2": "1st Group D",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 3",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "14:30"
+              },
+              {
+                "bracket": "Championship (1st\u20134th)",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              },
+              {
+                "bracket": "Silver (5th\u20138th)",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group A",
+                "t2": "2nd Group B",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Silver (5th\u20138th)",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "2nd Group C",
+                "t2": "2nd Group D",
+                "time": "10:30"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "5th/6th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "12:00"
+              },
+              {
+                "bracket": "5th\u20138th Place",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 3",
+                "lbl": "7th/8th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "09:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "09:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group C",
+                "t2": "3rd Group D",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 3",
+                "lbl": "9th/10th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "16:00"
+              },
+              {
+                "bracket": "Bronze (9th\u201312th)",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 3",
+                "lbl": "11th/12th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "12:00"
+              },
+              {
+                "bracket": "13th\u201316th Place",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 3",
+                "lbl": "13th/14th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "4th Group A",
+                "t2": "4th Group B",
+                "time": "09:00"
+              },
+              {
+                "bracket": "13th\u201316th Place",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 3",
+                "lbl": "15th/16th",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "4th Group C",
+                "t2": "4th Group D",
+                "time": "14:30"
+              }
+            ],
+            "name": "U16 BOYS",
+            "teams": [
+              "LIMITLESS HOOPS (USA)",
+              "KAISERSLAUTERN (GER)",
+              "ALTE KANTI (SWI)",
+              "NORWOOD STARS (CAD)",
+              "LEEDS BASKETBALL (ENG)",
+              "SMOOTHHANDLES (GER)",
+              "ST. MARYS BASKETBALL (IRE)",
+              "MVP 2 (USA)",
+              "FLAMES VIENNA (AUT)",
+              "UMF SINDRI (ICE)",
+              "SURREY RAMS (ENG)",
+              "MVP 1 (USA)",
+              "PHD HOOPS (USA)",
+              "KINGS COURT CANADA (CAD)",
+              "MADELENA (COL)",
+              "PARIS SW (FRA)"
+            ]
+          },
+          {
+            "color": "#06B6D4",
+            "games": [
+              {
+                "bracket": "Championship",
+                "court": "Blanes Court 2",
+                "dayLabel": "Day 3",
+                "lbl": "SF 1",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group A",
+                "t2": "2nd Group B",
+                "time": "10:30"
+              },
+              {
+                "bracket": "Championship",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 3",
+                "lbl": "SF 2",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "1st Group B",
+                "t2": "2nd Group A",
+                "time": "12:00"
+              },
+              {
+                "bracket": "Championship",
+                "court": "Blanes Court 4",
+                "dayLabel": "Day 3",
+                "lbl": "3rd Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              },
+              {
+                "bracket": "Championship",
+                "court": "Blanes Court 5",
+                "dayLabel": "Day 3",
+                "lbl": "FINAL",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "",
+                "t2": "",
+                "time": "17:30"
+              },
+              {
+                "bracket": "5th Place",
+                "court": "Blanes Court 1",
+                "dayLabel": "Day 3",
+                "lbl": "5th Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "3rd Group A",
+                "t2": "3rd Group B",
+                "time": "09:00"
+              },
+              {
+                "bracket": "7th Place",
+                "court": "Blanes Court 3",
+                "dayLabel": "Day 3",
+                "lbl": "7th Place",
+                "loc": "Blanes",
+                "locked": false,
+                "score1": null,
+                "score2": null,
+                "t1": "4th Group A",
+                "t2": "4th Group B",
+                "time": "14:30"
+              }
+            ],
+            "name": "U18 GIRLS",
+            "teams": [
+              "DUVBO IK (SWE)",
+              "LNCA 2 (MEX)",
+              "FALCONS (SWI)",
+              "SANFELIUNEC (ESP)",
+              "PHD HOOPS (USA)",
+              "BASKET CHILE (CHI)",
+              "ALTE KANTI (SWI)",
+              "LNCA 1 (MEX)"
+            ]
+          }
+        ],
+        "label": "Day 3 \u2014 Playoffs"
+      }
+    ],
+    "courts": [
+      {
+        "court": "Blanes Court 1",
+        "loc": "Blanes"
+      },
+      {
+        "court": "Blanes Court 2",
+        "loc": "Blanes"
+      },
+      {
+        "court": "Blanes Court 3",
+        "loc": "Blanes"
+      },
+      {
+        "court": "Blanes Court 4",
+        "loc": "Blanes"
+      },
+      {
+        "court": "Blanes Court 5",
+        "loc": "Blanes"
+      },
+      {
+        "court": "Santa Susanna Court 1",
+        "loc": "Santa Susanna"
+      },
+      {
+        "court": "Santa Susanna Court 2",
+        "loc": "Santa Susanna"
+      },
+      {
+        "court": "Palafolls Court 1",
+        "loc": "Palafolls"
+      },
+      {
+        "court": "Palafolls Court 2",
+        "loc": "Palafolls"
+      },
+      {
+        "court": "Pineda",
+        "loc": "Pineda"
+      }
+    ],
+    "daySlots": [
+      [
+        "09:00",
+        "10:30",
+        "12:00",
+        "14:30",
+        "16:00",
+        "17:30",
+        "19:00"
+      ],
+      [
+        "09:00",
+        "10:30",
+        "12:00",
+        "14:30",
+        "16:00",
+        "17:30",
+        "19:00"
+      ],
+      [
+        "09:00",
+        "10:30",
+        "12:00",
+        "14:30",
+        "16:00",
+        "17:30"
+      ]
+    ],
+    "gameDays": [
+      {
+        "dayIndex": 0,
+        "divs": [
+          {
+            "color": "#FF6B00",
+            "groups": {
+              "U12 MIXED Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GLOUCESTER SAXONS (ENG)",
+                    "t2": "USA ELITE (USA)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. JOSEPHS (IRE)",
+                    "t2": "USA ELITE (USA)",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U12 MIXED Group A"
+              },
+              "U12 MIXED Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MANCHESTER GIANTS 1 (ENG)",
+                    "t2": "LIMITLESS HOOPS (USA)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMITLESS HOOPS (USA)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U12 MIXED Group B"
+              },
+              "U12 MIXED Group C": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MANCHESTER GIANTS BLACK (ENG)",
+                    "t2": "PORTLAOISE PANTHERS (IRE)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PORTLAOISE PANTHERS (IRE)",
+                    "t2": "DEREE C. ATHLETIC (GRE)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U12 MIXED Group C"
+              },
+              "U12 MIXED Group D": {
+                "games": [
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MANCHESTER GIANTS SILVER (ENG)",
+                    "t2": "VKKM (LIT)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICS (IRE)",
+                    "t2": "VKKM (LIT)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U12 MIXED Group D"
+              }
+            },
+            "name": "U12 MIXED"
+          },
+          {
+            "color": "#3B82F6",
+            "groups": {
+              "U14 BOYS Group A": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "CORK 1 (IRE)",
+                    "t2": "KILKENNY STARS (IRE)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "CORK 1 (IRE)",
+                    "t2": "LEEDS BASKETBALL (ENG)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KILKENNY STARS (IRE)",
+                    "t2": "BASKETBALL WALES (WAL)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LEEDS BASKETBALL (ENG)",
+                    "t2": "BASKETBALL WALES (WAL)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U14 BOYS Group A"
+              },
+              "U14 BOYS Group B": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "SURREY RAMS (ENG)",
+                    "time": "17:30"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "GLOUCESTER SAXONS (ENG)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SURREY RAMS (ENG)",
+                    "t2": "KCB JALANDHAR (IND)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KCB JALANDHAR (IND)",
+                    "t2": "GLOUCESTER SAXONS (ENG)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U14 BOYS Group B"
+              },
+              "U14 BOYS Group C": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. JOSEPHS (IRE)",
+                    "t2": "PHD HOOPS (USA)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "DEREE C. ATHLETIC (GRE)",
+                    "t2": "CORK 2 (IRE)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U14 BOYS Group C"
+              },
+              "U14 BOYS Group D": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICS (IRE)",
+                    "t2": "PORTLAOISE PANTHERS (IRE)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICS (IRE)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PORTLAOISE PANTHERS (IRE)",
+                    "t2": "SILVA BACKS (USA)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U14 BOYS Group D"
+              }
+            },
+            "name": "U14 BOYS"
+          },
+          {
+            "color": "#10B981",
+            "groups": {
+              "U16 BOYS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMITLESS HOOPS (USA)",
+                    "t2": "ALTE KANTI (SWI)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMITLESS HOOPS (USA)",
+                    "t2": "NORWOOD STARS (CAD)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KAISERSLAUTERN (GER)",
+                    "t2": "NORWOOD STARS (CAD)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U16 BOYS Group A"
+              },
+              "U16 BOYS Group B": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LEEDS BASKETBALL (ENG)",
+                    "t2": "ST. MARYS BASKETBALL (IRE)",
+                    "time": "17:30"
+                  },
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LEEDS BASKETBALL (ENG)",
+                    "t2": "MVP 2 (USA)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SMOOTHHANDLES (GER)",
+                    "t2": "ST. MARYS BASKETBALL (IRE)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U16 BOYS Group B"
+              },
+              "U16 BOYS Group C": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "FLAMES VIENNA (AUT)",
+                    "t2": "UMF SINDRI (ICE)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SURREY RAMS (ENG)",
+                    "t2": "MVP 1 (USA)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U16 BOYS Group C"
+              },
+              "U16 BOYS Group D": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "KINGS COURT CANADA (CAD)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "MADELENA (COL)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KINGS COURT CANADA (CAD)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "17:30"
+                  },
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MADELENA (COL)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U16 BOYS Group D"
+              }
+            },
+            "name": "U16 BOYS"
+          },
+          {
+            "color": "#8B5CF6",
+            "groups": {
+              "U18 BOYS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KCB JALANDHAR (IND)",
+                    "t2": "LNCA (MEX)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KCB JALANDHAR (IND)",
+                    "t2": "MHAIGH CUILINN 2 (IRE)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U18 BOYS Group A"
+              },
+              "U18 BOYS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MHAIGH CUILINN 1 (IRE)",
+                    "t2": "TINDASTOLL (ICE)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "TINDASTOLL (ICE)",
+                    "t2": "FORTROSE ACADEMY (SCO)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U18 BOYS Group B"
+              },
+              "U18 BOYS Group C": {
+                "games": [
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SURREY RAMS (ENG)",
+                    "t2": "SOLLENTUNA 1 (SWE)",
+                    "time": "17:30"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BC ALTE KANTI (SWI)",
+                    "t2": "SOLLENTUNA 1 (SWE)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U18 BOYS Group C"
+              },
+              "U18 BOYS Group D": {
+                "games": [
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BANTRY BC (IRE)",
+                    "t2": "SOLLENTUNA 2 (SWE)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BANTRY BC (IRE)",
+                    "t2": "PHD HOOPS (USA)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U18 BOYS Group D"
+              }
+            },
+            "name": "U18 BOYS"
+          },
+          {
+            "color": "#F59E0B",
+            "groups": {
+              "U14 GIRLS Group A": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KILKENNY STARS (IRE)",
+                    "t2": "LNCA (MEX)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LNCA (MEX)",
+                    "t2": "Eagles (SWI)",
+                    "time": "17:30"
+                  }
+                ],
+                "group": "U14 GIRLS Group A"
+              },
+              "U14 GIRLS Group B": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICKS (IRE)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICKS (IRE)",
+                    "t2": "TEAM 10",
+                    "time": "17:30"
+                  }
+                ],
+                "group": "U14 GIRLS Group B"
+              },
+              "U14 GIRLS Group C": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. BRIDGET'S CURROW (IRE)",
+                    "t2": "BASKETBALL WALES 2 (WAL)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BASKETBALL WALES 2 (WAL)",
+                    "t2": "Team 11",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U14 GIRLS Group C"
+              },
+              "U14 GIRLS Group D": {
+                "games": [
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "BASKETBALL WALES 1 (WAL)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "Team 12",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U14 GIRLS Group D"
+              }
+            },
+            "name": "U14 GIRLS"
+          },
+          {
+            "color": "#EF4444",
+            "groups": {
+              "U16 GIRLS Group A": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GLANMIRE BASKETBALL 1 (IRE)",
+                    "t2": "BASKET CHILE (CHI)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GLANMIRE BASKETBALL 1 (IRE)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U16 GIRLS Group A"
+              },
+              "U16 GIRLS Group B": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GLANMIRE BASKETBALL 2 (IRE)",
+                    "t2": "GRASSHOPPER ZURICH 2 (SWI)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GLANMIRE BASKETBALL 2 (IRE)",
+                    "t2": "IBAS (SLK)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U16 GIRLS Group B"
+              },
+              "U16 GIRLS Group C": {
+                "games": [
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICS (IRE)",
+                    "t2": "LOBAS (SWE)",
+                    "time": "17:30"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GRASSHOPPER ZURICH 1 (SWI)",
+                    "t2": "LOBAS (SWE)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U16 GIRLS Group C"
+              },
+              "U16 GIRLS Group D": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PORTLAOISE PANTHERS (IRE)",
+                    "t2": "ST. MARYS BASKETBALL (IRE)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PORTLAOISE PANTHERS (IRE)",
+                    "t2": "PHD HOOPS (USA)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U16 GIRLS Group D"
+              }
+            },
+            "name": "U16 GIRLS"
+          },
+          {
+            "color": "#06B6D4",
+            "groups": {
+              "U18 GIRLS Group A": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "DUVBO IK (SWE)",
+                    "t2": "LNCA 2 (MEX)",
+                    "time": "19:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "FALCONS (SWI)",
+                    "t2": "SANFELIUNEC (ESP)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U18 GIRLS Group A"
+              },
+              "U18 GIRLS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "ALTE KANTI (SWI)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BASKET CHILE (CHI)",
+                    "t2": "ALTE KANTI (SWI)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BASKET CHILE (CHI)",
+                    "t2": "LNCA 1 (MEX)",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U18 GIRLS Group B"
+              }
+            },
+            "name": "U18 GIRLS"
+          }
+        ],
+        "label": "Day 1 \u2014 Round Robin"
+      },
+      {
+        "dayIndex": 1,
+        "divs": [
+          {
+            "color": "#FF6B00",
+            "groups": {
+              "U12 MIXED Group A": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GLOUCESTER SAXONS (ENG)",
+                    "t2": "ST. JOSEPHS (IRE)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U12 MIXED Group A"
+              },
+              "U12 MIXED Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MANCHESTER GIANTS 1 (ENG)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U12 MIXED Group B"
+              },
+              "U12 MIXED Group C": {
+                "games": [
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MANCHESTER GIANTS BLACK (ENG)",
+                    "t2": "DEREE C. ATHLETIC (GRE)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U12 MIXED Group C"
+              },
+              "U12 MIXED Group D": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MANCHESTER GIANTS SILVER (ENG)",
+                    "t2": "LIMERICK CELTICS (IRE)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U12 MIXED Group D"
+              },
+              "U12 MIXED \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Pineda",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 1",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "1st Group B",
+                    "time": "19:00"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group C",
+                    "t2": "1st Group D",
+                    "time": "19:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 2",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group C",
+                    "t2": "3rd Group D",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U12 MIXED \u2014 Playoffs"
+              }
+            },
+            "name": "U12 MIXED"
+          },
+          {
+            "color": "#3B82F6",
+            "groups": {
+              "U14 BOYS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "CORK 1 (IRE)",
+                    "t2": "BASKETBALL WALES (WAL)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KILKENNY STARS (IRE)",
+                    "t2": "LEEDS BASKETBALL (ENG)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U14 BOYS Group A"
+              },
+              "U14 BOYS Group B": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "KCB JALANDHAR (IND)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SURREY RAMS (ENG)",
+                    "t2": "GLOUCESTER SAXONS (ENG)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U14 BOYS Group B"
+              },
+              "U14 BOYS Group C": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. JOSEPHS (IRE)",
+                    "t2": "DEREE C. ATHLETIC (GRE)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. JOSEPHS (IRE)",
+                    "t2": "CORK 2 (IRE)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "DEREE C. ATHLETIC (GRE)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "CORK 2 (IRE)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U14 BOYS Group C"
+              },
+              "U14 BOYS Group D": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICS (IRE)",
+                    "t2": "SILVA BACKS (USA)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PORTLAOISE PANTHERS (IRE)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "12:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SILVA BACKS (USA)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U14 BOYS Group D"
+              },
+              "U14 BOYS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U14 BOYS \u2014 Playoffs"
+              }
+            },
+            "name": "U14 BOYS"
+          },
+          {
+            "color": "#10B981",
+            "groups": {
+              "U16 BOYS Group A": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMITLESS HOOPS (USA)",
+                    "t2": "KAISERSLAUTERN (GER)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KAISERSLAUTERN (GER)",
+                    "t2": "ALTE KANTI (SWI)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ALTE KANTI (SWI)",
+                    "t2": "NORWOOD STARS (CAD)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U16 BOYS Group A"
+              },
+              "U16 BOYS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LEEDS BASKETBALL (ENG)",
+                    "t2": "SMOOTHHANDLES (GER)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SMOOTHHANDLES (GER)",
+                    "t2": "MVP 2 (USA)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "MVP 2 (USA)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U16 BOYS Group B"
+              },
+              "U16 BOYS Group C": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "FLAMES VIENNA (AUT)",
+                    "t2": "SURREY RAMS (ENG)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "FLAMES VIENNA (AUT)",
+                    "t2": "MVP 1 (USA)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "UMF SINDRI (ICE)",
+                    "t2": "SURREY RAMS (ENG)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "UMF SINDRI (ICE)",
+                    "t2": "MVP 1 (USA)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U16 BOYS Group C"
+              },
+              "U16 BOYS Group D": {
+                "games": [
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Palafolls Court 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KINGS COURT CANADA (CAD)",
+                    "t2": "MADELENA (COL)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U16 BOYS Group D"
+              }
+            },
+            "name": "U16 BOYS"
+          },
+          {
+            "color": "#8B5CF6",
+            "groups": {
+              "U18 BOYS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LNCA (MEX)",
+                    "t2": "MHAIGH CUILINN 2 (IRE)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U18 BOYS Group A"
+              },
+              "U18 BOYS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "MHAIGH CUILINN 1 (IRE)",
+                    "t2": "FORTROSE ACADEMY (SCO)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U18 BOYS Group B"
+              },
+              "U18 BOYS Group C": {
+                "games": [
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SURREY RAMS (ENG)",
+                    "t2": "BC ALTE KANTI (SWI)",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U18 BOYS Group C"
+              },
+              "U18 BOYS Group D": {
+                "games": [
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "SOLLENTUNA 2 (SWE)",
+                    "t2": "PHD HOOPS (USA)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U18 BOYS Group D"
+              },
+              "U18 BOYS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "1st Group B",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group C",
+                    "t2": "1st Group D",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 2",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "19:00"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 2",
+                    "lbl": "5th/6th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group A",
+                    "t2": "2nd Group B",
+                    "time": "19:00"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 2",
+                    "lbl": "7th/8th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group C",
+                    "t2": "2nd Group D",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group C",
+                    "t2": "3rd Group D",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 2",
+                    "lbl": "9th/10th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U18 BOYS \u2014 Playoffs"
+              }
+            },
+            "name": "U18 BOYS"
+          },
+          {
+            "color": "#F59E0B",
+            "groups": {
+              "U14 GIRLS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "KILKENNY STARS (IRE)",
+                    "t2": "Eagles (SWI)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U14 GIRLS Group A"
+              },
+              "U14 GIRLS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PARIS SW (FRA)",
+                    "t2": "TEAM 10",
+                    "time": "10:30"
+                  }
+                ],
+                "group": "U14 GIRLS Group B"
+              },
+              "U14 GIRLS Group C": {
+                "games": [
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. BRIDGET'S CURROW (IRE)",
+                    "t2": "Team 11",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U14 GIRLS Group C"
+              },
+              "U14 GIRLS Group D": {
+                "games": [
+                  {
+                    "court": "Pineda",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BASKETBALL WALES 1 (WAL)",
+                    "t2": "Team 12",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U14 GIRLS Group D"
+              },
+              "U14 GIRLS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "1st Group B",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Santa Susanna Court 2",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group C",
+                    "t2": "1st Group D",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 2",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U14 GIRLS \u2014 Playoffs"
+              }
+            },
+            "name": "U14 GIRLS"
+          },
+          {
+            "color": "#EF4444",
+            "groups": {
+              "U16 GIRLS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "BASKET CHILE (CHI)",
+                    "t2": "PARIS SW (FRA)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U16 GIRLS Group A"
+              },
+              "U16 GIRLS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "GRASSHOPPER ZURICH 2 (SWI)",
+                    "t2": "IBAS (SLK)",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U16 GIRLS Group B"
+              },
+              "U16 GIRLS Group C": {
+                "games": [
+                  {
+                    "court": "Santa Susanna Court 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LIMERICK CELTICS (IRE)",
+                    "t2": "GRASSHOPPER ZURICH 1 (SWI)",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U16 GIRLS Group C"
+              },
+              "U16 GIRLS Group D": {
+                "games": [
+                  {
+                    "court": "Blanes Court 5",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ST. MARYS BASKETBALL (IRE)",
+                    "t2": "PHD HOOPS (USA)",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U16 GIRLS Group D"
+              },
+              "U16 GIRLS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "19:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 2",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group C",
+                    "t2": "3rd Group D",
+                    "time": "19:00"
+                  }
+                ],
+                "group": "U16 GIRLS \u2014 Playoffs"
+              }
+            },
+            "name": "U16 GIRLS"
+          },
+          {
+            "color": "#06B6D4",
+            "groups": {
+              "U18 GIRLS Group A": {
+                "games": [
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "DUVBO IK (SWE)",
+                    "t2": "FALCONS (SWI)",
+                    "time": "09:00"
+                  },
+                  {
+                    "court": "Santa Susanna Court 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "DUVBO IK (SWE)",
+                    "t2": "SANFELIUNEC (ESP)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Blanes Court 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LNCA 2 (MEX)",
+                    "t2": "FALCONS (SWI)",
+                    "time": "14:30"
+                  },
+                  {
+                    "court": "Blanes Court 4",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "LNCA 2 (MEX)",
+                    "t2": "SANFELIUNEC (ESP)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U18 GIRLS Group A"
+              },
+              "U18 GIRLS Group B": {
+                "games": [
+                  {
+                    "court": "Blanes Court 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "BASKET CHILE (CHI)",
+                    "time": "10:30"
+                  },
+                  {
+                    "court": "Palafolls Court 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "PHD HOOPS (USA)",
+                    "t2": "LNCA 1 (MEX)",
+                    "time": "16:00"
+                  },
+                  {
+                    "court": "Blanes Court 3",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "quotaViolation": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "ALTE KANTI (SWI)",
+                    "t2": "LNCA 1 (MEX)",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U18 GIRLS Group B"
+              }
+            },
+            "name": "U18 GIRLS"
+          }
+        ],
+        "label": "Day 2 \u2014 Round Robin & Playoffs"
+      },
+      {
+        "dayIndex": 2,
+        "divs": [
+          {
+            "color": "#FF6B00",
+            "groups": {
+              "U12 MIXED \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "5th/6th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group A",
+                    "t2": "2nd Group B",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Pineda",
+                    "dayLabel": "Day 3",
+                    "lbl": "7th/8th",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group C",
+                    "t2": "2nd Group D",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "9th/10th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "11th/12th",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  }
+                ],
+                "group": "U12 MIXED \u2014 Playoffs"
+              }
+            },
+            "name": "U12 MIXED"
+          },
+          {
+            "color": "#3B82F6",
+            "groups": {
+              "U14 BOYS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "1st Group B",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group C",
+                    "t2": "1st Group D",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Silver (5th\u20138th)",
+                    "court": "Santa Susanna Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group A",
+                    "t2": "2nd Group B",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Silver (5th\u20138th)",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group C",
+                    "t2": "2nd Group D",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Pineda",
+                    "dayLabel": "Day 3",
+                    "lbl": "5th/6th",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "7th/8th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Pineda",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group C",
+                    "t2": "3rd Group D",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "9th/10th",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "11th/12th",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "13th\u201316th Place",
+                    "court": "Pineda",
+                    "dayLabel": "Day 3",
+                    "lbl": "13th/14th",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "4th Group A",
+                    "t2": "4th Group B",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "13th\u201316th Place",
+                    "court": "Pineda",
+                    "dayLabel": "Day 3",
+                    "lbl": "15th/16th",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "4th Group C",
+                    "t2": "4th Group D",
+                    "time": "17:30"
+                  }
+                ],
+                "group": "U14 BOYS \u2014 Playoffs"
+              }
+            },
+            "name": "U14 BOYS"
+          },
+          {
+            "color": "#10B981",
+            "groups": {
+              "U16 BOYS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "1st Group B",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group C",
+                    "t2": "1st Group D",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 3",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "Silver (5th\u20138th)",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group A",
+                    "t2": "2nd Group B",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Silver (5th\u20138th)",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group C",
+                    "t2": "2nd Group D",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "5th/6th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 3",
+                    "lbl": "7th/8th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group C",
+                    "t2": "3rd Group D",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 3",
+                    "lbl": "9th/10th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 3",
+                    "lbl": "11th/12th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "13th\u201316th Place",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 3",
+                    "lbl": "13th/14th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "4th Group A",
+                    "t2": "4th Group B",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "13th\u201316th Place",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 3",
+                    "lbl": "15th/16th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "4th Group C",
+                    "t2": "4th Group D",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U16 BOYS \u2014 Playoffs"
+              }
+            },
+            "name": "U16 BOYS"
+          },
+          {
+            "color": "#8B5CF6",
+            "groups": {
+              "U18 BOYS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "11th/12th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "12:00"
+                  }
+                ],
+                "group": "U18 BOYS \u2014 Playoffs"
+              }
+            },
+            "name": "U18 BOYS"
+          },
+          {
+            "color": "#F59E0B",
+            "groups": {
+              "U14 GIRLS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "5th/6th",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group A",
+                    "t2": "2nd Group B",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "7th/8th",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group C",
+                    "t2": "2nd Group D",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Santa Susanna Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group C",
+                    "t2": "3rd Group D",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "9th/10th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "11th/12th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  }
+                ],
+                "group": "U14 GIRLS \u2014 Playoffs"
+              }
+            },
+            "name": "U14 GIRLS"
+          },
+          {
+            "color": "#EF4444",
+            "groups": {
+              "U16 GIRLS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "1st Group B",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Santa Susanna Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Santa Susanna",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group C",
+                    "t2": "1st Group D",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 3",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "Championship (1st\u20134th)",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Palafolls Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "5th/6th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group A",
+                    "t2": "2nd Group B",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "5th\u20138th Place",
+                    "court": "Pineda",
+                    "dayLabel": "Day 3",
+                    "lbl": "7th/8th",
+                    "loc": "Pineda",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "2nd Group C",
+                    "t2": "2nd Group D",
+                    "time": "16:00"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Palafolls Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "9th/10th",
+                    "loc": "Palafolls",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "14:30"
+                  },
+                  {
+                    "bracket": "Bronze (9th\u201312th)",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "11th/12th",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "09:00"
+                  }
+                ],
+                "group": "U16 GIRLS \u2014 Playoffs"
+              }
+            },
+            "name": "U16 GIRLS"
+          },
+          {
+            "color": "#06B6D4",
+            "groups": {
+              "U18 GIRLS \u2014 Playoffs": {
+                "games": [
+                  {
+                    "bracket": "Championship",
+                    "court": "Blanes Court 2",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 1",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group A",
+                    "t2": "2nd Group B",
+                    "time": "10:30"
+                  },
+                  {
+                    "bracket": "Championship",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 3",
+                    "lbl": "SF 2",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "1st Group B",
+                    "t2": "2nd Group A",
+                    "time": "12:00"
+                  },
+                  {
+                    "bracket": "Championship",
+                    "court": "Blanes Court 4",
+                    "dayLabel": "Day 3",
+                    "lbl": "3rd Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "Championship",
+                    "court": "Blanes Court 5",
+                    "dayLabel": "Day 3",
+                    "lbl": "FINAL",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "",
+                    "t2": "",
+                    "time": "17:30"
+                  },
+                  {
+                    "bracket": "5th Place",
+                    "court": "Blanes Court 1",
+                    "dayLabel": "Day 3",
+                    "lbl": "5th Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "3rd Group A",
+                    "t2": "3rd Group B",
+                    "time": "09:00"
+                  },
+                  {
+                    "bracket": "7th Place",
+                    "court": "Blanes Court 3",
+                    "dayLabel": "Day 3",
+                    "lbl": "7th Place",
+                    "loc": "Blanes",
+                    "locked": false,
+                    "score1": null,
+                    "score2": null,
+                    "t1": "4th Group A",
+                    "t2": "4th Group B",
+                    "time": "14:30"
+                  }
+                ],
+                "group": "U18 GIRLS \u2014 Playoffs"
+              }
+            },
+            "name": "U18 GIRLS"
+          }
+        ],
+        "label": "Day 3 \u2014 Playoffs"
+      }
+    ],
+    "totalCourts": 10,
+    "venueRestMandatory": true
+  },
+  "setupFields": {
+    "dayHours": [
+      {
+        "end": "19:00",
+        "start": "09:00"
+      },
+      {
+        "end": "19:00",
+        "start": "09:00"
+      },
+      {
+        "end": "17:30",
+        "start": "09:00"
+      }
+    ],
+    "finalTimes": "16:00, 14:30, 17:30",
+    "lE": "14:30",
+    "lS": "13:30",
+    "mainVenue": "Blanes",
+    "mainVenue3rd": true,
+    "mainVenueFinal": true,
+    "mainVenueSF": false,
+    "maxGPD": "2",
+    "nDays": "3",
+    "ruleRest": true,
+    "ruleVenueRest": true,
+    "sDate": "2026-06-19",
+    "tName": "Euro Youth Basketball Cup 2026",
+    "venueRestModeMandatory": true
+  },
+  "sites": [
+    {
+      "name": "Blanes",
+      "numCourts": 5
+    },
+    {
+      "name": "Santa Susanna",
+      "numCourts": 2
+    },
+    {
+      "name": "Palafolls",
+      "numCourts": 2
+    },
+    {
+      "name": "Pineda",
+      "numCourts": 1
+    }
+  ],
+  "stats": {
+    "po_games": 74,
+    "rr_games": 108,
+    "total": 182
+  },
+  "status": "optimal",
+  "unscheduledGames": [],
+  "venueBlackouts": [],
+  "venueRules": [
+    {
+      "divName": "U18 BOYS",
+      "prio": "blanes-only"
+    }
+  ]
+}
