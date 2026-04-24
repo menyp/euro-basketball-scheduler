@@ -14,3 +14,12 @@ desktop.ini
 
 # Claude Code
 .claude/
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Debug / scratch output from CLI scheduler runs
+test_*.json
+schedule_output.json
