@@ -183,6 +183,7 @@ def _build_context(config):
     rule_venue_rest = sf.get('ruleVenueRest', True)
     main_venue_final = sf.get('mainVenueFinal', True)
     main_venue_3rd = sf.get('mainVenue3rd', True)
+    main_venue_sf = sf.get('mainVenueSF', False)  # default OFF, matches UI checkbox default
     lunch_start = _time_to_min(sf.get('lS', '13:30'))
     lunch_end = _time_to_min(sf.get('lE', '14:30'))
 
@@ -369,6 +370,7 @@ def _build_context(config):
         'max_gpd': max_gpd,
         'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
         'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
+        'main_venue_sf': main_venue_sf,
         'lunch_start': lunch_start, 'lunch_end': lunch_end,
         'groups': groups, 'team_div': team_div, 'all_teams': all_teams,
         'rr_matchups': rr_matchups, 'num_rr': num_rr,
@@ -678,14 +680,27 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                         if c not in allowed:
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Finals + 3rd Place at main venue.
+    # Mandatory-at-main-venue gates, driven by the three UI toggles
+    # (mainVenueFinal / mainVenue3rd / mainVenueSF). Each toggle ON forces
+    # the matching PO type onto Blanes courts only; OFF removes the
+    # constraint and lets the soft objective decide.
+    mv_final = ctx['main_venue_final']
+    mv_3rd = ctx['main_venue_3rd']
+    mv_sf = ctx['main_venue_sf']
     for p, pg in enumerate(po_games):
-        if pg.get('type') in ('Final', '3rd'):
-            for d in range(n_days):
-                for s in range(len(day_slots[d])):
-                    for c in range(num_courts):
-                        if c not in blanes_courts:
-                            po_model.add(y[p, d, s, c] == 0)
+        t = pg.get('type')
+        enforce = (
+            (t == 'Final' and mv_final)
+            or (t == '3rd' and mv_3rd)
+            or (t == 'SF' and mv_sf)
+        )
+        if not enforce:
+            continue
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                for c in range(num_courts):
+                    if c not in blanes_courts:
+                        po_model.add(y[p, d, s, c] == 0)
 
     # SF before Final/3rd with venue-aware gap (Rule 4 + 7).
     # Only enforced WHEN BOTH ARE PLACED: if SF is placed late, only Final cells
