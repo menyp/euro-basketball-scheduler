@@ -1058,9 +1058,17 @@ def _extract_conflict_cells(blocked, rr_occupied, po_placements, ctx):
 
 
 def _blocked_to_unsched(pg):
-    """Convert a blocked PO game dict to the frontend 'unscheduledGames' shape."""
+    """Convert a blocked PO game dict to the frontend 'unscheduledGames' shape.
+
+    Emits BOTH `divName` and `div` keys so that frontend renderers using
+    either naming convention work without breakage. Falls back to the
+    bracket label if divName is somehow empty (defensive — shouldn't
+    normally happen but prevents the UI showing 'undefined').
+    """
+    div_name = pg.get('divName') or pg.get('bracket') or '(unknown division)'
     return {
-        'divName': pg['divName'],
+        'divName': div_name,
+        'div': div_name,           # alias for the JS-greedy convention
         'lbl': pg.get('lbl', ''),
         'bracket': pg.get('bracket', ''),
         't1': pg.get('t1', ''),

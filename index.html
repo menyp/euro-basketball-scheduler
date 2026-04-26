@@ -783,15 +783,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     }, 150);
   };
 
-  function updateEmptySlotCount() {
-    var el = document.getElementById('emptySlotCount');
-    if (!el) return;
-    var count = 0;
-    document.querySelectorAll('#schedOut .ghost-card').forEach(function(card) {
-      if (card.style.display !== 'none') count++;
-    });
-    el.textContent = count;
-  }
+  // No-op: the Empty Slots stat is now computed from the data model
+  // during schedule render (see stats-row block in renderSched). The
+  // function is kept for callers (filter handlers) but does nothing —
+  // we no longer want filter visibility to mutate the global stat,
+  // since "empty slots" should reflect the whole tournament, not the
+  // current filtered view.
+  function updateEmptySlotCount() { /* intentionally empty */ }
 
   function applySchedFilters() {
     var catSel = document.getElementById('schedFilterSel');
@@ -1925,7 +1923,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       lines.push('');
       unscheduledGames.forEach(function(u) {
         var label = u.lbl ? ('[' + u.lbl + '] ') : '';
-        lines.push('- **' + u.div + '** ' + (u.group || '') + ' — ' + label + (u.t1 || '?') + ' vs ' + (u.t2 || '?') + ' — ' + (u.reason || ''));
+        var dn = u.divName || u.div || u.bracket || '(unknown)';
+        lines.push('- **' + dn + '** ' + (u.group || '') + ' — ' + label + (u.t1 || '?') + ' vs ' + (u.t2 || '?') + ' — ' + (u.reason || ''));
       });
       lines.push('');
     }
@@ -5898,11 +5897,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // ── Unscheduled games alert banner ────────────────────
     // Sticky, animated, with smart suggestions based on failure patterns.
     if (failedCount > 0) {
-      // Group by division
+      // Group by division. Tolerate either field name (`div` from JS greedy
+      // path, `divName` from CP-SAT path) and fall back to bracket label
+      // when neither is set, so the banner never shows "undefined".
       var byDiv = {};
       unscheduledGames.forEach(function(u) {
-        if (!byDiv[u.div]) byDiv[u.div] = [];
-        byDiv[u.div].push(u);
+        var dn = (u.divName || u.div || u.bracket || '(unknown division)').toString();
+        if (!byDiv[dn]) byDiv[dn] = [];
+        byDiv[dn].push(u);
       });
 
       // Analyze failures to generate smart suggestions
@@ -6038,8 +6040,17 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     }
 
     // ── Court Utilization ─────────────────────────────────
+    // Dedupe by game-object identity: bracketDays and gameDays share the
+    // SAME PO game objects (intentional, for dedup elsewhere), so a naive
+    // count over both would double-count playoff games. Use a Set seen by
+    // object reference to count each game exactly once.
     var courtCount = {};
-    function walkCU(g) { if (g.court) courtCount[g.court] = (courtCount[g.court] || 0) + 1; }
+    var _seenGames = new WeakSet();
+    function walkCU(g) {
+      if (!g || !g.court || _seenGames.has(g)) return;
+      _seenGames.add(g);
+      courtCount[g.court] = (courtCount[g.court] || 0) + 1;
+    }
     sched.gameDays.forEach(function(d) {
       d.divs.forEach(function(dv) {
         if (dv.games) dv.games.forEach(walkCU);
@@ -6069,13 +6080,51 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       h += '</div></div>';
     }
 
+    // ── Empty slots — computed from data, not the DOM ─────
+    // Total court-slots = sum over days of (slots-on-day × courts), minus
+    // any blackout cells. Subtract the number of placed games (already
+    // deduped above in courtCount). Result is the true empty count.
+    var totalCourtSlots = 0;
+    var nCourts = (sched.courts || []).length || sched.totalCourts || 0;
+    if (sched.daySlots && sched.daySlots.length && nCourts) {
+      sched.daySlots.forEach(function(daySlotList) {
+        totalCourtSlots += (daySlotList || []).length * nCourts;
+      });
+    }
+    // Subtract blackout cells: each blackout entry blocks one court at
+    // a specific (day, slot) pair.
+    (function() {
+      try {
+        var bl = (window.venueBlackouts || []);
+        if (!sched.daySlots || !nCourts || !bl.length) return;
+        var courtsByVenue = {};
+        (sched.courts || []).forEach(function(c) {
+          (courtsByVenue[c.loc] = courtsByVenue[c.loc] || []).push(c.court);
+        });
+        bl.forEach(function(b) {
+          var d = parseInt(b.day);
+          if (isNaN(d) || !sched.daySlots[d]) return;
+          var courtsAtVenue = (courtsByVenue[b.venue] || []).length;
+          var afterM = b.afterTime ? toM(b.afterTime) : Infinity;
+          var beforeM = b.beforeTime ? toM(b.beforeTime) : -1;
+          (sched.daySlots[d] || []).forEach(function(t) {
+            var tm = toM(t);
+            if (tm >= afterM || tm < beforeM) totalCourtSlots -= courtsAtVenue;
+          });
+        });
+      } catch (e) { /* fall back to no blackout subtraction */ }
+    })();
+    var placedGames = 0;
+    Object.keys(courtCount).forEach(function(c) { placedGames += courtCount[c]; });
+    var trueEmpty = Math.max(0, totalCourtSlots - placedGames);
+
     // ── Stats row ─────────────────────────────────────────
     h += '<div class="stats-row">'
       + '<div class="stat"><div class="stn">' + divisions.length + '</div><div class="stl">Divisions</div></div>'
       + '<div class="stat"><div class="stn">' + totTeams + '</div><div class="stl">Teams</div></div>'
       + '<div class="stat"><div class="stn">' + scheduledCount + '</div><div class="stl">Games</div></div>'
       + '<div class="stat"><div class="stn">' + sched.totalCourts + '</div><div class="stl">Courts</div></div>'
-      + '<div class="stat"><div class="stn" id="emptySlotCount">0</div><div class="stl">Empty Slots</div></div>'
+      + '<div class="stat"><div class="stn" id="emptySlotCount">' + trueEmpty + '</div><div class="stl">Empty Slots</div></div>'
       + '</div>';
 
     // ── Export buttons + view toggle ──────────────────────
