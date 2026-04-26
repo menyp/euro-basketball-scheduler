@@ -428,35 +428,52 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         <!-- Venue Exclusivity -->
         <div style="padding-top:14px;border-top:1px solid var(--b)">
           <div class="stitle" style="margin-bottom:12px">Venue Exclusivity</div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-            <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap">Main Venue</span>
-            <input type="text" id="mainVenue" value="Blanes" placeholder="e.g. Blanes" style="width:130px;margin:0">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+            <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap;min-width:120px">Main Venue</span>
+            <select id="mainVenue" style="width:160px;margin:0"></select>
           </div>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-bottom:10px">Mandatory at Main Venue</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="display:flex;align-items:center;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+            <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap;min-width:120px">Secondary Venue</span>
+            <select id="secondaryVenue" style="width:160px;margin:0"></select>
+          </div>
+          <p style="font-size:11px;color:var(--g);margin:0 0 12px 0;font-style:italic">Used only when a category below is set to <strong>High Priority</strong> — solver tries main venue first, then falls back to secondary, then anywhere.</p>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-bottom:10px">Main Venue Preference</div>
+          <div style="display:flex;flex-direction:column;gap:10px" id="venueExclRows">
+            <div class="vex-row" data-vex="Final" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
               <label class="rule-toggle" style="margin:0">
-                <input type="checkbox" id="mainVenueFinal" checked>
+                <input type="checkbox" id="mainVenueFinal" class="vex-toggle" data-mode-target="mainVenueFinalMode" checked>
                 <span class="rule-slider"></span>
               </label>
-              <span style="font-size:13px;font-weight:600">Final</span>
-              <span style="font-size:11px;color:var(--g)">Championship Final must be held at main venue</span>
+              <span style="font-size:13px;font-weight:600;min-width:80px">Final</span>
+              <span class="vex-mode" data-vex-mode-for="mainVenueFinalMode" style="display:inline-flex;gap:8px;font-size:11px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueFinalMode" value="mandatory" checked>Mandatory</label>
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueFinalMode" value="high-priority">High Priority</label>
+              </span>
+              <span class="vex-desc" style="font-size:11px;color:var(--g);flex:1;min-width:200px">Championship Final placement preference</span>
             </div>
-            <div style="display:flex;align-items:center;gap:12px">
+            <div class="vex-row" data-vex="3rd" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
               <label class="rule-toggle" style="margin:0">
-                <input type="checkbox" id="mainVenue3rd" checked>
+                <input type="checkbox" id="mainVenue3rd" class="vex-toggle" data-mode-target="mainVenue3rdMode" checked>
                 <span class="rule-slider"></span>
               </label>
-              <span style="font-size:13px;font-weight:600">3rd Place</span>
-              <span style="font-size:11px;color:var(--g)">3rd Place game must be held at main venue</span>
+              <span style="font-size:13px;font-weight:600;min-width:80px">3rd Place</span>
+              <span class="vex-mode" data-vex-mode-for="mainVenue3rdMode" style="display:inline-flex;gap:8px;font-size:11px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenue3rdMode" value="mandatory" checked>Mandatory</label>
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenue3rdMode" value="high-priority">High Priority</label>
+              </span>
+              <span class="vex-desc" style="font-size:11px;color:var(--g);flex:1;min-width:200px">3rd Place game placement preference</span>
             </div>
-            <div style="display:flex;align-items:center;gap:12px">
+            <div class="vex-row" data-vex="SF" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
               <label class="rule-toggle" style="margin:0">
-                <input type="checkbox" id="mainVenueSF">
+                <input type="checkbox" id="mainVenueSF" class="vex-toggle" data-mode-target="mainVenueSFMode">
                 <span class="rule-slider"></span>
               </label>
-              <span style="font-size:13px;font-weight:600">Semifinals</span>
-              <span style="font-size:11px;color:var(--g)">When OFF, SFs prefer external venues to keep main venue free for medal games</span>
+              <span style="font-size:13px;font-weight:600;min-width:80px">Semifinals</span>
+              <span class="vex-mode" data-vex-mode-for="mainVenueSFMode" style="display:inline-flex;gap:8px;font-size:11px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueSFMode" value="mandatory" checked>Mandatory</label>
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueSFMode" value="high-priority">High Priority</label>
+              </span>
+              <span class="vex-desc" style="font-size:11px;color:var(--g);flex:1;min-width:200px">Semifinal placement preference</span>
             </div>
           </div>
         </div>
@@ -928,6 +945,71 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   });
 
   // ── Sites ──────────────────────────────────────────────
+  // Re-render both venue dropdowns from sites[]. Main preserves selection
+  // (falls back to "Blanes" or first site). Secondary disables the option
+  // matching Main so they can't equal each other; "(none)" stays available.
+  function renderVenueDropdowns() {
+    var mainSel = document.getElementById('mainVenue');
+    var secSel = document.getElementById('secondaryVenue');
+    if (!mainSel || !secSel) return;
+    var prevMain = mainSel.value || 'Blanes';
+    var prevSec = secSel.value || '';
+    var names = sites.map(function (s) { return (s.name || '').trim(); }).filter(Boolean);
+    // Main
+    mainSel.innerHTML = '';
+    if (!names.length) {
+      mainSel.innerHTML = '<option value="">(no venues configured)</option>';
+    } else {
+      var mainPick = names.indexOf(prevMain) !== -1 ? prevMain
+                    : (names.indexOf('Blanes') !== -1 ? 'Blanes' : names[0]);
+      names.forEach(function (n) {
+        var opt = document.createElement('option');
+        opt.value = n; opt.textContent = n;
+        if (n === mainPick) opt.selected = true;
+        mainSel.appendChild(opt);
+      });
+    }
+    var mainVal = mainSel.value;
+    // Secondary — always has "(none)" as first option, disables option matching main
+    secSel.innerHTML = '<option value="">(none)</option>';
+    var secPick = (prevSec && names.indexOf(prevSec) !== -1 && prevSec !== mainVal) ? prevSec : '';
+    names.forEach(function (n) {
+      var opt = document.createElement('option');
+      opt.value = n; opt.textContent = n + (n === mainVal ? '  — same as Main, unavailable' : '');
+      if (n === mainVal) opt.disabled = true;
+      if (n === secPick) opt.selected = true;
+      secSel.appendChild(opt);
+    });
+  }
+  // Show/hide the inline radios based on the toggle state. When toggle OFF,
+  // dim the radios and disable them (they have no effect when toggle is off).
+  function updateVenueExclusivityRows() {
+    document.querySelectorAll('.vex-row').forEach(function (row) {
+      var toggle = row.querySelector('.vex-toggle');
+      var modeSpan = row.querySelector('.vex-mode');
+      var desc = row.querySelector('.vex-desc');
+      if (!toggle || !modeSpan) return;
+      var isOn = toggle.checked;
+      modeSpan.style.opacity = isOn ? '1' : '0.35';
+      modeSpan.style.pointerEvents = isOn ? '' : 'none';
+      modeSpan.querySelectorAll('input[type=radio]').forEach(function (r) {
+        r.disabled = !isOn;
+      });
+      if (desc) {
+        if (!isOn) {
+          desc.textContent = 'OFF — no preference';
+        } else {
+          var mode = (modeSpan.querySelector('input[type=radio]:checked') || {}).value || 'mandatory';
+          var label = row.dataset.vex || '';
+          if (mode === 'mandatory') {
+            desc.textContent = label + ' MUST be at Main Venue (hard rule)';
+          } else {
+            desc.textContent = label + ' SHOULD be at Main Venue → Secondary → anywhere (soft)';
+          }
+        }
+      }
+    });
+  }
   function renderSites() {
     var el = document.getElementById('siteList');
     el.innerHTML = '';
@@ -941,11 +1023,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       el.appendChild(d);
     });
     updateTotal();
+    renderVenueDropdowns();
   }
   document.getElementById('siteList').addEventListener('input', function (e) {
     var si = parseInt(e.target.dataset.si);
     if (isNaN(si)) return;
-    if (e.target.classList.contains('sname')) sites[si].name = e.target.value;
+    if (e.target.classList.contains('sname')) {
+      sites[si].name = e.target.value;
+      renderVenueDropdowns();
+    }
     if (e.target.classList.contains('snum')) { sites[si].numCourts = parseInt(e.target.value) || 1; updateTotal(); }
   });
   document.getElementById('siteList').addEventListener('click', function (e) {
@@ -954,6 +1040,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   });
   document.getElementById('addSiteBtn').addEventListener('click', function () {
     sites.push({ name: '', numCourts: 1 }); renderSites();
+  });
+  // When Main Venue changes, re-render Secondary so the options reflect the new exclusion.
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'mainVenue') {
+      renderVenueDropdowns();
+    }
+    if (e.target && e.target.classList && e.target.classList.contains('vex-toggle')) {
+      updateVenueExclusivityRows();
+    }
+    if (e.target && e.target.matches && e.target.matches('input[type=radio][name^=mainVenue]')) {
+      updateVenueExclusivityRows();
+    }
   });
   document.getElementById('addVenueRuleBtn').addEventListener('click', function () {
     var firstDiv = divisions.length ? divisions[0].name : '';
@@ -995,9 +1093,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueRest:            venueRestOn,
       venueRestMandatory:   venueRestMandatory,
       mainVenue:            (document.getElementById('mainVenue').value || '').trim() || 'Blanes',
+      secondaryVenue:       (document.getElementById('secondaryVenue').value || '').trim(),
       mainVenueFinal:       document.getElementById('mainVenueFinal').checked,
       mainVenue3rd:         document.getElementById('mainVenue3rd').checked,
-      mainVenueSF:          document.getElementById('mainVenueSF').checked
+      mainVenueSF:          document.getElementById('mainVenueSF').checked,
+      mainVenueFinalMode:   (document.querySelector('input[name=mainVenueFinalMode]:checked') || {}).value || 'mandatory',
+      mainVenue3rdMode:     (document.querySelector('input[name=mainVenue3rdMode]:checked') || {}).value || 'mandatory',
+      mainVenueSFMode:      (document.querySelector('input[name=mainVenueSFMode]:checked') || {}).value || 'mandatory'
     };
   }
 
@@ -1711,10 +1813,24 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     lines.push('10. Court capacity: no more games per slot than courts available');
     lines.push('10b. Every team plays at least **one RR game at the main venue** (**' + (rules.mainVenue || 'Blanes') + '**)');
     lines.push('10c. **PO-day safety:** If a division has playoff games (SFs) on a day, each team in that division should play at most **' + (gpd - 1) + ' RR games** on that day — so an advancing team doesn\'t exceed ' + gpd + ' total games (RR + SF)');
-    if (rules.mainVenueFinal) lines.push('11. Finals must be placed at the main venue (**' + (rules.mainVenue || 'Blanes') + '**)');
-    if (rules.mainVenue3rd)   lines.push('12. 3rd Place games must be placed at the main venue');
+    var mvName = rules.mainVenue || 'Blanes';
+    var secName = rules.secondaryVenue || '';
+    function _vexLine(num, label, on, mode) {
+      if (!on) return null;
+      if (mode === 'high-priority') {
+        var fallback = secName ? (mvName + ' → ' + secName + ' → anywhere') : (mvName + ' → anywhere');
+        return num + '. ' + label + ' SHOULD be at the main venue (High Priority — soft preference, fallback order: ' + fallback + ')';
+      }
+      return num + '. ' + label + ' must be placed at the main venue (**' + mvName + '**)';
+    }
+    var l11 = _vexLine(11, 'Finals',     rules.mainVenueFinal, rules.mainVenueFinalMode);
+    var l12 = _vexLine(12, '3rd Place',  rules.mainVenue3rd,   rules.mainVenue3rdMode);
+    var l_sf = _vexLine(13, 'Semifinals', rules.mainVenueSF,   rules.mainVenueSFMode);
+    if (l11) lines.push(l11);
+    if (l12) lines.push(l12);
+    if (l_sf) lines.push(l_sf);
     if (venueRules && venueRules.length) {
-      var ruleCounter = 13;
+      var ruleCounter = (l_sf ? 14 : (l12 ? 13 : (l11 ? 12 : 11)));
       venueRules.forEach(function(vr) {
         var r = migrateLegacyVenueRule(vr) || vr;
         var venues = Array.isArray(r.venues) ? r.venues : [];
@@ -3241,12 +3357,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         lS: document.getElementById('lS').value || '13:30',
         lE: document.getElementById('lE').value || '14:30',
         mainVenue: (document.getElementById('mainVenue').value || '').trim() || 'Blanes',
+        secondaryVenue: (document.getElementById('secondaryVenue').value || '').trim(),
         ruleRest: document.getElementById('ruleRest').checked,
         ruleVenueRest: document.getElementById('ruleVenueRest').checked,
         venueRestMandatory: document.getElementById('venueRestModeMandatory').checked,
         mainVenueFinal: document.getElementById('mainVenueFinal').checked,
         mainVenue3rd: document.getElementById('mainVenue3rd').checked,
         mainVenueSF: document.getElementById('mainVenueSF').checked,
+        mainVenueFinalMode: (document.querySelector('input[name=mainVenueFinalMode]:checked') || {}).value || 'mandatory',
+        mainVenue3rdMode:   (document.querySelector('input[name=mainVenue3rdMode]:checked') || {}).value || 'mandatory',
+        mainVenueSFMode:    (document.querySelector('input[name=mainVenueSFMode]:checked') || {}).value || 'mandatory',
         dayHours: getDayHours(),
         finalTimes: (document.getElementById('finalTimes').value || '').trim(),
       },
@@ -6676,6 +6796,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         setField('lE',      sf.lE);
         setField('finalTimes', sf.finalTimes);
         setField('mainVenue',  sf.mainVenue);
+        // Re-render dropdowns now that mainVenue is set, so secondary's exclusion is correct
+        renderVenueDropdowns();
+        setField('secondaryVenue', sf.secondaryVenue || '');
         setChecked('ruleRest',              sf.ruleRest);
         setChecked('ruleVenueRest',         sf.ruleVenueRest);
         setChecked('venueRestModeMandatory',sf.venueRestModeMandatory);
@@ -6683,6 +6806,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         setChecked('mainVenueFinal',        sf.mainVenueFinal);
         setChecked('mainVenue3rd',          sf.mainVenue3rd);
         setChecked('mainVenueSF',           sf.mainVenueSF);
+        // Restore the per-toggle mode radios. Default to 'mandatory' to match
+        // legacy configs (which had no mode field).
+        function _setRadio(name, val) {
+          var r = document.querySelector('input[type=radio][name=' + name + '][value="' + (val || 'mandatory') + '"]');
+          if (r) r.checked = true;
+        }
+        _setRadio('mainVenueFinalMode', sf.mainVenueFinalMode);
+        _setRadio('mainVenue3rdMode',   sf.mainVenue3rdMode);
+        _setRadio('mainVenueSFMode',    sf.mainVenueSFMode);
+        updateVenueExclusivityRows();
         // Restore nDays first, then rebuild day-hours grid, then fill saved values
         if (sf.nDays !== undefined) {
           setField('nDays', sf.nDays);
@@ -7222,6 +7355,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   renderDayHours();
   parseTeams();
   applyDefaultGroupArrangement();
+  updateVenueExclusivityRows();
 
 }());
 </script>
