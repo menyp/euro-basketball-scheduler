@@ -273,6 +273,7 @@ footer span{color:var(--o)}
 .cg-table tr.cg-lunch-row td{background:rgba(255,165,0,.1);border-top:1px solid rgba(255,165,0,.4);border-bottom:1px solid rgba(255,165,0,.4);color:#FFB94C;text-align:center;font-weight:800;font-size:11px;letter-spacing:1px;padding:7px;text-transform:uppercase}
 .cg-quota-warn{outline:2px solid #fbbf24;outline-offset:-2px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.mini.min.js"></script>
 </head>
 <body>
 <div id="toast-stack"></div>
@@ -6222,6 +6223,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<button id="auditBtn" class="btn" style="background:#0ea5e9;color:#fff;padding:9px 18px;font-weight:700">&#128269; Audit Schedule</button>'
       + '<button id="auditExportBtn" class="btn" style="background:#8B5CF6;color:#fff;padding:9px 18px;font-weight:700">&#128203; Export for AI Review</button>'
       + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
+      + '<button id="exportXLSXBtn" class="btn" style="background:#107C41;color:#fff;padding:9px 18px;font-weight:700">&#128202; Export Excel</button>'
       + '<button id="printGridBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Court Grid</button>'
       + '<button id="printDivBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128203; By Division</button>'
       + '<button id="jsonExportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128190; Save JSON</button>'
@@ -6329,6 +6331,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     }
 
     var csvBtn       = document.getElementById('exportCSVBtn');
+    var xlsxBtn      = document.getElementById('exportXLSXBtn');
     var printGridBtn = document.getElementById('printGridBtn');
     var printDivBtn  = document.getElementById('printDivBtn');
     var jsonExpBtn   = document.getElementById('jsonExportBtn');
@@ -6339,6 +6342,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var viewListBtn  = document.getElementById('viewListBtn');
     var viewGridBtn  = document.getElementById('viewGridBtn');
     if (csvBtn)       csvBtn.onclick      = exportScheduleToCSV;
+    if (xlsxBtn)      xlsxBtn.onclick     = exportScheduleToXLSX;
     if (printGridBtn) printGridBtn.onclick = printCourtGrid;
     if (printDivBtn)  printDivBtn.onclick  = printByDivision;
     if (jsonExpBtn)   jsonExpBtn.onclick   = exportScheduleToJSON;
@@ -6401,6 +6405,236 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var a    = document.createElement('a');
     a.href = url; a.download = 'tournament_schedule.csv'; a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // ── Export: Excel (.xlsx) ─────────────────────────────
+  // Produces a multi-sheet workbook matching the Blanes 2025 reference format:
+  //   Sheet 1  : GRUPOS FASE PREVIA  — division → groups → teams listing
+  //   Sheet 2+ : one per game day    — banner + 13-column timetable
+  // Uses SheetJS (xlsx.mini.min.js) loaded via CDN in <head>.
+
+  function _xlsxParseDivision(name) {
+    // "Boys U14" → {category:'U14', gender:'MALE'}; "U18 Girls" → {U18, FEMALE}; "U12 MIXED" → {U12, MIX}
+    var s = String(name || '').toLowerCase();
+    var cat = (s.match(/u(\d{2})/) || [])[0] || '';
+    cat = cat ? cat.toUpperCase() : '';
+    var gender = '';
+    if (/girl|female|women|wom/.test(s))      gender = 'FEMALE';
+    else if (/mix/.test(s))                    gender = 'MIX';
+    else if (/boy|male|men/.test(s))           gender = 'MALE';
+    return { category: cat, gender: gender };
+  }
+
+  function _xlsxParseCourt(g) {
+    // g.loc holds the raw venue name ("Blanes", "Santa Suzana"). g.court is "<loc>" or "<loc> Court N".
+    var loc = String(g.loc || '').trim();
+    var court = String(g.court || '').trim();
+    var num = 1;
+    var m = court.match(/Court\s+(\d+)\s*$/i);
+    if (m) num = parseInt(m[1], 10) || 1;
+    // Reference uppercases city names and uses "SANTA SUSANA" (no Z)
+    var cityUpper = loc.toUpperCase().replace(/SUZANA/g, 'SUSANA');
+    return { city: cityUpper, courtNum: num };
+  }
+
+  function _xlsxStageLabel(g) {
+    var lbl = (g && g.lbl) ? String(g.lbl).trim() : '';
+    if (!lbl) return 'group phase';
+    var u = lbl.toUpperCase();
+    if (u === 'FINAL')                                return 'FINAL';
+    if (u.indexOf('3RD') === 0 || u.indexOf('3RD PLACE') !== -1) return '3rht POSITION MATCH';
+    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1)        return 'crossing phase';
+    if (u.indexOf('5TH') === 0 || u.indexOf('5-6') !== -1)        return '5-6 POSITION';
+    if (u.indexOf('7TH') === 0 || u.indexOf('7-8') !== -1)        return '7-8 POSITION';
+    if (u.indexOf('9TH') === 0 || u.indexOf('9-10') !== -1)       return '9-10 POSITION';
+    if (u.indexOf('11TH') === 0 || u.indexOf('11-12') !== -1)     return '11-12 POSITION';
+    return lbl;
+  }
+
+  function _xlsxTimeFraction(hhmm) {
+    // "14:30" → 0.6041666... (Excel time of day fraction)
+    var parts = String(hhmm || '').split(':');
+    var h = parseInt(parts[0], 10) || 0;
+    var m = parseInt(parts[1], 10) || 0;
+    return (h * 60 + m) / 1440;
+  }
+
+  function _xlsxGroupLetter(groupKey, divName) {
+    // "Boys U14 Group A" → "A"; falls back to "" if no letter found
+    if (!groupKey) return '';
+    var s = String(groupKey).replace(divName || '', '').trim();
+    var m = s.match(/Group\s+([A-Z])/i);
+    return m ? m[1].toUpperCase() : '';
+  }
+
+  function _xlsxDayDate(dayIdx) {
+    var sd = (document.getElementById('sDate') || {}).value;
+    if (!sd) return null;
+    var d = new Date(sd + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    d.setDate(d.getDate() + (dayIdx || 0));
+    return d;
+  }
+
+  function _xlsxDayTitle(dayIdx) {
+    var d = _xlsxDayDate(dayIdx);
+    if (!d) return 'Day ' + ((dayIdx || 0) + 1);
+    var weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months   = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return weekdays[d.getDay()] + ' ' + d.getDate() + ' of ' + months[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function _xlsxSheetName(dayIdx) {
+    // "FRIDAY 13 OF JUNE" — Excel sheet names cap at 31 chars; this format always fits.
+    var d = _xlsxDayDate(dayIdx);
+    if (!d) return ('DAY ' + ((dayIdx || 0) + 1)).slice(0, 31);
+    var weekdays = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+    var months   = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+    return (weekdays[d.getDay()] + ' ' + d.getDate() + ' OF ' + months[d.getMonth()]).slice(0, 31);
+  }
+
+  function _xlsxBuildGroupsSheet() {
+    // Sheet 1: division → groups → teams listing (matches reference layout)
+    var rows = [];
+    var totalRR = 0;
+    divisions.forEach(function(d) {
+      var meta = _xlsxParseDivision(d.name);
+      var genderLabel = meta.gender === 'FEMALE' ? '(girls)' : (meta.gender === 'MIX' ? 'MIX' : '(boys)');
+      var headerCat = (meta.category || d.name) + (meta.gender === 'MIX' ? ' ' + genderLabel : ' ' + genderLabel);
+      rows.push([headerCat]);
+      var groups = (d.manualGroups && d.manualGroups.length) ? d.manualGroups : [d.teams || []];
+      groups.forEach(function(grp, gi) {
+        rows.push(['GROUP ' + String.fromCharCode(65 + gi)]);
+        grp.forEach(function(team) { rows.push([team]); });
+        // Group RR count = n*(n-1)/2
+        totalRR += grp.length * (grp.length - 1) / 2;
+      });
+      rows.push([]); // blank separator
+    });
+    rows.push(['TOTAL FASE PREVIA:', totalRR]);
+    return rows;
+  }
+
+  function _xlsxBuildDaySheet(dayEntry, dayIdx, matchCounter) {
+    // One sheet per day: banner, day title, header, then one row per (slot × court) tuple.
+    var rows = [];
+    rows.push(['EURO YOUTH BASKETBALL CUP']);
+    rows.push([_xlsxDayTitle(dayIdx)]);
+    rows.push(['Time', 'match number', 'Stage', 'Category', 'GROUP',
+               'Male/Female/Mix', 'Court', 'City', 'Local Team', 'Visiting Team',
+               'Referees', 'Volunteers', 'Notes']);
+
+    // Build a lookup: "<HH:MM>|<court name>" → game (with division metadata)
+    var lookup = {};
+    (dayEntry.divs || []).forEach(function(d) {
+      var meta = _xlsxParseDivision(d.name);
+      var pushGame = function(g, groupKey) {
+        var k = (g.time || '') + '|' + (g.court || '');
+        lookup[k] = { g: g, divName: d.name, meta: meta, groupKey: groupKey };
+      };
+      if (d.groups) {
+        Object.keys(d.groups).forEach(function(gk) {
+          (d.groups[gk].games || []).forEach(function(g) { pushGame(g, gk); });
+        });
+      }
+      if (d.games) {
+        d.games.forEach(function(g) { pushGame(g, ''); });
+      }
+    });
+
+    // Determine the day's time slots and court list. Use whatever is on sched, else derive.
+    var lS = document.getElementById('lS').value || '13:30';
+    var lE = document.getElementById('lE').value || '14:30';
+    var dayHours = getDayHours();
+    var hours = dayHours[Math.min(dayIdx, dayHours.length - 1)];
+    var slotMins = buildTimeSlots(toM(hours.start), toM(hours.end), toM(lS), toM(lE));
+    var courts = (sched && sched.courts && sched.courts.length) ? sched.courts : getCourts();
+
+    var lunchStartFrac = _xlsxTimeFraction(lS);
+    var lunchInserted = false;
+
+    slotMins.forEach(function(mins) {
+      var hhmm = toT(mins);
+      var slotFrac = _xlsxTimeFraction(hhmm);
+      // Insert LUNCH TIME row when we cross over the lunch window
+      if (!lunchInserted && slotFrac >= lunchStartFrac) {
+        // lunch row: column B = "LUNCH TIME"
+        rows.push(['', 'LUNCH TIME']);
+        lunchInserted = true;
+      }
+      courts.forEach(function(c) {
+        var key = hhmm + '|' + c.court;
+        var hit = lookup[key];
+        if (hit) {
+          var g = hit.g;
+          var pc = _xlsxParseCourt(g);
+          rows.push([
+            slotFrac,
+            matchCounter.next(),
+            _xlsxStageLabel(g),
+            hit.meta.category,
+            _xlsxGroupLetter(hit.groupKey, hit.divName),
+            hit.meta.gender,
+            pc.courtNum,
+            pc.city,
+            g.t1 || '',
+            g.t2 || '',
+            '', '', ''
+          ]);
+        } else {
+          // Empty slot row — matches reference's blank-row convention
+          var pc2 = _xlsxParseCourt({ loc: c.loc, court: c.court });
+          rows.push([
+            slotFrac, '', 'group phase', '', '', '',
+            pc2.courtNum, pc2.city,
+            '', '', '', '', ''
+          ]);
+        }
+      });
+    });
+
+    return rows;
+  }
+
+  function exportScheduleToXLSX() {
+    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    if (typeof XLSX === 'undefined') {
+      alert('Excel export library failed to load.\nCheck your internet connection or use Export CSV instead.');
+      return;
+    }
+
+    var matchCounter = (function() {
+      var n = 0;
+      return { next: function() { return ++n; } };
+    })();
+
+    var wb = XLSX.utils.book_new();
+
+    // Sheet 1: GRUPOS FASE PREVIA
+    var gWs = XLSX.utils.aoa_to_sheet(_xlsxBuildGroupsSheet());
+    XLSX.utils.book_append_sheet(wb, gWs, 'GRUPOS FASE PREVIA');
+
+    // Per-day sheets
+    sched.gameDays.forEach(function(day) {
+      var dayIdx = (typeof day.dayIndex === 'number') ? day.dayIndex : sched.gameDays.indexOf(day);
+      var rows = _xlsxBuildDaySheet(day, dayIdx, matchCounter);
+      var ws = XLSX.utils.aoa_to_sheet(rows);
+      // Format column A as time (h:mm) so 0.5 renders as "12:00"
+      var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      for (var r = 3; r <= range.e.r; r++) {
+        var cell = ws[XLSX.utils.encode_cell({ r: r, c: 0 })];
+        if (cell && typeof cell.v === 'number') { cell.t = 'n'; cell.z = 'h:mm'; }
+      }
+      // Set reasonable column widths
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 9 }, { wch: 7 },
+        { wch: 14 }, { wch: 7 }, { wch: 14 }, { wch: 28 }, { wch: 28 },
+        { wch: 14 }, { wch: 14 }, { wch: 16 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, _xlsxSheetName(dayIdx));
+    });
+
+    XLSX.writeFile(wb, 'tournament_schedule.xlsx');
   }
 
   // ── Print helpers ─────────────────────────────────────
