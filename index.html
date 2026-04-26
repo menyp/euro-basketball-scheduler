@@ -273,7 +273,7 @@ footer span{color:var(--o)}
 .cg-table tr.cg-lunch-row td{background:rgba(255,165,0,.1);border-top:1px solid rgba(255,165,0,.4);border-bottom:1px solid rgba(255,165,0,.4);color:#FFB94C;text-align:center;font-weight:800;font-size:11px;letter-spacing:1px;padding:7px;text-transform:uppercase}
 .cg-quota-warn{outline:2px solid #fbbf24;outline-offset:-2px}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.mini.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 </head>
 <body>
 <div id="toast-stack"></div>
@@ -6494,30 +6494,48 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function _xlsxBuildGroupsSheet() {
-    // Sheet 1: division → groups → teams listing (matches reference layout)
+    return _xlsxBuildGroupsSheetWithMap().rows;
+  }
+
+  function _xlsxBuildGroupsSheetWithMap() {
+    // Sheet 1: division-groups-teams listing (matches reference layout)
     var rows = [];
+    var sectionMap = [];
     var totalRR = 0;
     divisions.forEach(function(d) {
       var meta = _xlsxParseDivision(d.name);
-      var genderLabel = meta.gender === 'FEMALE' ? '(girls)' : (meta.gender === 'MIX' ? 'MIX' : '(boys)');
-      var headerCat = (meta.category || d.name) + (meta.gender === 'MIX' ? ' ' + genderLabel : ' ' + genderLabel);
+      var genderLabel = meta.gender === 'FEMALE' ? '(girls)' : (meta.gender === 'MIX' ? '(mix)' : '(boys)');
+      var headerCat = (meta.category || d.name) + ' ' + genderLabel;
+      sectionMap.push({ row: rows.length, kind: 'div' });
       rows.push([headerCat]);
       var groups = (d.manualGroups && d.manualGroups.length) ? d.manualGroups : [d.teams || []];
       groups.forEach(function(grp, gi) {
+        sectionMap.push({ row: rows.length, kind: 'group' });
         rows.push(['GROUP ' + String.fromCharCode(65 + gi)]);
-        grp.forEach(function(team) { rows.push([team]); });
+        grp.forEach(function(team) {
+          sectionMap.push({ row: rows.length, kind: 'team' });
+          rows.push([team]);
+        });
         // Group RR count = n*(n-1)/2
         totalRR += grp.length * (grp.length - 1) / 2;
       });
       rows.push([]); // blank separator
     });
+    sectionMap.push({ row: rows.length, kind: 'total' });
     rows.push(['TOTAL FASE PREVIA:', totalRR]);
-    return rows;
+    return { rows: rows, sectionMap: sectionMap };
   }
 
   function _xlsxBuildDaySheet(dayEntry, dayIdx, matchCounter) {
-    // One sheet per day: banner, day title, header, then one row per (slot × court) tuple.
+    return _xlsxBuildDaySheetWithMap(dayEntry, dayIdx, matchCounter).rows;
+  }
+
+  function _xlsxBuildDaySheetWithMap(dayEntry, dayIdx, matchCounter) {
+    // One sheet per day: banner, day title, header, then one row per (slot, court) tuple.
+    // Returns { rows, slotBoundaries } so the styling pass can apply alternating
+    // bands per time-slot block + dedicated colour for the lunch divider row.
     var rows = [];
+    var slotBoundaries = [];
     rows.push(['EURO YOUTH BASKETBALL CUP']);
     rows.push([_xlsxDayTitle(dayIdx)]);
     rows.push(['Time', 'match number', 'Stage', 'Category', 'GROUP',
@@ -6552,16 +6570,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     var lunchStartFrac = _xlsxTimeFraction(lS);
     var lunchInserted = false;
+    var slotIdx = 0;
 
     slotMins.forEach(function(mins) {
       var hhmm = toT(mins);
       var slotFrac = _xlsxTimeFraction(hhmm);
       // Insert LUNCH TIME row when we cross over the lunch window
       if (!lunchInserted && slotFrac >= lunchStartFrac) {
-        // lunch row: column B = "LUNCH TIME"
+        slotBoundaries.push({ startRow: rows.length, endRow: rows.length, kind: 'lunch' });
         rows.push(['', 'LUNCH TIME']);
         lunchInserted = true;
       }
+      var blockStart = rows.length;
       courts.forEach(function(c) {
         var key = hhmm + '|' + c.court;
         var hit = lookup[key];
@@ -6591,9 +6611,118 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           ]);
         }
       });
+      slotBoundaries.push({ startRow: blockStart, endRow: rows.length - 1, banded: (slotIdx % 2 === 1) });
+      slotIdx++;
     });
 
-    return rows;
+    return { rows: rows, slotBoundaries: slotBoundaries };
+  }
+
+  // ── Cell styling (xlsx-js-style) ──────────────────────
+  // Reference workbook colour palette (matches the Blanes 2025 master file):
+  //   Header row              : 2F5496 dark blue + white bold text
+  //   Lunch row               : FFC000 orange + bold text
+  //   Time-slot banding (alt.) : D9E1F2 light blue tint
+  //   Section headers (groups): FF6B00 orange bold (project accent colour)
+  //   Empty cells             : default (no fill)
+
+  var _XLSX_STYLE = {
+    border:    { top:{style:'thin',color:{rgb:'BFBFBF'}}, bottom:{style:'thin',color:{rgb:'BFBFBF'}},
+                 left:{style:'thin',color:{rgb:'BFBFBF'}}, right:{style:'thin',color:{rgb:'BFBFBF'}} },
+    bannerCell:  { font:{name:'Calibri',sz:18,bold:true,color:{rgb:'2F5496'}}, alignment:{horizontal:'left',vertical:'center'} },
+    titleCell:   { font:{name:'Calibri',sz:14,bold:true,italic:true,color:{rgb:'1F3864'}}, alignment:{horizontal:'left',vertical:'center'} },
+    headerCell:  { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'2F5496'}},
+                   alignment:{horizontal:'center',vertical:'center',wrapText:true},
+                   border:{top:{style:'thin',color:{rgb:'1F3864'}}, bottom:{style:'thin',color:{rgb:'1F3864'}},
+                           left:{style:'thin',color:{rgb:'1F3864'}}, right:{style:'thin',color:{rgb:'1F3864'}}} },
+    lunchCell:   { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'FFC000'}},
+                   alignment:{horizontal:'center',vertical:'center'} },
+    bandedCell:  { fill:{fgColor:{rgb:'D9E1F2'}}, alignment:{horizontal:'center',vertical:'center'} },
+    plainCell:   { alignment:{horizontal:'center',vertical:'center'} },
+    teamCellL:   { alignment:{horizontal:'left',vertical:'center'} },
+    bandedTeamL: { fill:{fgColor:{rgb:'D9E1F2'}}, alignment:{horizontal:'left',vertical:'center'} },
+    divHeader:   { font:{name:'Calibri',sz:13,bold:true,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'FF6B00'}},
+                   alignment:{horizontal:'left',vertical:'center'} },
+    grpHeader:   { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'D9E1F2'}},
+                   alignment:{horizontal:'left',vertical:'center'} },
+    teamRow:     { alignment:{horizontal:'left',vertical:'center'} },
+    totalRow:    { font:{name:'Calibri',sz:12,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'FFE699'}},
+                   alignment:{horizontal:'left',vertical:'center'} }
+  };
+
+  function _xlsxApplyStyle(ws, ref, style) {
+    if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+    // Merge with existing style (preserving number-format etc.)
+    var prev = ws[ref].s || {};
+    ws[ref].s = Object.assign({}, prev, style);
+    // Always include a soft border
+    if (!ws[ref].s.border && style.border) ws[ref].s.border = style.border;
+    else if (!ws[ref].s.border) ws[ref].s.border = _XLSX_STYLE.border;
+  }
+
+  function _xlsxStyleDaySheet(ws, slotBoundaries) {
+    // slotBoundaries: array of {startRow, endRow, banded:bool} for each time-slot block.
+    // Rows are 0-indexed in this notation (matches XLSX.utils.encode_cell).
+    var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+    // Banner (row 0) and Day title (row 1) — apply to merged A1:M1 / A2:M2
+    _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:0,c:0}), _XLSX_STYLE.bannerCell);
+    _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:1,c:0}), _XLSX_STYLE.titleCell);
+
+    // Header row (row 2) — 13 columns
+    for (var c = 0; c < 13; c++) {
+      _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:2,c:c}), _XLSX_STYLE.headerCell);
+    }
+
+    // Body rows
+    slotBoundaries.forEach(function(block) {
+      for (var r = block.startRow; r <= block.endRow; r++) {
+        if (block.kind === 'lunch') {
+          for (var c = 0; c < 13; c++) {
+            _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:r,c:c}), _XLSX_STYLE.lunchCell);
+          }
+          continue;
+        }
+        var base = block.banded ? _XLSX_STYLE.bandedCell : _XLSX_STYLE.plainCell;
+        var teamStyle = block.banded ? _XLSX_STYLE.bandedTeamL : _XLSX_STYLE.teamCellL;
+        for (var c = 0; c < 13; c++) {
+          // Local Team (col I=8) and Visiting Team (col J=9) get left alignment
+          var style = (c === 8 || c === 9) ? teamStyle : base;
+          _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:r,c:c}), style);
+        }
+      }
+    });
+
+    // Merge banner + day title across all 13 columns
+    if (!ws['!merges']) ws['!merges'] = [];
+    ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 12 } });
+    ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: 12 } });
+
+    // Set row heights for visual breathing room
+    if (!ws['!rows']) ws['!rows'] = [];
+    ws['!rows'][0] = { hpt: 26 };
+    ws['!rows'][1] = { hpt: 22 };
+    ws['!rows'][2] = { hpt: 30 };
+  }
+
+  function _xlsxStyleGroupsSheet(ws, sectionMap) {
+    // sectionMap: array of {row, kind:'div'|'group'|'team'|'total', mergeCols:bool}
+    sectionMap.forEach(function(s) {
+      var ref = XLSX.utils.encode_cell({r:s.row,c:0});
+      var style = _XLSX_STYLE[
+        s.kind === 'div'   ? 'divHeader' :
+        s.kind === 'group' ? 'grpHeader' :
+        s.kind === 'total' ? 'totalRow'  : 'teamRow'
+      ];
+      _xlsxApplyStyle(ws, ref, style);
+      // For total row, also style col B (the count)
+      if (s.kind === 'total') {
+        _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:s.row,c:1}), _XLSX_STYLE.totalRow);
+      }
+    });
+
+    // Set column widths
+    ws['!cols'] = [{ wch: 36 }, { wch: 12 }];
   }
 
   function exportScheduleToXLSX() {
@@ -6610,27 +6739,33 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     var wb = XLSX.utils.book_new();
 
-    // Sheet 1: GRUPOS FASE PREVIA
-    var gWs = XLSX.utils.aoa_to_sheet(_xlsxBuildGroupsSheet());
+    // ── Sheet 1: GRUPOS FASE PREVIA ────────────────────
+    var groupsResult = _xlsxBuildGroupsSheetWithMap();
+    var gWs = XLSX.utils.aoa_to_sheet(groupsResult.rows);
+    _xlsxStyleGroupsSheet(gWs, groupsResult.sectionMap);
     XLSX.utils.book_append_sheet(wb, gWs, 'GRUPOS FASE PREVIA');
 
-    // Per-day sheets
+    // ── Per-day sheets ─────────────────────────────────
     sched.gameDays.forEach(function(day) {
       var dayIdx = (typeof day.dayIndex === 'number') ? day.dayIndex : sched.gameDays.indexOf(day);
-      var rows = _xlsxBuildDaySheet(day, dayIdx, matchCounter);
-      var ws = XLSX.utils.aoa_to_sheet(rows);
-      // Format column A as time (h:mm) so 0.5 renders as "12:00"
+      var dayResult = _xlsxBuildDaySheetWithMap(day, dayIdx, matchCounter);
+      var ws = XLSX.utils.aoa_to_sheet(dayResult.rows);
+
+      // Format column A (time) as h:mm so the fraction renders as 12:00
       var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
       for (var r = 3; r <= range.e.r; r++) {
         var cell = ws[XLSX.utils.encode_cell({ r: r, c: 0 })];
         if (cell && typeof cell.v === 'number') { cell.t = 'n'; cell.z = 'h:mm'; }
       }
-      // Set reasonable column widths
+      // Column widths
       ws['!cols'] = [
         { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 9 }, { wch: 7 },
         { wch: 14 }, { wch: 7 }, { wch: 14 }, { wch: 28 }, { wch: 28 },
         { wch: 14 }, { wch: 14 }, { wch: 16 }
       ];
+      // Apply colour styling
+      _xlsxStyleDaySheet(ws, dayResult.slotBoundaries);
+
       XLSX.utils.book_append_sheet(wb, ws, _xlsxSheetName(dayIdx));
     });
 
