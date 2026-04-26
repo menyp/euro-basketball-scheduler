@@ -20,6 +20,7 @@ from ortools.sat.python import cp_model
 from itertools import combinations
 from collections import defaultdict
 import json
+import os
 import time
 import re
 
@@ -78,6 +79,11 @@ def solve_schedule(config, time_limit=120):
     last_rr_occupied = None
     last_po_result = None
     last_blocked = None
+    # Lever B: hints carried across iterations (None on iter 1).
+    rr_hints = None  # {g: (d, s, c)} from previous iteration's RR placements
+    po_hints = None  # {p: (d, s, c)} from previous iteration's PO placements
+    # Lever C: detect plateau in blocked count → early bail.
+    last_blocked_count = None
 
     for iteration in range(MAX_ITERATIONS):
         iter_start = time.time()
@@ -89,7 +95,7 @@ def solve_schedule(config, time_limit=120):
         )
 
         rr_result, rr_occupied, p1_status = _solve_phase1(
-            ctx, forbidden_cells, time_limit)
+            ctx, forbidden_cells, time_limit, hints=rr_hints)
 
         if p1_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             # Phase 1 infeasible — can't satisfy RR with these forbidden cells.
@@ -110,7 +116,8 @@ def solve_schedule(config, time_limit=120):
             break
 
         po_result, blocked, p2_status, po_placements = _solve_phase2(
-            ctx, rr_result, rr_occupied, time_limit, po_excluded_cells)
+            ctx, rr_result, rr_occupied, time_limit, po_excluded_cells,
+            hints=po_hints)
 
         iter_summary = (f"Iteration {iteration+1} done in {time.time()-iter_start:.1f}s: "
                         f"{len(rr_result)} RR placed, {len(po_result)} PO placed, "
@@ -132,6 +139,14 @@ def solve_schedule(config, time_limit=120):
             _progress_done()
             return _assemble_sched(rr_result, po_result, [], ctx, config)
 
+        # Lever C: plateau detection — if blocked count didn't shrink, we're
+        # not making progress. Bail before wasting another full iteration.
+        if last_blocked_count is not None and len(blocked) >= last_blocked_count:
+            _progress(f"No improvement vs previous iteration "
+                      f"({last_blocked_count} → {len(blocked)} blocked) — bailing out")
+            break
+        last_blocked_count = len(blocked)
+
         # Derive feedback: RR cells to free up + PO games to evict from
         # cells that block lower/equal-priority PO games.
         new_forbidden, new_po_exclusions = _extract_conflict_cells(
@@ -146,6 +161,14 @@ def solve_schedule(config, time_limit=120):
                   f"{len(added_po)} PO-exclusion cell(s) for next iteration")
         forbidden_cells |= new_forbidden
         po_excluded_cells |= new_po_exclusions
+
+        # Lever B: build hints for next iteration from this iter's placements.
+        # The forbidden/exclusion sets above ensure the hinted cells will be
+        # filtered by add_hint() calls in the next phases, so stale hints get
+        # silently dropped.
+        rr_hints = {g: (rg['day'], rg['slotIdx'], rg['courtIdx'])
+                    for g, rg in enumerate(rr_result)}
+        po_hints = dict(po_placements)  # already {p: (d, s, c)}
 
     # Exhausted iterations (or bailed) with blocked games — return best attempt.
     total_elapsed = time.time() - start_time
@@ -400,7 +423,7 @@ def _is_blacked_out(ctx, court_idx, day_idx, slot_min):
 # PHASE 1 — RR PLACEMENT
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _solve_phase1(ctx, forbidden_cells, time_limit):
+def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     """
     Place RR games. forbidden_cells is a set of (day, slot, court) triples
     RR must avoid (passed from the iterative feedback loop).
@@ -431,6 +454,15 @@ def _solve_phase1(ctx, forbidden_cells, time_limit):
             for s in range(len(day_slots[d])):
                 for c in range(num_courts):
                     x[g, d, s, c] = model.new_bool_var(f'x_{g}_{d}_{s}_{c}')
+
+    # Lever B: warm-start with previous iteration's placements. Hints are
+    # advisory — solver verifies them against constraints and ignores any
+    # that don't satisfy. They speed convergence on iter 2+.
+    if hints:
+        for g, (d, s, c) in hints.items():
+            key = (g, d, s, c)
+            if key in x:
+                model.add_hint(x[key], 1)
 
     for g in range(num_rr):
         model.add_exactly_one([
@@ -557,7 +589,8 @@ def _solve_phase1(ctx, forbidden_cells, time_limit):
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit
-    solver.parameters.num_workers = 8
+    # Lever A: scale workers to available cores (CP-SAT scales near-linearly).
+    solver.parameters.num_workers = min(16, os.cpu_count() or 8)
     status = solver.solve(model)
     _progress(f"Phase 1 status: {ctx['status_names'].get(status, status)}")
 
@@ -588,7 +621,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit):
 # PHASE 2 — PO PLACEMENT (partial-placement allowed)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=None):
+def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=None, hints=None):
     """
     Place PO games given frozen RR. Uses at-most-one per PO (partial allowed)
     with a dominant placement-reward objective so the solver only skips a
@@ -628,6 +661,15 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
             for s in range(len(day_slots[d])):
                 for c in range(num_courts):
                     y[p, d, s, c] = po_model.new_bool_var(f'po_{p}_{d}_{s}_{c}')
+
+    # Lever B: warm-start with previous iteration's PO placements. Hints
+    # are advisory — solver verifies and silently drops any that no longer
+    # satisfy current constraints (e.g. cells now blocked by feedback).
+    if hints:
+        for p, (d, s, c) in hints.items():
+            key = (p, d, s, c)
+            if key in y:
+                po_model.add_hint(y[key], 1)
 
     # Each PO placed at most once (partial placement allowed).
     for p in range(num_po):
@@ -841,7 +883,8 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
 
     po_solver = cp_model.CpSolver()
     po_solver.parameters.max_time_in_seconds = time_limit
-    po_solver.parameters.num_workers = 8
+    # Lever A: scale workers to available cores (CP-SAT scales near-linearly).
+    po_solver.parameters.num_workers = min(16, os.cpu_count() or 8)
     po_status = po_solver.solve(po_model)
     _progress(f"Phase 2 status: {ctx['status_names'].get(po_status, po_status)}")
 
