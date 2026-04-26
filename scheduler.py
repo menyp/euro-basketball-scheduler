@@ -202,10 +202,17 @@ def _build_context(config):
     n_days = int(sf.get('nDays', 3))
     max_gpd = int(sf.get('maxGPD', 2))
     main_venue = sf.get('mainVenue', 'Blanes').strip()
+    secondary_venue = (sf.get('secondaryVenue') or '').strip()
     rule_rest = sf.get('ruleRest', True)
     rule_venue_rest = sf.get('ruleVenueRest', True)
     main_venue_final = sf.get('mainVenueFinal', True)
     main_venue_3rd = sf.get('mainVenue3rd', True)
+    main_venue_sf = sf.get('mainVenueSF', False)
+    # Per-category mode when toggle is ON: 'mandatory' (hard) or
+    # 'high-priority' (soft, prefers main → secondary → anywhere).
+    main_venue_final_mode = sf.get('mainVenueFinalMode', 'mandatory')
+    main_venue_3rd_mode = sf.get('mainVenue3rdMode', 'mandatory')
+    main_venue_sf_mode = sf.get('mainVenueSFMode', 'mandatory')
     lunch_start = _time_to_min(sf.get('lS', '13:30'))
     lunch_end = _time_to_min(sf.get('lE', '14:30'))
 
@@ -225,6 +232,12 @@ def _build_context(config):
     main_venue_lower = main_venue.lower()
     blanes_courts = [i for i, c in enumerate(courts)
                      if c['venue'].lower().find(main_venue_lower) != -1]
+    # Secondary venue courts (only used by the High-Priority tier).
+    secondary_courts = []
+    if secondary_venue and secondary_venue.lower() != main_venue_lower:
+        sv_lower = secondary_venue.lower()
+        secondary_courts = [i for i, c in enumerate(courts)
+                            if c['venue'].lower() == sv_lower]
 
     day_slots = []
     for d in range(n_days):
@@ -392,6 +405,12 @@ def _build_context(config):
         'max_gpd': max_gpd,
         'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
         'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
+        'main_venue_sf': main_venue_sf,
+        'main_venue_final_mode': main_venue_final_mode,
+        'main_venue_3rd_mode': main_venue_3rd_mode,
+        'main_venue_sf_mode': main_venue_sf_mode,
+        'secondary_venue': secondary_venue,
+        'secondary_courts': secondary_courts,
         'lunch_start': lunch_start, 'lunch_end': lunch_end,
         'groups': groups, 'team_div': team_div, 'all_teams': all_teams,
         'rr_matchups': rr_matchups, 'num_rr': num_rr,
@@ -720,9 +739,21 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                         if c not in allowed:
                             po_model.add(y[p, d, s, c] == 0)
 
-    # Finals + 3rd Place at main venue.
+    # Venue Exclusivity — driven by 3 toggles + per-toggle mode.
+    # Toggle ON + mode='mandatory'  → hard constraint: must be at main venue.
+    # Toggle ON + mode='high-priority' → soft tiers added below in the
+    #   objective (main free, secondary medium penalty, elsewhere high).
+    # Toggle OFF → no constraint, no penalty.
+    venue_exclusivity_modes = {
+        'Final': (ctx['main_venue_final'], ctx['main_venue_final_mode']),
+        '3rd':   (ctx['main_venue_3rd'],   ctx['main_venue_3rd_mode']),
+        'SF':    (ctx['main_venue_sf'],    ctx['main_venue_sf_mode']),
+    }
     for p, pg in enumerate(po_games):
-        if pg.get('type') in ('Final', '3rd'):
+        t = pg.get('type')
+        toggle_on, mode = venue_exclusivity_modes.get(t, (False, 'mandatory'))
+        if toggle_on and mode == 'mandatory':
+            # Hard: forbid all non-main-venue courts.
             for d in range(n_days):
                 for s in range(len(day_slots[d])):
                     for c in range(num_courts):
@@ -842,6 +873,28 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                         soft += max(0, (960 - m) // 10)
                     if soft:
                         obj_terms.append(soft * y[p, d, s, c])
+
+    # Venue Exclusivity — High Priority tier (soft).
+    # For PO games whose toggle is ON with mode='high-priority':
+    #   main venue cells: 0 cost (preferred)
+    #   secondary venue cells: SECONDARY_PENALTY (acceptable)
+    #   elsewhere: ELSEWHERE_PENALTY (last resort)
+    SECONDARY_PENALTY = 100
+    ELSEWHERE_PENALTY = 500
+    secondary_courts_set = set(ctx['secondary_courts'])
+    blanes_courts_set = set(blanes_courts)
+    for p, pg in enumerate(po_games):
+        t = pg.get('type')
+        toggle_on, mode = venue_exclusivity_modes.get(t, (False, 'mandatory'))
+        if not (toggle_on and mode == 'high-priority'):
+            continue
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                for c in range(num_courts):
+                    if c in blanes_courts_set:
+                        continue  # main venue → no penalty
+                    pen = SECONDARY_PENALTY if c in secondary_courts_set else ELSEWHERE_PENALTY
+                    obj_terms.append(pen * y[p, d, s, c])
 
     # Soft: 3rd Place before Final (convention — Final is the tournament
     # climax). Uses global-slot int vars channeled to y; penalty fires only
