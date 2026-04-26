@@ -826,9 +826,23 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # Objective: one placement indicator per PO (dominant), plus soft prefs on
     # cell-level y vars. Per-game indicators keep the objective compact and
     # give the solver a simple "maximize placements" signal.
-    # Soft-pref 3 "late afternoon" = 16:00 / 17:30 only. 14:30 (870) is post-
-    # lunch, not prime — excluding it nudges Finals/3rd to the real showcase slots.
-    prime_slots = {960, 1050}
+    # Soft-pref 3 "showcase slot": Finals → 17:30, 3rd Place → 16:00.
+    # Distance-from-target penalty (symmetric) ensures Finals fill 17:30 first
+    # and 3rd Place fills 16:00 first, with 3rd-before-Final reinforced.
+    # Per-division age weighting: when overflow forces medal games to drop a
+    # slot, the YOUNGEST division gets pushed first (U18 keeps 17:30, U12
+    # accepts 16:00). Older brackets are the showcase, by tournament tradition.
+    FINAL_TARGET = 1050   # 17:30
+    THIRD_TARGET = 960    # 16:00
+
+    def _age_weight(divname):
+        """Older brackets get higher weight → larger penalty for being away
+        from their target → solver protects them first when 17:30 is saturated."""
+        m_age = re.search(r'U(\d{2})', divname or '')
+        if not m_age:
+            return 1
+        return {18: 4, 16: 3, 14: 2, 12: 1}.get(int(m_age.group(1)), 1)
+
     placed_vars = []
     for p in range(num_po):
         cell_vars = [y[p, d, s, c]
@@ -866,11 +880,16 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                             soft += div_priority.get(dn, 1)
                     elif c not in blanes_courts:
                         soft += div_priority.get(dn, 1)
-                    if t in ('Final', '3rd') and d == finals_day and m not in prime_slots:
-                        # Graded penalty: earlier slots cost more. 09:00 → 42,
-                        # 10:30 → 33, 12:00 → 24, 14:30 → 9. Nudges Finals away
-                        # from morning when prime (16:00/17:30) is saturated.
-                        soft += max(0, (960 - m) // 10)
+                    if t == 'Final' and d == finals_day:
+                        # Symmetric distance from 17:30, weighted by age priority.
+                        # 17:30 → 0; 16:00 → ±18×age_w; later than 17:30 → also penalized.
+                        soft += _age_weight(dn) * (abs(m - FINAL_TARGET) // 5)
+                    elif t == '3rd' and d == finals_day:
+                        # Symmetric distance from 16:00, weighted by age priority.
+                        # 16:00 → 0; 17:30 → 18×age_w (frees 17:30 for Finals);
+                        # 14:30 → 18×age_w. Solver picks the later side first
+                        # because of the existing 3rd-before-Final preference.
+                        soft += _age_weight(dn) * (abs(m - THIRD_TARGET) // 5)
                     if soft:
                         obj_terms.append(soft * y[p, d, s, c])
 
