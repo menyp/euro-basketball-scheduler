@@ -2736,6 +2736,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var rrDays   = Math.max(1, nDays - 1);
     var dayHours = getDayHours();
     var mv       = (document.getElementById('mainVenue') || {}).value || 'Main Venue';
+    var secV     = (document.getElementById('secondaryVenue') || {}).value || '';
 
     // Read current rule state so the description reflects what is actually active
     var ruleRest      = document.getElementById('ruleRest') && document.getElementById('ruleRest').checked;
@@ -2744,21 +2745,27 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var mvFinal       = document.getElementById('mainVenueFinal') && document.getElementById('mainVenueFinal').checked;
     var mv3rd         = document.getElementById('mainVenue3rd')   && document.getElementById('mainVenue3rd').checked;
     var mvSF          = document.getElementById('mainVenueSF')    && document.getElementById('mainVenueSF').checked;
+    var mvFinalMode   = (document.querySelector('input[name=mainVenueFinalMode]:checked') || {}).value || 'mandatory';
+    var mv3rdMode     = (document.querySelector('input[name=mainVenue3rdMode]:checked')   || {}).value || 'mandatory';
+    var mvSFMode      = (document.querySelector('input[name=mainVenueSFMode]:checked')    || {}).value || 'mandatory';
     var finalTimesVal = (document.getElementById('finalTimes') || {}).value || '16:00, 14:30, 17:30';
 
     function pill(t) { return '<span class="algo-pill">' + t + '</span>'; }
     function on(b)   { return b ? '<span style="color:#68d391;font-weight:700">ON</span>' : '<span style="color:#fc8181;font-weight:700">OFF</span>'; }
     function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-    var pills = [
+    var pillList = [
       'Slot interval: 90 min',
       'Lunch: ' + lS + '\u2013' + lE,
       'Tournament days: ' + nDays,
       'Round-robin days: ' + rrDays,
       'Max games / team / day: ' + maxGPD,
+      'Max group size: 5',
       'Courts: ' + crts.length,
       'Main venue: ' + mv
-    ].map(pill).join('');
+    ];
+    if (secV) pillList.push('Secondary venue: ' + secV);
+    var pills = pillList.map(pill).join('');
 
     // Build per-day slot pills
     var regularSlots = buildTimeSlots(
@@ -2789,19 +2796,50 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       ? '<ul>' + vrRows + '<li><em>All other divisions</em> \u2014 <span style="color:var(--g)">Flexible (any court)</span></li></ul>'
       : '<p style="color:var(--g);font-style:italic">No rules configured — all divisions are Flexible (any court). Add rules in the Venue Priority Rules card.</p>';
 
+    // Venue Blackouts summary (read live from venueBlackouts[])
+    var blackoutRows = '';
+    (window.venueBlackouts || []).forEach(function(b) {
+      var parts = [];
+      if (b.beforeTime) parts.push('before <strong>' + esc(b.beforeTime) + '</strong>');
+      if (b.afterTime)  parts.push('at or after <strong>' + esc(b.afterTime) + '</strong>');
+      if (parts.length === 0) return;
+      blackoutRows += '<li><strong>' + esc(b.venue) + '</strong> — Day ' + (b.day + 1) + ' ' + parts.join(' and ') + '</li>';
+    });
+    var blackoutSection = blackoutRows
+      ? '<ul>' + blackoutRows + '</ul>'
+      : '<p style="color:var(--g);font-style:italic">None configured. Add per-venue, per-day blackout windows in the <em>Venue Availability Restrictions</em> card.</p>';
+
+    // Helpers for rendering each Venue Exclusivity row in its actual current mode.
+    function _vexBadge(toggleOn, mode) {
+      if (!toggleOn) return '<span style="color:#94a3b8;font-weight:700">OFF</span>';
+      if (mode === 'high-priority') return '<span style="color:#f6ad55;font-weight:700">High Priority</span>';
+      return '<span style="color:#fc8181;font-weight:700">Mandatory</span>';
+    }
+    function _vexExplain(toggleOn, mode) {
+      if (!toggleOn) return ' — no preference. Game can land on any allowed court.';
+      if (mode === 'high-priority') {
+        var fallback = secV ? mv + ' → ' + secV + ' → anywhere' : mv + ' → anywhere';
+        return ' — <strong>should prefer ' + mv + '</strong> (soft). Fallback when ' + mv + ' is full: ' + fallback + '.';
+      }
+      return ' — <strong>must be at ' + mv + '</strong> (hard). If no ' + mv + ' slot fits, the game is left unscheduled.';
+    }
+
     return '<div class="algo-config">' + pills + '</div>'
 
       // ── 1. Groups ──────────────────────────────────────────────────────────
       + '<div class="algo-section"><h4>Step 1 — Groups</h4>'
       + '<p>After pasting team lists, click <strong>Assign Groups</strong> (or go to the <strong>Groups</strong> tab) to review the automatic grouping. '
       + 'You can drag teams between groups before generating the schedule.</p>'
-      + '<p><strong>Automatic group sizes:</strong></p><ul>'
+      + '<p><strong>Hard cap (Rule 9):</strong> any group can hold at most <strong>5 teams</strong>. The auto-grouper picks layouts that respect this:</p><ul>'
       + '<li>\u2264 5 teams \u2192 single group (everyone plays everyone)</li>'
       + '<li>6 teams \u2192 2 groups of 3</li>'
       + '<li>7\u20138 teams \u2192 2 groups of 4</li>'
-      + '<li>9\u201312 teams \u2192 3 groups of 3</li>'
-      + '<li>13+ teams \u2192 groups of 4 (balanced)</li>'
+      + '<li>9\u201310 teams \u2192 2 groups of 4\u20135</li>'
+      + '<li>11\u201312 teams \u2192 3 groups of 3\u20134</li>'
+      + '<li>13\u201316 teams \u2192 4 groups of 3\u20134 (balanced)</li>'
+      + '<li>17+ teams \u2192 multiple groups of 4\u20135 (balanced)</li>'
       + '</ul>'
+      + '<p><strong>Round-robin completeness (Rule 1):</strong> within every group, every team plays every other team exactly once. The engine never schedules duplicates and never skips a pairing.</p>'
       + '<p><strong>National mixing:</strong> the app automatically tries to ensure no group contains more than 2 teams from the same country '
       + '(detected from the country code in team names, e.g. <em>"SURREY RAMS (ENG)"</em>). '
       + 'If it is mathematically impossible it will get as close as possible.</p></div>'
@@ -2814,24 +2852,26 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<p style="margin-top:8px">The lunch window (<strong>' + lS + '\u2013' + lE + '</strong>) is blocked automatically. '
       + 'No game can start outside a day\'s configured operating hours.</p></div>'
 
-      // ── 3. Game Spread ─────────────────────────────────────────────────────
-      + '<div class="algo-section"><h4>Step 3 — Spreading Games Across Days</h4>'
-      + '<p>Round-robin games fill the first <strong>' + rrDays + ' day(s)</strong>. '
-      + 'The hard limit is <strong>' + maxGPD + ' game(s) per team per day</strong> — configurable in Setup under <em>Max games per team per day</em>. '
-      + 'The scheduler always fills the main venue (<strong>' + mv + '</strong>) before using external courts, '
-      + 'so every available ' + mv + ' slot is used before a game goes elsewhere.</p>'
+      // ── 3. Game Spread + Daily Limits ──────────────────────────────────────
+      + '<div class="algo-section"><h4>Step 3 — Spreading Games &amp; Daily Limits</h4>'
+      + '<p>Round-robin games fill the first <strong>' + rrDays + ' day(s)</strong>. The last tournament day is reserved for playoffs.</p>'
+      + '<p><strong>Rule 5 — Max games per team per day:</strong> at most <strong>' + maxGPD + '</strong>. Configurable in Setup under <em>Max games per team per day</em>.</p>'
+      + '<p><strong>Rule 10 — Court capacity:</strong> at most one game per court per time slot.</p>'
+      + '<p><strong>Rule 10b — Main-venue guarantee:</strong> every team plays at least <strong>one round-robin game</strong> at <strong>' + mv + '</strong>. The engine guarantees this even when the team\'s division is otherwise scheduled at external courts.</p>'
+      + '<p><strong>Rule 10c — PO-day safety:</strong> on a day where a division has playoff games (semi-finals or finals), each team in that division plays at most <strong>' + Math.max(0, maxGPD - 1) + '</strong> round-robin games on that day. This caps an advancing team\'s total games per day at maxGPD (RR + playoff).</p>'
+      + '<p><strong>Rule 3 — RR before playoffs (per division):</strong> all of a division\'s round-robin games must complete before any of that division\'s playoff games begin. Different divisions may run RR and playoffs on the same day if their schedules permit.</p>'
       + '<p>If the engine cannot fit every game within these constraints, the remaining games are shown as '
       + '<span style="color:#fc8181;font-weight:700">Failed / Unscheduled</span> in the status bar — no rule is silently broken.</p></div>'
 
       // ── 4. Rest Rules ──────────────────────────────────────────────────────
       + '<div class="algo-section"><h4>Rest Rules <span style="font-weight:400;font-size:11px">(Advanced Scheduling Rules card)</span></h4>'
-      + '<p><strong>Team Rest Between Games</strong> ' + on(ruleRest) + '<br>'
+      + '<p><strong>Rule 6 — Team Rest Between Games</strong> ' + on(ruleRest) + '<br>'
       + (ruleRest
           ? 'A team must have at least <strong>one clear slot (90 min)</strong> between any two games on the same day. '
             + 'Example: a team playing at 09:00 cannot play again until 12:00.'
           : 'Currently <em>disabled</em> — teams may be scheduled back-to-back. Enable this when player welfare allows it.')
       + '</p>'
-      + '<p style="margin-top:10px"><strong>Venue Change Rest (180 min actual rest)</strong> ' + on(ruleVR) + '<br>'
+      + '<p style="margin-top:10px"><strong>Rule 7 — Venue Change Rest (180 min actual rest)</strong> ' + on(ruleVR) + '<br>'
       + (ruleVR
           ? 'When a team\'s next game is at a <em>different venue</em>, the team must have at least <strong>180 minutes of actual rest</strong> between the end of the previous game and the tip-off of the next one (a 3-slot gap, equivalent to 270 min start-to-start). '
             + 'Mode: <strong>' + (vrMandatory ? 'Mandatory' : 'High Priority') + '</strong>. '
@@ -2839,26 +2879,45 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                 ? 'Hard constraint — any game that cannot satisfy the gap is left unscheduled rather than violating the rule.'
                 : 'Best-effort — the engine tries hard to respect the gap but may relax it if no other slot is available.')
           : 'Currently <em>disabled</em> — venue changes on the same day have no additional rest requirement beyond the standard team rest.')
-      + '</p></div>'
+      + '</p>'
+      + '<p style="margin-top:10px"><strong>Rule 4 — Semi-final timing:</strong> a semi-final must start at least <strong>90 min before</strong> any later game in its bracket (Final, 3rd Place, or medal). The Final and 3rd Place games always begin at least <strong>180 min after</strong> their SFs (3-slot gap when on the main venue, more if a venue change is involved).</p></div>'
 
       // ── 5. Venue Priority ──────────────────────────────────────────────────
-      + '<div class="algo-section"><h4>Venue Priority Rules <span style="font-weight:400;font-size:11px">(Venue Priority Rules card)</span></h4>'
-      + '<p>Each division can be assigned a court priority for <strong>' + mv + '</strong>. '
-      + 'Add or remove rules using the <em>+ Add Priority Rule</em> button in the Setup tab.</p>'
-      + '<p><strong>Priority levels:</strong></p><ul>'
-      + '<li><strong>Mandatory (' + mv + ' only)</strong> \u2014 <em>all</em> games for that division (round-robin, semi-finals, consolation, medal games) are placed exclusively at ' + mv + '. '
-        + 'If ' + mv + ' has no capacity the game is left unscheduled — it will never move to an external court.</li>'
-      + '<li><strong>High Priority</strong> \u2014 ' + mv + ' slots are strongly preferred; the engine falls back to external courts only when ' + mv + ' is fully occupied at that time.</li>'
+      + '<div class="algo-section"><h4>Venue Priority Rules (per division) <span style="font-weight:400;font-size:11px">(Venue Priority Rules card)</span></h4>'
+      + '<p>Each division can be configured with a list of allowed venues and a mode. The list can include <strong>multiple venues</strong> (e.g. <em>Blanes + Pineda</em>) \u2014 not only the main venue. Add or remove rules using the <em>+ Add Priority Rule</em> button.</p>'
+      + '<p><strong>Modes:</strong></p><ul>'
+      + '<li><strong>Mandatory</strong> \u2014 <em>all</em> games for that division (round-robin, semi-finals, consolation, medal games) are placed exclusively at the listed venues. '
+        + 'If those venues have no capacity, the game is left unscheduled — it never lands on a non-listed venue.</li>'
+      + '<li><strong>High Priority</strong> \u2014 listed venues are strongly preferred; the engine falls back to other courts only when the listed venues are fully occupied at that time.</li>'
       + '<li><strong>Flexible</strong> (default, no rule needed) \u2014 any available court is used, with ' + mv + ' still filled first before external courts.</li>'
       + '</ul>'
       + '<p><strong>Current rules:</strong></p>' + vrSection + '</div>'
 
       // ── 6. Venue Exclusivity ───────────────────────────────────────────────
-      + '<div class="algo-section"><h4>Venue Exclusivity <span style="font-weight:400;font-size:11px">(Venue Exclusivity card)</span></h4>'
-      + '<p>Controls which specific playoff games <em>must</em> be held at <strong>' + mv + '</strong>:</p><ul>'
-      + '<li><strong>Championship Final</strong> \u2014 ' + on(mvFinal) + (mvFinal ? ' Must be at ' + mv + '.' : ' Can use any court.') + '</li>'
-      + '<li><strong>3rd Place game</strong> \u2014 ' + on(mv3rd) + (mv3rd ? ' Must be at ' + mv + '.' : ' Can use any court.') + '</li>'
-      + '<li><strong>Semi-finals</strong> \u2014 ' + on(mvSF) + (mvSF ? ' Must be at ' + mv + '.' : ' Prefer external courts, keeping ' + mv + ' free for medal games.') + '</li>'
+      + '<div class="algo-section"><h4>Venue Exclusivity (Final / 3rd / Semi-finals) <span style="font-weight:400;font-size:11px">(Venue Exclusivity card)</span></h4>'
+      + '<p>Each playoff category has its own toggle. When ON, choose between <strong>Mandatory</strong> (hard) and <strong>High Priority</strong> (soft, falls back to the Secondary Venue then to anywhere). When OFF, the game can land on any allowed court.</p>'
+      + '<p><strong>Main venue:</strong> <strong>' + mv + '</strong>'
+        + (secV ? ' &middot; <strong>Secondary venue:</strong> <strong>' + secV + '</strong>' : ' &middot; <em>Secondary venue not configured</em>')
+        + '</p>'
+      + '<p><strong>Current settings:</strong></p><ul>'
+      + '<li><strong>Rule 11 \u2014 Championship Final</strong> ' + _vexBadge(mvFinal, mvFinalMode) + _vexExplain(mvFinal, mvFinalMode) + '</li>'
+      + '<li><strong>Rule 12 \u2014 3rd Place game</strong> ' + _vexBadge(mv3rd, mv3rdMode) + _vexExplain(mv3rd, mv3rdMode) + '</li>'
+      + '<li><strong>Rule 13 \u2014 Semi-finals</strong> ' + _vexBadge(mvSF, mvSFMode) + _vexExplain(mvSF, mvSFMode) + '</li>'
+      + '</ul></div>'
+
+      // \u2500\u2500 6b. Venue Blackouts \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      + '<div class="algo-section"><h4>Venue Blackouts <span style="font-weight:400;font-size:11px">(Venue Availability Restrictions card)</span></h4>'
+      + '<p><strong>Rule 8 \u2014 Hard blackout windows.</strong> A blackout marks specific times on a specific day at a specific venue as unavailable \u2014 the engine treats those slots as if the courts did not exist. Useful when a venue has a regional event, a school activity, or limited morning/evening access.</p>'
+      + '<p>Format: per venue, per day, you can block <em>before</em> a time (no games before that time on that day) and/or <em>at or after</em> a time (no games at or after that time on that day).</p>'
+      + '<p><strong>Active blackouts:</strong></p>' + blackoutSection + '</div>'
+
+      // \u2500\u2500 7. Soft Preferences \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      + '<div class="algo-section"><h4>Soft Preferences (objective \u2014 nudges, not hard rules)</h4>'
+      + '<p>These are not constraints \u2014 they are weighted terms in the solver\'s objective function. The engine tries to satisfy them but may trade them off against each other when the schedule is tight.</p><ul>'
+      + '<li><strong>Division priority hierarchy</strong> \u2014 the order of divisions in the Setup tab matters. Higher-priority divisions (top of the list, e.g. <em>U18 BOYS</em>) get the strongest pull toward ' + mv + ' courts during round-robin. The weight is exponential (each rank up roughly doubles the pull) so the top division dominates ' + mv + ' allocation when slots are scarce.</li>'
+      + '<li><strong>Prime-time Finals</strong> \u2014 the Championship Final earns a graded reward for landing in the prime-time window (16:00\u201317:30 by default). The closer to the configured Finals Preferred Times, the larger the reward. This is on top of the hard \u201cmust be at ' + mv + '\u201d when Final is set to Mandatory.</li>'
+      + '<li><strong>3rd Place before Final</strong> \u2014 within the same bracket, the 3rd Place game is preferred earlier than the Championship Final on finals day. Avoids the medal ceremony for 3rd happening after the gold-medal game has already finished.</li>'
+      + '<li><strong>Main-venue density</strong> \u2014 ' + mv + ' courts are preferred over external courts for round-robin games when no division-level rule overrides this. Keeps the host venue busy for spectators and reduces team travel.</li>'
       + '</ul></div>'
 
       // ── 7. Playoffs ────────────────────────────────────────────────────────
@@ -2873,20 +2932,46 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + 'and SFs on the finals day with a fallback to main venue if external courts are full. '
       + 'The Championship Final and 3rd Place game always start at least <strong>180 minutes (2 slots)</strong> after their semi-finals begin.</p>'
       + '<p><strong>Finals preferred times</strong> (currently: <em>' + esc(finalTimesVal) + '</em>): '
-      + 'the Championship Final is anchored to the closest available ' + mv + ' slot to these times — first match wins. '
+      + 'the Championship Final is anchored toward these times via a graded reward — the closer to the configured prime-time, the larger the bonus. '
       + 'Change this in Setup under <em>Finals Preferred Times</em>.</p>'
+      + '<p><strong>3rd Place before Final (soft):</strong> within the same bracket, the 3rd Place game is preferred earlier on finals day than the Championship Final, so the bronze medal is decided before the gold-medal game finishes.</p>'
       + '<p>Playoff team slots show placeholders (e.g. <em>"1st Group A"</em>) until all round-robin scores are entered — they fill in automatically once the round-robin is complete.</p></div>'
 
-      // ── 8. Guarantees ──────────────────────────────────────────────────────
-      + '<div class="algo-section"><h4>What the Scheduler Always Guarantees</h4><ul>'
-      + '<li>\u2705 No team ever plays on two courts at the same time (double-booking is impossible).</li>'
-      + '<li>\u2705 No team ever plays against itself.</li>'
-      + (ruleRest ? '<li>\u2705 Minimum 90-minute gap between a team\'s games on the same day.</li>' : '<li>\u26A0\uFE0F Team rest is currently <strong>OFF</strong> — back-to-back games are allowed.</li>')
-      + (ruleVR   ? '<li>\u2705 Minimum 180-minute <em>actual rest</em> (270 min start-to-start, a 3-slot gap) when a team switches venues on the same day' + (vrMandatory ? ' (hard constraint).' : ' (best-effort).') + '</li>' : '<li>\u26A0\uFE0F Venue-change rest is currently <strong>OFF</strong> — no extra gap is required when switching venues.</li>')
-      + '<li>\u2705 Divisions set to <strong>Mandatory</strong> in Venue Priority Rules are always at ' + mv + ' — they are never quietly moved to another venue.</li>'
-      + (mvFinal ? '<li>\u2705 Championship Final is always at <strong>' + mv + '</strong>.</li>' : '')
-      + (mv3rd   ? '<li>\u2705 3rd Place game is always at <strong>' + mv + '</strong>.</li>' : '')
-      + '<li>\u2705 ' + mv + ' courts are filled before external courts for every division (maximum ' + mv + ' utilisation).</li>'
+      // ── 9. Engine ──────────────────────────────────────────────
+      + '<div class="algo-section"><h4>Engine — How the Solver Works</h4>'
+      + '<p>The scheduler uses <strong>Google OR-Tools CP-SAT</strong>, an industrial constraint-programming solver (Python backend, Flask server). It is mathematically guaranteed to find an optimal placement if one exists within the allowed time budget — or to prove that no valid schedule exists.</p>'
+      + '<p><strong>Iterative two-phase model:</strong></p><ul>'
+      + '<li><strong>Phase 1 — Round Robin.</strong> Places all RR games respecting Rules 1, 5, 6, 7, 8, 9, 10, 10b, 10c.</li>'
+      + '<li><strong>Phase 2 — Playoffs.</strong> With the RR placement frozen, places semi-finals, 3rd Place and Final respecting Rules 3, 4, 11, 12, 13.</li>'
+      + '<li><strong>Feedback loop (PO-blocks-PO).</strong> If Phase 2 cannot fit a playoff game, the engine identifies the RR cells that are blocking it and re-runs Phase 1 with those cells excluded. Up to <strong>4 iterations</strong>.</li>'
+      + '</ul>'
+      + '<p><strong>Performance optimisations (Tier 1):</strong></p><ul>'
+      + '<li><strong>Multi-core search</strong> — the solver runs on up to 16 CPU workers in parallel.</li>'
+      + '<li><strong>Warm-start hints</strong> — each iteration seeds the next with its best placement so far, so re-runs converge much faster than a cold start.</li>'
+      + '<li><strong>Plateau bail</strong> — when the objective stops improving for several seconds, the solver returns its best result instead of burning the full time budget.</li>'
+      + '</ul>'
+      + '<p><strong>Live progress.</strong> While the solver runs, a banner above the schedule shows the current iteration, phase and status — long runs are not silent.</p>'
+      + '<p><strong>Failure surfacing.</strong> If even after 4 iterations some games cannot be placed, those exact games are listed in the status bar as <span style="color:#fc8181;font-weight:700">Failed / Unscheduled</span> with the division, opponents, and which constraints failed. The schedule that <em>does</em> place is still emitted — admins can adjust the config and re-run.</p></div>'
+
+      // ── 10. Guarantees ─────────────────────────────────────────────────────
+      + '<div class="algo-section"><h4>What the Scheduler Always Guarantees (hard rules)</h4>'
+      + '<p>Each rule is enforced as a hard constraint inside CP-SAT. If a rule cannot be satisfied for a particular game, that game is left <strong>unscheduled</strong> rather than the rule being silently broken.</p><ul>'
+      + '<li>\u2705 <strong>Rule 1 \u2014 RR completeness.</strong> Within every group, every team plays every other team exactly once.</li>'
+      + '<li>\u2705 <strong>Rule 2 \u2014 No double-booking.</strong> A team is never on two courts at the same time, and never plays against itself.</li>'
+      + '<li>\u2705 <strong>Rule 3 \u2014 RR before playoffs (per division).</strong> A division\'s round-robin completes before any of its playoff games begin.</li>'
+      + '<li>\u2705 <strong>Rule 4 \u2014 Semi-final timing.</strong> The Final and 3rd Place games begin at least 180 min after their semi-finals.</li>'
+      + '<li>\u2705 <strong>Rule 5 \u2014 Max games per team per day:</strong> at most <strong>' + maxGPD + '</strong>.</li>'
+      + (ruleRest ? '<li>\u2705 <strong>Rule 6 \u2014 Team rest:</strong> minimum 90-minute gap between a team\'s games on the same day.</li>' : '<li>\u26A0\uFE0F <strong>Rule 6 — Team rest</strong> is currently <strong>OFF</strong> (back-to-back games allowed).</li>')
+      + (ruleVR   ? '<li>\u2705 <strong>Rule 7 \u2014 Venue-change rest:</strong> 180 min actual rest (3-slot gap) when a team switches venues on the same day' + (vrMandatory ? ' (hard).' : ' (best-effort).') + '</li>' : '<li>\u26A0\uFE0F <strong>Rule 7 — Venue-change rest</strong> is currently <strong>OFF</strong>.</li>')
+      + '<li>\u2705 <strong>Rule 8 \u2014 Venue blackouts.</strong> Configured blackout windows are honoured; the engine will never place a game in a blacked-out slot.</li>'
+      + '<li>\u2705 <strong>Rule 9 \u2014 Max group size:</strong> at most 5 teams per group.</li>'
+      + '<li>\u2705 <strong>Rule 10 \u2014 Court capacity:</strong> at most one game per court per slot.</li>'
+      + '<li>\u2705 <strong>Rule 10b \u2014 Main-venue guarantee:</strong> every team plays at least one round-robin game at <strong>' + mv + '</strong>.</li>'
+      + '<li>\u2705 <strong>Rule 10c \u2014 PO-day RR cap:</strong> on a day with playoff games, a division\'s teams play at most ' + Math.max(0, maxGPD - 1) + ' RR games that day.</li>'
+      + '<li>\u2705 Divisions set to <strong>Mandatory</strong> in Venue Priority Rules are always at their listed venues.</li>'
+      + '<li>\u2705 <strong>Rule 11 \u2014 Final venue:</strong> ' + (mvFinal ? (mvFinalMode === 'mandatory' ? 'Championship Final must be at <strong>' + mv + '</strong> (Mandatory).' : 'Championship Final prefers <strong>' + mv + '</strong>' + (secV ? ' \u2192 ' + secV : '') + ' \u2192 anywhere (High Priority).') : 'no preference (toggle is OFF).') + '</li>'
+      + '<li>\u2705 <strong>Rule 12 \u2014 3rd Place venue:</strong> ' + (mv3rd ? (mv3rdMode === 'mandatory' ? '3rd Place must be at <strong>' + mv + '</strong> (Mandatory).' : '3rd Place prefers <strong>' + mv + '</strong>' + (secV ? ' \u2192 ' + secV : '') + ' \u2192 anywhere (High Priority).') : 'no preference (toggle is OFF).') + '</li>'
+      + '<li>\u2705 <strong>Rule 13 \u2014 Semi-final venue:</strong> ' + (mvSF ? (mvSFMode === 'mandatory' ? 'Semi-finals must be at <strong>' + mv + '</strong> (Mandatory).' : 'Semi-finals prefer <strong>' + mv + '</strong>' + (secV ? ' \u2192 ' + secV : '') + ' \u2192 anywhere (High Priority).') : 'no preference (toggle is OFF).') + '</li>'
       + '<li>\u2705 Each day\'s games respect that day\'s operating hours (finals day ends at <strong>' + finalHours.end + '</strong>).</li>'
       + '<li>\u2705 No games are placed during the lunch break (<strong>' + lS + '\u2013' + lE + '</strong>).</li>'
       + '<li>\u26A0\uFE0F If a game cannot be placed without breaking a rule, it is reported as <strong>Failed / Unscheduled</strong> — no constraint is silently violated.</li>'
