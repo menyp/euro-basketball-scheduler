@@ -342,6 +342,25 @@ def _build_context(config):
         before = _time_to_min(bo['beforeTime']) if bo.get('beforeTime') else -1
         blackout_map[key].append((after, before))
 
+    # Lever D helper: contiguous court-index groups for each multi-court venue.
+    # Courts are appended sequentially per site in build order, so courts of
+    # the same venue have consecutive indices. Within a venue all courts are
+    # functionally interchangeable in the model (div_allowed_courts and
+    # blackout_map both operate at venue granularity), so we can break the
+    # search-tree symmetry safely. Single-court venues are skipped.
+    venue_court_groups = []
+    i = 0
+    while i < num_courts:
+        venue = courts[i]['venue']
+        grp = [i]
+        j = i + 1
+        while j < num_courts and courts[j]['venue'] == venue:
+            grp.append(j)
+            j += 1
+        if len(grp) >= 2:
+            venue_court_groups.append(grp)
+        i = j
+
     po_games = _build_po_structure(divisions, groups)
 
     finals_day = n_days - 1
@@ -435,6 +454,7 @@ def _build_context(config):
         'po_start_day': po_start_day, 'reserve': reserve,
         'div_priority': div_priority,
         'final_target': final_target, 'third_target': third_target,
+        'venue_court_groups': venue_court_groups,
         'status_names': {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE',
                          cp_model.INFEASIBLE: 'INFEASIBLE', cp_model.UNKNOWN: 'UNKNOWN',
                          cp_model.MODEL_INVALID: 'MODEL_INVALID'},
@@ -597,6 +617,29 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 for c in range(num_courts):
                     if _is_blacked_out(ctx, c, d, day_slots[d][s]):
                         model.add(x[g, d, s, c] == 0)
+
+    # Lever D: symmetry breaking on interchangeable courts. Within each
+    # multi-court venue, force courts to fill in canonical order at every
+    # (day, slot): occupancy at court_k must be >= occupancy at court_{k+1}.
+    # This collapses N! equivalent permutations of which game sits on which
+    # court at the same venue, shrinking the search tree without excluding
+    # any feasible schedule. We skip slots that are RR-forbidden (rr_slot_mask)
+    # and pairs where forbidden_cells introduces asymmetry — applying the
+    # constraint there would propagate forced zeros to free courts.
+    for grp in ctx['venue_court_groups']:
+        for d in range(n_days):
+            allowed = rr_slot_mask.get(d, set())
+            for s in range(len(day_slots[d])):
+                if s not in allowed:
+                    continue
+                free = [c for c in grp if (d, s, c) not in forbidden_cells]
+                if len(free) < 2:
+                    continue
+                for k in range(len(free) - 1):
+                    c1, c2 = free[k], free[k + 1]
+                    z1 = sum(x[g, d, s, c1] for g in range(num_rr))
+                    z2 = sum(x[g, d, s, c2] for g in range(num_rr))
+                    model.add(z1 >= z2)
 
     # Soft objective: prefer main venue for RR.
     outer_courts = [i for i in range(num_courts) if i not in blanes_courts]
@@ -809,6 +852,32 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                 for c in range(num_courts):
                     if _is_blacked_out(ctx, c, d, day_slots[d][s]):
                         po_model.add(y[p, d, s, c] == 0)
+
+    # Lever D: symmetry breaking on interchangeable courts. Same idea as in
+    # Phase 1, but here we must skip (d, s) pairs where ANY court in the
+    # group is RR-occupied or has a per-cell PO exclusion — that asymmetry
+    # would propagate forced zeros to free courts and exclude valid
+    # placements. When all courts in the group are unrestricted at (d, s)
+    # we add the lex-ordering constraint that collapses court permutations.
+    _po_excluded_cell_set = set()
+    if po_excluded_cells:
+        for (_p, _d, _s, _c) in po_excluded_cells:
+            _po_excluded_cell_set.add((_d, _s, _c))
+    for grp in ctx['venue_court_groups']:
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                symmetric = True
+                for c in grp:
+                    if (d, s, c) in rr_occupied or (d, s, c) in _po_excluded_cell_set:
+                        symmetric = False
+                        break
+                if not symmetric:
+                    continue
+                for k in range(len(grp) - 1):
+                    c1, c2 = grp[k], grp[k + 1]
+                    z1 = sum(y[p, d, s, c1] for p in range(num_po))
+                    z2 = sum(y[p, d, s, c2] for p in range(num_po))
+                    po_model.add(z1 >= z2)
 
     # Rest between RR and PO for candidate teams.
     rr_by_team_day = defaultdict(list)
