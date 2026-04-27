@@ -433,48 +433,49 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap;min-width:120px">Main Venue</span>
             <select id="mainVenue" style="width:160px;margin:0"></select>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
             <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap;min-width:120px">Secondary Venue</span>
             <select id="secondaryVenue" style="width:160px;margin:0"></select>
+            <span style="font-size:11px;color:var(--g);font-style:italic">Fallback when a row below is set to High Priority</span>
           </div>
-          <p style="font-size:11px;color:var(--g);margin:0 0 12px 0;font-style:italic">Used only when a category below is set to <strong>High Priority</strong> — solver tries main venue first, then falls back to secondary, then anywhere.</p>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-bottom:10px">Main Venue Preference</div>
-          <div style="display:flex;flex-direction:column;gap:10px" id="venueExclRows">
-            <div class="vex-row" data-vex="Final" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);margin-bottom:4px">Main Venue Preference</div>
+          <p style="font-size:11px;color:var(--g);margin:0 0 12px 0;font-style:italic;line-height:1.5">
+            <strong>Mandatory</strong> = game must be at Main Venue (otherwise left unscheduled).
+            <strong>High Priority</strong> = prefer Main Venue, fall back to Secondary, then any court.
+          </p>
+          <div id="venueExclRows" style="display:grid;grid-template-columns:auto 110px auto;gap:12px 16px;align-items:center">
+            <div class="vex-row" data-vex="Final" style="display:contents">
               <label class="rule-toggle" style="margin:0">
                 <input type="checkbox" id="mainVenueFinal" class="vex-toggle" data-mode-target="mainVenueFinalMode" checked>
                 <span class="rule-slider"></span>
               </label>
-              <span style="font-size:13px;font-weight:600;min-width:80px">Final</span>
-              <span class="vex-mode" data-vex-mode-for="mainVenueFinalMode" style="display:inline-flex;gap:8px;font-size:11px">
-                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueFinalMode" value="mandatory" checked>Mandatory</label>
-                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueFinalMode" value="high-priority">High Priority</label>
+              <span style="font-size:13px;font-weight:600">Final</span>
+              <span class="vex-mode" data-vex-mode-for="mainVenueFinalMode" style="display:inline-flex;gap:12px;font-size:11px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="mainVenueFinalMode" value="mandatory" checked>Mandatory</label>
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="mainVenueFinalMode" value="high-priority">High Priority</label>
               </span>
-              <span class="vex-desc" style="font-size:11px;color:var(--g);flex:1;min-width:200px">Championship Final placement preference</span>
             </div>
-            <div class="vex-row" data-vex="3rd" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="vex-row" data-vex="3rd" style="display:contents">
               <label class="rule-toggle" style="margin:0">
                 <input type="checkbox" id="mainVenue3rd" class="vex-toggle" data-mode-target="mainVenue3rdMode" checked>
                 <span class="rule-slider"></span>
               </label>
-              <span style="font-size:13px;font-weight:600;min-width:80px">3rd Place</span>
-              <span class="vex-mode" data-vex-mode-for="mainVenue3rdMode" style="display:inline-flex;gap:8px;font-size:11px">
-                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenue3rdMode" value="mandatory" checked>Mandatory</label>
-                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenue3rdMode" value="high-priority">High Priority</label>
+              <span style="font-size:13px;font-weight:600">3rd Place</span>
+              <span class="vex-mode" data-vex-mode-for="mainVenue3rdMode" style="display:inline-flex;gap:12px;font-size:11px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="mainVenue3rdMode" value="mandatory" checked>Mandatory</label>
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="mainVenue3rdMode" value="high-priority">High Priority</label>
               </span>
-              <span class="vex-desc" style="font-size:11px;color:var(--g);flex:1;min-width:200px">3rd Place game placement preference</span>
             </div>
-            <div class="vex-row" data-vex="SF" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="vex-row" data-vex="SF" style="display:contents">
               <label class="rule-toggle" style="margin:0">
                 <input type="checkbox" id="mainVenueSF" class="vex-toggle" data-mode-target="mainVenueSFMode">
                 <span class="rule-slider"></span>
               </label>
-              <span style="font-size:13px;font-weight:600;min-width:80px">Semifinals</span>
-              <span class="vex-mode" data-vex-mode-for="mainVenueSFMode" style="display:inline-flex;gap:8px;font-size:11px">
-                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueSFMode" value="mandatory" checked>Mandatory</label>
-                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><input type="radio" name="mainVenueSFMode" value="high-priority">High Priority</label>
+              <span style="font-size:13px;font-weight:600">Semifinals</span>
+              <span class="vex-mode" data-vex-mode-for="mainVenueSFMode" style="display:inline-flex;gap:12px;font-size:11px">
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="mainVenueSFMode" value="mandatory" checked>Mandatory</label>
+                <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px"><input type="radio" name="mainVenueSFMode" value="high-priority">High Priority</label>
               </span>
-              <span class="vex-desc" style="font-size:11px;color:var(--g);flex:1;min-width:200px">Semifinal placement preference</span>
             </div>
           </div>
         </div>
@@ -986,7 +987,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     document.querySelectorAll('.vex-row').forEach(function (row) {
       var toggle = row.querySelector('.vex-toggle');
       var modeSpan = row.querySelector('.vex-mode');
-      var desc = row.querySelector('.vex-desc');
       if (!toggle || !modeSpan) return;
       var isOn = toggle.checked;
       modeSpan.style.opacity = isOn ? '1' : '0.35';
@@ -994,19 +994,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       modeSpan.querySelectorAll('input[type=radio]').forEach(function (r) {
         r.disabled = !isOn;
       });
-      if (desc) {
-        if (!isOn) {
-          desc.textContent = 'OFF — no preference';
-        } else {
-          var mode = (modeSpan.querySelector('input[type=radio]:checked') || {}).value || 'mandatory';
-          var label = row.dataset.vex || '';
-          if (mode === 'mandatory') {
-            desc.textContent = label + ' MUST be at Main Venue (hard rule)';
-          } else {
-            desc.textContent = label + ' SHOULD be at Main Venue → Secondary → anywhere (soft)';
-          }
-        }
-      }
     });
   }
   function renderSites() {
