@@ -7111,12 +7111,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         lE:                    getFieldVal('lE'),
         finalTimes:            getFieldVal('finalTimes'),
         mainVenue:             getFieldVal('mainVenue'),
+        secondaryVenue:        getFieldVal('secondaryVenue'),
         ruleRest:              getFieldChecked('ruleRest'),
         ruleVenueRest:         getFieldChecked('ruleVenueRest'),
         venueRestModeMandatory:getFieldChecked('venueRestModeMandatory'),
         mainVenueFinal:        getFieldChecked('mainVenueFinal'),
         mainVenue3rd:          getFieldChecked('mainVenue3rd'),
         mainVenueSF:           getFieldChecked('mainVenueSF'),
+        mainVenueFinalMode:    (document.querySelector('input[name=mainVenueFinalMode]:checked') || {}).value || 'mandatory',
+        mainVenue3rdMode:      (document.querySelector('input[name=mainVenue3rdMode]:checked')   || {}).value || 'mandatory',
+        mainVenueSFMode:       (document.querySelector('input[name=mainVenueSFMode]:checked')    || {}).value || 'mandatory',
         dayHours:              getDayHours()
       }
     }, null, 2);
