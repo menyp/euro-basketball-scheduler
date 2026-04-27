@@ -377,9 +377,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       <div id="dayHoursContainer"></div>
       <label style="margin-top:18px">Max games per team per day</label>
       <input type="number" id="maxGPD" value="2" min="1" max="10">
-      <label style="margin-top:18px">Finals Preferred Times <span style="font-weight:400;font-size:12px;opacity:.7">(order matters, comma-separated)</span></label>
-      <input type="text" id="finalTimes" value="16:00, 14:30, 17:30" placeholder="e.g. 16:00, 14:30, 17:30" style="width:220px">
-      <p class="help" style="margin-top:4px">FINAL games on the last day will be anchored to the closest available slot at these times (first match wins).</p>
+      <label style="margin-top:18px">Finals Target Time Slot</label>
+      <select id="finalTimes" style="width:160px"></select>
+      <p class="help" style="margin-top:4px">Finals will be placed as close to this slot as possible. Older brackets (U18) get the slot first when capacity is tight; younger brackets overflow one slot earlier.</p>
     </div>
 
     <!-- Hidden legacy toggles (not surfaced in UI) -->
@@ -1162,6 +1162,40 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     h += '</div>';
     document.getElementById('dayHoursContainer').innerHTML = h;
     renderVenueBlackouts(); // refresh day dropdowns when nDays changes
+    renderFinalsDropdown(); // refresh target-slot options when finals day hours change
+    // Wire change-listeners on day-hours inputs so the Finals dropdown stays in sync.
+    var n2 = parseInt(document.getElementById('nDays').value) || 3;
+    for (var di = 0; di < n2; di++) {
+      var sEl = document.getElementById('dayStart_' + di);
+      var eEl = document.getElementById('dayEnd_' + di);
+      if (sEl) sEl.addEventListener('change', renderFinalsDropdown);
+      if (eEl) eEl.addEventListener('change', renderFinalsDropdown);
+    }
+  }
+
+  // ── Finals target dropdown ────────────────────────────
+  // Populates #finalTimes with the actual time slots available on finals day.
+  // Re-runs whenever finals-day operating hours or lunch window change so the
+  // option set never goes stale. The selected value is sent to the CP-SAT solver
+  // as setupFields.finalTimes and drives FINAL_TARGET / THIRD_TARGET there.
+  function renderFinalsDropdown() {
+    var sel = document.getElementById('finalTimes');
+    if (!sel) return;
+    var prev = sel.value;
+    var dh = getDayHours();
+    if (!dh.length) return;
+    var lastDay = dh[dh.length - 1];
+    var lS = (document.getElementById('lS') || {}).value || '13:30';
+    var lE = (document.getElementById('lE') || {}).value || '14:30';
+    var slots = buildTimeSlots(toM(lastDay.start), toM(lastDay.end), toM(lS), toM(lE));
+    var slotStrs = slots.map(toT);
+    sel.innerHTML = slotStrs.map(function(s) {
+      return '<option value="' + s + '">' + s + '</option>';
+    }).join('');
+    // Restore previous selection if still valid; otherwise default to the last slot
+    // (matches the "as late as possible" intent admins expect).
+    if (slotStrs.indexOf(prev) !== -1) sel.value = prev;
+    else sel.value = slotStrs[slotStrs.length - 1] || '';
   }
 
   // ── Scheduling helpers ─────────────────────────────────
@@ -2749,7 +2783,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var mvFinalMode   = (document.querySelector('input[name=mainVenueFinalMode]:checked') || {}).value || 'mandatory';
     var mv3rdMode     = (document.querySelector('input[name=mainVenue3rdMode]:checked')   || {}).value || 'mandatory';
     var mvSFMode      = (document.querySelector('input[name=mainVenueSFMode]:checked')    || {}).value || 'mandatory';
-    var finalTimesVal = (document.getElementById('finalTimes') || {}).value || '16:00, 14:30, 17:30';
+    var finalTimesVal = (document.getElementById('finalTimes') || {}).value || '17:30';
+    // Helper used in Soft Preferences and Playoffs sections — derives the
+    // 3rd Place target one slot earlier than the Final target.
+    function _xlsxThirdTargetLabel(ftVal) {
+      try {
+        var m = toM(ftVal);
+        return toT(Math.max(0, m - 90));
+      } catch (e) { return '16:00'; }
+    }
 
     function pill(t) { return '<span class="algo-pill">' + t + '</span>'; }
     function on(b)   { return b ? '<span style="color:#68d391;font-weight:700">ON</span>' : '<span style="color:#fc8181;font-weight:700">OFF</span>'; }
@@ -2916,7 +2958,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<div class="algo-section"><h4>Soft Preferences (objective \u2014 nudges, not hard rules)</h4>'
       + '<p>These are not constraints \u2014 they are weighted terms in the solver\'s objective function. The engine tries to satisfy them but may trade them off against each other when the schedule is tight.</p><ul>'
       + '<li><strong>Division priority hierarchy</strong> \u2014 the order of divisions in the Setup tab matters. Higher-priority divisions (top of the list, e.g. <em>U18 BOYS</em>) get the strongest pull toward ' + mv + ' courts during round-robin. The weight is exponential (each rank up roughly doubles the pull) so the top division dominates ' + mv + ' allocation when slots are scarce.</li>'
-      + '<li><strong>Showcase-slot Finals</strong> \u2014 each Championship Final is pulled toward <strong>17:30</strong> via a symmetric distance-from-target penalty. 3rd Place games are pulled toward <strong>16:00</strong> instead, so they don\'t compete with Finals for the same court at 17:30. <strong>Older brackets (U18) get priority</strong> for 17:30: when overflow forces a Final to drop a slot, the youngest division goes first (U12 \u2192 U14 \u2192 U16 \u2192 U18). This is on top of the hard \u201cmust be at ' + mv + '\u201d when Final is set to Mandatory.</li>'
+      + '<li><strong>Showcase-slot Finals</strong> \u2014 each Championship Final is pulled toward the configured target slot (<strong>' + esc(finalTimesVal) + '</strong>) via a symmetric distance-from-target penalty. 3rd Place games target the slot one step earlier (<strong>' + esc(_xlsxThirdTargetLabel(finalTimesVal)) + '</strong>) so they don\'t compete with Finals for the same court. <strong>Older brackets (U18) get priority</strong> for the target slot: when overflow forces a Final to drop a slot, the youngest division goes first (U12 \u2192 U14 \u2192 U16 \u2192 U18). This is on top of the hard \u201cmust be at ' + mv + '\u201d when Final is set to Mandatory.</li>'
       + '<li><strong>3rd Place before Final</strong> \u2014 within the same bracket, the 3rd Place game is preferred earlier than the Championship Final on finals day. Avoids the medal ceremony for 3rd happening after the gold-medal game has already finished.</li>'
       + '<li><strong>Main-venue density</strong> \u2014 ' + mv + ' courts are preferred over external courts for round-robin games when no division-level rule overrides this. Keeps the host venue busy for spectators and reduces team travel.</li>'
       + '</ul></div>'
@@ -2932,9 +2974,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + 'SFs on the day before the final (freeing the finals day), SFs on the finals day at external courts (main venue reserved for medals), '
       + 'and SFs on the finals day with a fallback to main venue if external courts are full. '
       + 'The Championship Final and 3rd Place game always start at least <strong>180 minutes (2 slots)</strong> after their semi-finals begin.</p>'
-      + '<p><strong>Finals preferred times</strong> (currently: <em>' + esc(finalTimesVal) + '</em>): '
-      + 'each Championship Final is pulled toward <strong>17:30</strong> (and 3rd Place toward <strong>16:00</strong>) by a symmetric distance penalty, with older brackets (U18 first) getting priority for the 17:30 slot when capacity is tight. '
-      + 'Change this in Setup under <em>Finals Preferred Times</em>.</p>'
+      + '<p><strong>Finals target slot:</strong> <em>' + esc(finalTimesVal) + '</em>. '
+      + 'Each Championship Final is pulled toward this slot by a symmetric distance penalty; 3rd Place games target the slot one step earlier (' + esc(_xlsxThirdTargetLabel(finalTimesVal)) + '). '
+      + 'Older brackets (U18 first) get priority for the Finals slot when capacity is tight; younger brackets overflow one slot earlier. '
+      + 'Change the target in Setup under <em>Finals Target Time Slot</em>.</p>'
       + '<p><strong>3rd Place before Final (soft):</strong> within the same bracket, the 3rd Place game is preferred earlier on finals day than the Championship Final, so the bronze medal is decided before the gold-medal game finishes.</p>'
       + '<p>Playoff team slots show placeholders (e.g. <em>"1st Group A"</em>) until all round-robin scores are entered — they fill in automatically once the round-robin is complete.</p></div>'
 
@@ -7307,7 +7350,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         setField('maxGPD',  sf.maxGPD);
         setField('lS',      sf.lS);
         setField('lE',      sf.lE);
-        setField('finalTimes', sf.finalTimes);
+        // finalTimes is set AFTER the day-hours block below so the dropdown
+        // options exist when we try to select the saved value.
         setField('mainVenue',  sf.mainVenue);
         // Re-render dropdowns now that mainVenue is set, so secondary's exclusion is correct
         renderVenueDropdowns();
@@ -7332,14 +7376,26 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         // Restore nDays first, then rebuild day-hours grid, then fill saved values
         if (sf.nDays !== undefined) {
           setField('nDays', sf.nDays);
-          renderDayHours(); // rebuilds inputs based on nDays
+          renderDayHours(); // rebuilds inputs based on nDays (also re-populates the Finals dropdown)
           if (sf.dayHours && sf.dayHours.length) {
             sf.dayHours.forEach(function(dh, i) {
               setField('dayStart_' + i, dh.start);
               setField('dayEnd_'   + i, dh.end);
             });
+            // Day-end values may have changed → refresh the Finals dropdown
+            // again so its options reflect the imported finals-day hours.
+            renderFinalsDropdown();
           }
         }
+        // Restore Finals target now that dropdown options exist. Tolerate legacy
+        // comma-separated snapshots ("16:00, 14:30, 17:30") by picking the LATEST
+        // entry (best matches the "as late as possible" intent).
+        var ftRaw = (sf.finalTimes || '').toString();
+        var ftParts = ftRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        var ftPick = ftParts.length
+          ? ftParts.sort(function(a, b) { return toM(b) - toM(a); })[0]
+          : '';
+        if (ftPick) setField('finalTimes', ftPick);
         renderVenueRules();
         renderVenueBlackouts();
         renderSched();
@@ -7391,7 +7447,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     setField('maxGPD',     '2');
     setField('lS',         '13:30');
     setField('lE',         '14:30');
-    setField('finalTimes', '16:00, 14:30, 17:30');
+    // finalTimes is applied AFTER renderDayHours() below so the dropdown options exist.
     setField('mainVenue',  'Blanes');
     setChecked('ruleRest',               true);
     setChecked('ruleVenueRest',          true);
@@ -7401,7 +7457,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     setChecked('mainVenue3rd',           true);
     setChecked('mainVenueSF',            false);
     setField('nDays', '3');
-    renderDayHours();
+    renderDayHours();           // also rebuilds the Finals dropdown
+    setField('finalTimes', '17:30');
     renderVenueRules();
     var dl = document.getElementById('divList');
     if (dl) dl.innerHTML = '';
@@ -7862,6 +7919,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   // Re-render day-hours grid whenever the number of days changes.
   document.getElementById('nDays').addEventListener('change', renderDayHours);
+  // Lunch window changes affect which time slots exist on finals day.
+  document.getElementById('lS').addEventListener('change', renderFinalsDropdown);
+  document.getElementById('lE').addEventListener('change', renderFinalsDropdown);
 
   // ── Init ──────────────────────────────────────────────
   renderSites();

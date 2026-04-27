@@ -216,6 +216,18 @@ def _build_context(config):
     lunch_start = _time_to_min(sf.get('lS', '13:30'))
     lunch_end = _time_to_min(sf.get('lE', '14:30'))
 
+    # Finals target slot — drives FINAL_TARGET in _solve_phase2's soft objective.
+    # The UI is now a single-slot dropdown but legacy snapshots may still send a
+    # comma-separated list ("16:00, 14:30, 17:30"); pick the latest entry to best
+    # match the "as late as possible" intent.
+    final_times_str = (sf.get('finalTimes') or '17:30').strip()
+    _ft_parts = [p.strip() for p in final_times_str.split(',') if p.strip()]
+    try:
+        final_target = max(_time_to_min(p) for p in _ft_parts) if _ft_parts else 1050
+    except Exception:
+        final_target = 1050
+    third_target = max(0, final_target - 90)  # one 90-min slot earlier than the Final
+
     day_hours = sf.get('dayHours', [])
     if not day_hours:
         day_hours = [{'start': '09:00', 'end': '19:00' if i < n_days - 1 else '17:30'}
@@ -422,6 +434,7 @@ def _build_context(config):
         'rr_slot_mask': rr_slot_mask, 'finals_day': finals_day,
         'po_start_day': po_start_day, 'reserve': reserve,
         'div_priority': div_priority,
+        'final_target': final_target, 'third_target': third_target,
         'status_names': {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE',
                          cp_model.INFEASIBLE: 'INFEASIBLE', cp_model.UNKNOWN: 'UNKNOWN',
                          cp_model.MODEL_INVALID: 'MODEL_INVALID'},
@@ -826,14 +839,18 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # Objective: one placement indicator per PO (dominant), plus soft prefs on
     # cell-level y vars. Per-game indicators keep the objective compact and
     # give the solver a simple "maximize placements" signal.
-    # Soft-pref 3 "showcase slot": Finals → 17:30, 3rd Place → 16:00.
-    # Distance-from-target penalty (symmetric) ensures Finals fill 17:30 first
-    # and 3rd Place fills 16:00 first, with 3rd-before-Final reinforced.
-    # Per-division age weighting: when overflow forces medal games to drop a
-    # slot, the YOUNGEST division gets pushed first (U18 keeps 17:30, U12
-    # accepts 16:00). Older brackets are the showcase, by tournament tradition.
-    FINAL_TARGET = 1050   # 17:30
-    THIRD_TARGET = 960    # 16:00
+    # Soft-pref 3 "showcase slot": Finals → admin-configured target slot,
+    # 3rd Place → one 90-min slot earlier. The target comes from the Setup tab's
+    # "Finals Target Time Slot" dropdown (sent as setupFields.finalTimes) and
+    # is parsed in _build_context().
+    # Distance-from-target penalty (symmetric) ensures Finals fill the target
+    # slot first and 3rd Place fills one slot earlier, with 3rd-before-Final
+    # reinforced. Per-division age weighting: when overflow forces medal games
+    # to drop a slot, the YOUNGEST division gets pushed first (U18 keeps the
+    # target slot, U12 accepts overflow). Older brackets are the showcase, by
+    # tournament tradition.
+    FINAL_TARGET = ctx['final_target']
+    THIRD_TARGET = ctx['third_target']
 
     def _age_weight(divname):
         """Older brackets get higher weight → larger penalty for being away
