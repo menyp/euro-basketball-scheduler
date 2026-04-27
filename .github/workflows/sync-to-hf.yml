@@ -1,0 +1,29 @@
+name: Sync to Hugging Face Space
+
+# Auto-deploys main branch to https://huggingface.co/spaces/menyp/eybc-scheduler
+# on every push. Uses the HF_TOKEN secret (Write-scope HF access token) to
+# authenticate the force-push to the HF git remote.
+
+on:
+  push:
+    branches:
+      - main
+  # Also allow manual triggering from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo (full history)
+        uses: actions/checkout@v4
+        with:
+          # Need full history so we can force-push to HF without "shallow" errors
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force https://menyp:$HF_TOKEN@huggingface.co/spaces/menyp/eybc-scheduler main
