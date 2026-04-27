@@ -976,6 +976,24 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                         # 14:30 → 18×age_w. Solver picks the later side first
                         # because of the existing 3rd-before-Final preference.
                         soft += _age_weight(dn) * (abs(m - THIRD_TARGET) // 5)
+                    elif t == 'SF' and d == finals_day:
+                        # SF-position bias on finals day: earlier slots are
+                        # strongly preferred so SFs don't cascade-block their
+                        # own 3rd Place / Final placements (Rule 4 forces
+                        # 3rd ≥180min after SF — a late SF pins 3rd to 17:30,
+                        # stealing a Final-target slot).
+                        soft += _age_weight(dn) * max(0, m - 540) // 15
+                    # Reserve the Final-target slot on finals_day for Finals
+                    # only. Any non-Final game placed at FINAL_TARGET pays a
+                    # large penalty, forcing the solver to find SF / 3rd-Place
+                    # / consolation placements that leave 17:30 exclusively for
+                    # the showcase. Calibrated well below UNPLACED_WEIGHT so
+                    # placement is never sacrificed, but well above any single
+                    # distance penalty so it decisively flips the trade-off
+                    # where a 3rd Place would otherwise camp on 17:30 (forced
+                    # there by an SF placed at 14:30).
+                    if t != 'Final' and d == finals_day and m == FINAL_TARGET:
+                        soft += 5000
                     if soft:
                         obj_terms.append(soft * y[p, d, s, c])
 
