@@ -949,6 +949,30 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
         # Minimize -w * placed_p  ≡  reward placement.
         obj_terms.append(-w * placed_vars[p])
 
+    # Tie-breaker helpers — both are tiny offsets that only matter when other
+    # costs in the objective are equal, resolving previously-arbitrary
+    # solver picks toward the user's stated preferences.
+    def _bracket_blanes_bonus(bracket):
+        """Bracket-importance tie-breaker for venue choice. Champ pays MORE
+        for non-main-venue → solver prefers Champ at Blanes when capacity
+        forces a same-division split. Tiny — only resolves ties."""
+        b = (bracket or '').lower()
+        if 'champ' in b:
+            return 3
+        if 'silver' in b or '5th' in b or '7th' in b:
+            return 2
+        if 'bronze' in b or '9th' in b or '11th' in b:
+            return 1
+        return 0  # 13th-place / consolation: lowest priority for Blanes
+
+    def _is_boys_division(divname):
+        n = (divname or '').upper()
+        if 'GIRL' in n or 'WOMEN' in n:
+            return False
+        if 'MIX' in n:
+            return False
+        return True
+
     div_preferred_courts = ctx['div_preferred_courts']
     for p, pg in enumerate(po_games):
         t = pg.get('type')
@@ -966,6 +990,13 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                             soft += div_priority.get(dn, 1)
                     elif c not in blanes_courts:
                         soft += div_priority.get(dn, 1)
+                    # Tie-breaker 1 (bracket importance): Championship pays
+                    # extra to be at non-Blanes, Bronze pays a little, etc.
+                    # Resolves the case where two same-division SFs (one
+                    # Champ + one Bronze) compete for Blanes courts and the
+                    # solver was picking arbitrarily.
+                    if c not in blanes_courts:
+                        soft += _bracket_blanes_bonus(pg.get('bracket', ''))
                     if t == 'Final' and d == finals_day:
                         # Symmetric distance from 17:30, weighted by age priority.
                         # 17:30 → 0; 16:00 → ±18×age_w; later than 17:30 → also penalized.
@@ -976,6 +1007,13 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                         # 14:30 → 18×age_w. Solver picks the later side first
                         # because of the existing 3rd-before-Final preference.
                         soft += _age_weight(dn) * (abs(m - THIRD_TARGET) // 5)
+                        # Tie-breaker 2 (Boys over Girls at equal age):
+                        # When two same-age 3rd Place games compete for the
+                        # 16:00 target, Boys pays a tiny extra to be away
+                        # from target → solver keeps Boys at the target slot
+                        # and Girls overflows earlier.
+                        if _is_boys_division(dn) and m != THIRD_TARGET:
+                            soft += 1
                     elif t == 'SF' and d == finals_day:
                         # SF-position bias on finals day: earlier slots are
                         # strongly preferred so SFs don't cascade-block their
