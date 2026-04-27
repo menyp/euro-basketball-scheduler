@@ -6810,6 +6810,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         { wch: 14 }, { wch: 7 }, { wch: 14 }, { wch: 28 }, { wch: 28 },
         { wch: 14 }, { wch: 14 }, { wch: 16 }
       ];
+      // AutoFilter on the 13-column header row + all data rows. Header is
+      // row 3 (1-indexed): rows 1+2 are the banner + day-title. The reviewer
+      // can then click any column's filter dropdown in Excel to slice by
+      // Stage / Category / GROUP / Court / City / etc.
+      ws['!autofilter'] = {
+        ref: 'A3:M' + (range.e.r + 1)
+      };
       // Apply colour styling
       _xlsxStyleDaySheet(ws, dayResult.slotBoundaries);
 
