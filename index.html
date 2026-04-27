@@ -6442,8 +6442,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (!lbl) return 'group phase';
     var u = lbl.toUpperCase();
     if (u === 'FINAL')                                return 'FINAL';
-    if (u.indexOf('3RD') === 0 || u.indexOf('3RD PLACE') !== -1) return '3rht POSITION MATCH';
-    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1)        return 'crossing phase';
+    if (u.indexOf('3RD') === 0 || u.indexOf('3RD PLACE') !== -1) return '3RD PLACE';
+    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1)        return 'SEMI FINAL';
     if (u.indexOf('5TH') === 0 || u.indexOf('5-6') !== -1)        return '5-6 POSITION';
     if (u.indexOf('7TH') === 0 || u.indexOf('7-8') !== -1)        return '7-8 POSITION';
     if (u.indexOf('9TH') === 0 || u.indexOf('9-10') !== -1)       return '9-10 POSITION';
