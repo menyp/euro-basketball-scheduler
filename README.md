@@ -1,39 +1,58 @@
+---
+title: EYBC Scheduler
+emoji: 🏀
+colorFrom: orange
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Euro Youth Basketball Cup tournament scheduler with CP-SAT optimal solver
+---
+
 # Euro Youth Basketball Cup — Tournament Scheduler
 
-A lightweight, offline-ready tournament scheduling web app built for the **Euro Youth Basketball Cup** (Barcelona, Spain 🇪🇸).
+A tournament scheduling web app built for the **Euro Youth Basketball Cup** (Barcelona, Spain 🇪🇸), powered by Google OR-Tools CP-SAT for mathematically optimal placement.
 
-Live demo: *(add your GitHub Pages URL here once deployed)*
+Hosted version: *(add your Hugging Face Space URL here once deployed)*
+
+GitHub Pages preview (UI + lower-quality JS-greedy fallback only): https://menyp.github.io/euro-basketball-scheduler/
 
 ---
 
 ## Features
 
 - **Paste & parse** team lists by division (e.g. `Boys U12: Team1, Team2, Team3`)
-- **Multi-venue support** — define venues with individual court counts
-- **Smart round-robin scheduling** — each team plays max 1 game per day
-- **All games fit within N days** — round robin spread across first (N-1) days, finals on the last day
-- **Lunch break avoidance** — no games scheduled during the lunch window
+- **Multi-venue support** — define venues with individual court counts and per-day blackout windows
+- **CP-SAT optimal scheduling** — Google OR-Tools constraint solver finds optimal placements respecting team rest, venue rules, max-games-per-day, etc.
+- **Iterative two-phase model** — RR placement, then PO placement, with PO-blocks-PO feedback loop (up to 4 iterations)
+- **Multi-venue Mandatory / High-Priority rules per division** — e.g. "U18 BOYS only at Blanes + Pineda"
+- **Tiered Venue Exclusivity** — Final / 3rd / Semi-final venue rules with Mandatory or High-Priority modes
+- **Excel export** — multi-sheet workbook matching the Blanes 2025 organisers' format
+- **Live progress banner** — see solver iteration + phase while it runs
 - **Color-coded divisions** — easy to read at a glance
-- **Bracket day** — semis & finals with smart dropdowns per division (type or pick from list)
-- **Fully offline** — single HTML file, no server needed, works on any device
+- **JSON snapshot** save/load for tournament drafts
 
 ---
 
 ## Getting Started
 
-No installation required. Just open `index.html` in any browser.
+### Option 1 — use the hosted version (recommended for non-technical users)
+Open the public URL above. No install. Full CP-SAT solver quality.
+
+### Option 2 — run locally (for developers)
 
 ```bash
-# Clone the repo
-git clone https://github.com/YOUR_USERNAME/euro-basketball-scheduler.git
+git clone https://github.com/menyp/euro-basketball-scheduler.git
 cd euro-basketball-scheduler
 
-# Open in browser (macOS)
-open index.html
+pip install -r requirements.txt
 
-# Open in browser (Windows)
-start index.html
+python app.py
+# → opens http://localhost:5000
 ```
+
+### Option 3 — UI-only preview (no Python)
+Open `index.html` directly in a browser, or visit the GitHub Pages link above. The UI works, but `Generate Schedule` falls back to a lower-quality JS-only greedy algorithm because the CP-SAT solver requires the Python backend.
 
 ---
 
@@ -63,12 +82,20 @@ The app loads with sample data pre-filled:
 
 ---
 
-## Deploying to GitHub Pages
+## Deployment
 
-1. Push this repo to GitHub
-2. Go to **Settings → Pages**
-3. Set source to `main` branch, `/ (root)`
-4. Your app will be live at `https://YOUR_USERNAME.github.io/euro-basketball-scheduler`
+### Hugging Face Spaces (free, no card — recommended for public hosting)
+
+1. Sign in at https://huggingface.co with GitHub OAuth.
+2. **+ New Space** → SDK: **Docker** → Hardware: **CPU basic (free)** → public.
+3. Connect this GitHub repo (Settings → Linked GitHub repository) for auto-deploy on push.
+4. The included `Dockerfile` + `app.py` are ready to go. First build takes ~5–10 min.
+
+See `Issue #11` for the full step-by-step.
+
+### GitHub Pages (UI only)
+
+GitHub Pages serves the static `index.html` only — no Python backend, so it falls back to the JS-greedy algorithm. Useful as a UI preview but not for production tournament scheduling.
 
 ---
 
@@ -76,18 +103,24 @@ The app loads with sample data pre-filled:
 
 ```
 euro-basketball-scheduler/
-├── index.html      # The entire app — single self-contained file
-├── README.md       # This file
-└── .gitignore      # Standard web gitignore
+├── index.html       # Single-page UI (vanilla HTML/CSS/JS, no frameworks)
+├── app.py           # Flask server — serves the UI + /api/generate endpoint
+├── scheduler.py     # CP-SAT solver (Google OR-Tools)
+├── requirements.txt # Python dependencies
+├── Dockerfile       # HF Spaces / Cloud Run deploy
+├── tests/           # Unit + smoke tests
+└── README.md
 ```
 
 ---
 
 ## Built With
 
-- Vanilla HTML, CSS, JavaScript — no frameworks, no dependencies
-- Google Fonts (Montserrat + Open Sans)
-- Designed for the [Euro Youth Basketball Cup](https://www.eurobasketballcup.com)
+- **Frontend:** Vanilla HTML, CSS, JavaScript — no frameworks
+- **Backend:** Python 3 + Flask (single file, ~70 lines)
+- **Solver:** Google OR-Tools CP-SAT
+- **Production WSGI:** Gunicorn
+- **Designed for the** [Euro Youth Basketball Cup](https://www.eurobasketballcup.com)
 
 ---
 
