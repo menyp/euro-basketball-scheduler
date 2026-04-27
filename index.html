@@ -7281,6 +7281,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (!data.sched || !data.sched.gameDays) { alert('Invalid schedule file.'); return; }
         sched            = data.sched;
         divisions        = data.divisions        || divisions;
+        // Repopulate the Teams and Divisions textarea + division cards from
+        // the loaded divisions[]. Without this, the textarea keeps stale
+        // sample/default data even though divisions[] is correct.
+        var pasteBox = document.getElementById('pasteBox');
+        if (pasteBox) {
+          pasteBox.value = divisions.map(function(d) {
+            return d.name + ': ' + (d.teams || []).join(', ');
+          }).join('\n');
+        }
+        renderDivisions();
         // Auto-repair any data-integrity drift between teams[] and manualGroups
         var sanitizeFixes = sanitizeDivisionsAfterImport();
         venueRules       = data.venueRules       || [];
