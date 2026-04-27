@@ -1,12 +1,12 @@
 ---
 title: EYBC Scheduler
 emoji: 🏀
-colorFrom: orange
+colorFrom: yellow
 colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Euro Youth Basketball Cup tournament scheduler with CP-SAT optimal solver
+short_description: Euro Youth Basketball Cup tournament scheduler
 ---
 
 # Euro Youth Basketball Cup — Tournament Scheduler
