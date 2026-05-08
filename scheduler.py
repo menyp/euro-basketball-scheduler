@@ -79,6 +79,7 @@ def solve_schedule(config, time_limit=120):
     last_rr_occupied = None
     last_po_result = None
     last_blocked = None
+    last_nbd_violations = []
     # Lever B: hints carried across iterations (None on iter 1).
     rr_hints = None  # {g: (d, s, c)} from previous iteration's RR placements
     po_hints = None  # {p: (d, s, c)} from previous iteration's PO placements
@@ -94,7 +95,7 @@ def solve_schedule(config, time_limit=120):
             iteration=iteration + 1,
         )
 
-        rr_result, rr_occupied, p1_status = _solve_phase1(
+        rr_result, rr_occupied, p1_status, nbd_violations = _solve_phase1(
             ctx, forbidden_cells, time_limit, hints=rr_hints)
 
         if p1_status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -115,6 +116,21 @@ def solve_schedule(config, time_limit=120):
                   f"using last good result from iteration {iteration}")
             break
 
+        # Daily Game Distribution (no blank days). Slack-relaxed Phase 1 always
+        # solves; if any slack is set, the rule was violated. In Mandatory mode
+        # we surface this as a fatal generation error so the admin can soften
+        # the rule. In High Priority mode we keep going and attach the warnings
+        # to the final response (handled by _assemble_sched).
+        if iteration == 0 and nbd_violations and ctx.get('nbd_mode') == 'mandatory':
+            _progress_done('Daily Game Distribution rule violated')
+            return {
+                'error': ('Daily Game Distribution rule (Mandatory) cannot be satisfied: '
+                          f'{len(nbd_violations)} team-day pair(s) would have zero games.'),
+                'reason': 'no_blank_day_mandatory_infeasible',
+                'status': 'NBD_MANDATORY_VIOLATED',
+                'blocked_team_days': nbd_violations,
+            }
+
         po_result, blocked, p2_status, po_placements = _solve_phase2(
             ctx, rr_result, rr_occupied, time_limit, po_excluded_cells,
             hints=po_hints)
@@ -130,6 +146,7 @@ def solve_schedule(config, time_limit=120):
         last_rr_occupied = rr_occupied
         last_po_result = po_result
         last_blocked = blocked
+        last_nbd_violations = nbd_violations
 
         if not blocked:
             # All games placed.
@@ -137,7 +154,8 @@ def solve_schedule(config, time_limit=120):
             _progress(f"Done: {len(rr_result)} RR + {len(po_result)} PO "
                       f"in {total_elapsed:.1f}s ({iteration+1} iteration(s))")
             _progress_done()
-            return _assemble_sched(rr_result, po_result, [], ctx, config)
+            return _assemble_sched(rr_result, po_result, [], ctx, config,
+                                   nbd_violations=nbd_violations)
 
         # Lever C: plateau detection — if blocked count didn't shrink, we're
         # not making progress. Bail before wasting another full iteration.
@@ -184,7 +202,8 @@ def solve_schedule(config, time_limit=120):
                 'status': 'INFEASIBLE'}
 
     unscheduled = [_blocked_to_unsched(pg) for pg in (last_blocked or [])]
-    return _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config)
+    return _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config,
+                           nbd_violations=last_nbd_violations)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +224,14 @@ def _build_context(config):
     secondary_venue = (sf.get('secondaryVenue') or '').strip()
     rule_rest = sf.get('ruleRest', True)
     rule_venue_rest = sf.get('ruleVenueRest', True)
+    # Daily Game Distribution (no blank days) — every team plays >=1 game per day.
+    # Mandatory: hard constraint (slack pays a huge penalty so solver avoids it
+    # unless absolutely impossible). After solving, any non-zero slack triggers
+    # a generation failure with a per-(team, day) diagnostic.
+    # High Priority: same shape, smaller penalty — solver minimizes blank days
+    # but accepts unavoidable ones, surfaced as audit warnings.
+    rule_no_blank_day = sf.get('ruleNoBlankDay', True)
+    nbd_mode = sf.get('noBlankDayMode', 'mandatory')
     main_venue_final = sf.get('mainVenueFinal', True)
     main_venue_3rd = sf.get('mainVenue3rd', True)
     main_venue_sf = sf.get('mainVenueSF', False)
@@ -435,6 +462,7 @@ def _build_context(config):
         'day_slots': day_slots, 'n_days': n_days,
         'max_gpd': max_gpd,
         'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
+        'rule_no_blank_day': rule_no_blank_day, 'nbd_mode': nbd_mode,
         'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
         'main_venue_sf': main_venue_sf,
         'main_venue_final_mode': main_venue_final_mode,
@@ -570,6 +598,46 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 effective_gpd = max(max_gpd - 1, 1)
             model.add(sum(terms) <= effective_gpd)
 
+    # Daily Game Distribution (no blank days). For each team, ensure >=1 RR
+    # game on every day that is RR-eligible AND has no PO games for the
+    # team's division. On mixed RR/PO days the structural bracket coverage
+    # in Phase 2 takes care of the team's day. On PO-only days the
+    # placeholder game generation in Phase 2 handles it.
+    #
+    # Slack-relaxed formulation: every constraint allows a Bool slack var
+    # that pays a penalty when set. Mandatory mode uses a huge penalty so
+    # the solver only sets slack when truly infeasible; we then return an
+    # error. High Priority mode uses a smaller penalty and surfaces any
+    # remaining slacks as audit warnings.
+    nbd_slacks = {}  # (div, team, d) -> Bool slack var (1 if rule violated)
+    rule_no_blank_day = ctx.get('rule_no_blank_day', False)
+    nbd_mode = ctx.get('nbd_mode', 'mandatory')
+    NBD_HARD_PENALTY = 10 ** 6  # dominates other penalty terms
+    NBD_SOFT_PENALTY = 100      # comparable to existing soft prefs
+    nbd_penalty_terms = []
+    if rule_no_blank_day:
+        weight = NBD_HARD_PENALTY if nbd_mode == 'mandatory' else NBD_SOFT_PENALTY
+        for d in range(n_days):
+            # Skip days that have no RR slots at all (RR cannot be placed there).
+            if not rr_slot_mask.get(d):
+                continue
+            for (div, team), g_list in team_games.items():
+                # Skip days where this division has PO games — Phase 2
+                # ensures the team's group has a placeholder game that day,
+                # so a blank day cannot occur even with 0 RR games.
+                if d in po_days_per_div.get(div, set()):
+                    continue
+                terms = [x[g, d, s, c]
+                         for g in g_list
+                         for s in range(len(day_slots[d]))
+                         for c in range(num_courts)]
+                if not terms:
+                    continue
+                slack = model.new_bool_var(f'nbd_{d}_{div}_{team}')
+                model.add(sum(terms) + slack >= 1)
+                nbd_slacks[(div, team, d)] = slack
+                nbd_penalty_terms.append(weight * slack)
+
     # Rest between games (Rules 6 & 7).
     for (div, team), g_list in team_games.items():
         if len(g_list) < 2:
@@ -659,8 +727,10 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
             for s in range(len(day_slots[d])):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
-    if penalty_terms:
-        model.minimize(sum(penalty_terms))
+    # Combine venue-preference penalties with No-Blank-Day slack penalties.
+    all_penalty_terms = penalty_terms + nbd_penalty_terms
+    if all_penalty_terms:
+        model.minimize(sum(all_penalty_terms))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit
@@ -670,7 +740,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     _progress(f"Phase 1 status: {ctx['status_names'].get(status, status)}")
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return [], set(), status
+        return [], set(), status, []
 
     rr_result = []
     rr_occupied = set()
@@ -689,7 +759,16 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                             't1': a, 't2': b,
                         })
                         rr_occupied.add((d, s, c))
-    return rr_result, rr_occupied, status
+
+    # Read No-Blank-Day slacks. Each non-zero slack means the rule could not
+    # be satisfied for that (team, day) pair. The caller decides whether
+    # this is a fatal error (Mandatory mode) or a soft warning (High Priority).
+    nbd_violations = []
+    for (div, team, d), slack in nbd_slacks.items():
+        if solver.value(slack) > 0:
+            nbd_violations.append({'divName': div, 'team': team, 'day': d})
+
+    return rr_result, rr_occupied, status, nbd_violations
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1384,7 +1463,7 @@ def _build_po_structure(divisions, groups):
     return po_games
 
 
-def _assemble_sched(rr_result, po_result, unscheduled, ctx, config):
+def _assemble_sched(rr_result, po_result, unscheduled, ctx, config, nbd_violations=None):
     """Assemble the schedule in the format the frontend expects."""
     divisions = ctx['divisions']
     courts = ctx['courts']
@@ -1489,7 +1568,10 @@ def _assemble_sched(rr_result, po_result, unscheduled, ctx, config):
             'po_games': len(po_result),
             'total': len(rr_result) + len(po_result),
             'unscheduled': len(unscheduled),
-        }
+        },
+        # No-Blank-Day warnings (High Priority mode only — Mandatory mode
+        # short-circuits with an error response upstream).
+        'noBlankDayWarnings': list(nbd_violations or []),
     }
 
 
