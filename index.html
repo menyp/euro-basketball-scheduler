@@ -6145,6 +6145,42 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           : '')
       + '</div>';
 
+    // ── Daily Game Distribution warnings ──────────────────
+    // High Priority mode may produce a schedule where some teams have a blank
+    // day (no RR or PO game). Surface those team-day pairs so the admin can
+    // decide whether to accept them or rerun with a different config.
+    var nbdWarn = (sched.noBlankDayWarnings || []);
+    if (nbdWarn.length > 0) {
+      var byTeam = {};
+      nbdWarn.forEach(function (w) {
+        var key = (w.divName || '') + ' / ' + (w.team || '');
+        if (!byTeam[key]) byTeam[key] = [];
+        byTeam[key].push((w.day || 0) + 1);
+      });
+      var nbdRows = Object.keys(byTeam).sort().map(function (k) {
+        var days = byTeam[k].sort(function(a,b){return a-b;}).map(function(d){return 'Day ' + d;}).join(', ');
+        var parts = k.split(' / ');
+        var divName = parts[0] || '';
+        var team = parts.slice(1).join(' / ');
+        return '<li style="margin-bottom:4px"><strong>' + escHtml(team) + '</strong>'
+          + ' <span style="opacity:.65;font-size:11px">(' + escHtml(divName) + ')</span>'
+          + ' &mdash; <span style="color:#fc8181">no game on ' + escHtml(days) + '</span></li>';
+      }).join('');
+      h += '<div style="background:rgba(246,173,85,.08);border:1px solid rgba(246,173,85,.4);'
+        + 'border-radius:8px;padding:14px 18px;margin-bottom:14px">'
+        + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
+        + 'text-transform:uppercase;letter-spacing:1.5px;color:#f6ad55;margin-bottom:10px">'
+        + '⚠️ Daily Game Distribution &mdash; ' + nbdWarn.length + ' blank-day warning'
+        + (nbdWarn.length === 1 ? '' : 's') + '</div>'
+        + '<p style="font-size:13px;line-height:1.5;margin:0 0 10px 0;color:#e2e8f0">'
+        + 'High Priority mode produced this schedule, but the solver could not give every team '
+        + 'a game on every day. The teams below have <strong>no game</strong> on the listed '
+        + 'day(s).</p>'
+        + '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.6;'
+        + 'font-family:Montserrat,sans-serif;color:#e2e8f0">' + nbdRows + '</ul>'
+        + '</div>';
+    }
+
     // ── Unscheduled games alert banner ────────────────────
     // Sticky, animated, with smart suggestions based on failure patterns.
     if (failedCount > 0) {
