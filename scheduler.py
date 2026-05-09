@@ -915,8 +915,47 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
             for s in range(len(day_slots[d])):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
-    # Combine venue-preference penalties with No-Blank-Day slack penalties.
-    all_penalty_terms = penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms
+
+    # Soft rest-fairness: prefer larger same-day gaps between a team's games.
+    # For each (team, day, slot-pair) with gap < REST_TARGET_GAP, add a
+    # convex (squared deficit) penalty. The squared shape means worst cases
+    # (at the 90-min hard floor) dominate the objective — delivering
+    # "fix the worst rest first" without the cost of true max-min.
+    # See the plan file for the full rationale.
+    REST_TARGET_GAP = 240
+    rest_terms = []
+    for (div, team), g_list in team_games.items():
+        if len(g_list) < 2:
+            continue
+        for d in range(n_days):
+            slots_today = day_slots[d]
+            # Per-(team, day, slot) indicator: sum of x[g, d, s, c] over the
+            # team's games and all courts. The no-2-games-same-slot constraint
+            # above guarantees this is 0 or 1, so we can use it directly.
+            team_at = {}
+            for s in range(len(slots_today)):
+                terms = [x[g, d, s, c] for g in g_list for c in range(num_courts)]
+                if terms:
+                    team_at[s] = sum(terms)
+            for s1 in range(len(slots_today)):
+                for s2 in range(s1 + 1, len(slots_today)):
+                    gap = slots_today[s2] - slots_today[s1]
+                    if gap >= REST_TARGET_GAP:
+                        continue  # adequate; no penalty
+                    if s1 not in team_at or s2 not in team_at:
+                        continue
+                    deficit = REST_TARGET_GAP - gap
+                    penalty = deficit * deficit  # squared = convex
+                    safe = (div + '_' + team + '_' + str(d) + '_' + str(s1) + '_' + str(s2)).replace(' ', '_')
+                    pair = model.new_bool_var('rest_' + safe)
+                    # pair = 1 iff team plays at BOTH s1 and s2 on day d.
+                    # Lower bound suffices under minimization with positive coeff.
+                    model.add(team_at[s1] + team_at[s2] - 1 <= pair)
+                    rest_terms.append(penalty * pair)
+
+    # Combine venue-preference penalties with No-Blank-Day slack penalties
+    # and the new rest-fairness term.
+    all_penalty_terms = penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms + rest_terms
     if all_penalty_terms:
         model.minimize(sum(all_penalty_terms))
 
@@ -1425,6 +1464,43 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # collected earlier alongside the cross-phase constraint).
     if nbd_phase2_slack_terms:
         obj_terms.extend(nbd_phase2_slack_terms)
+
+    # Soft rest-fairness — Phase 2 cross-phase term.
+    #
+    # For each (placeholder PO game, day, slot) candidate placement, sum a
+    # squared-deficit penalty over every candidate team's already-placed RR
+    # game on that day. The squared shape means tight gaps (< target) get
+    # progressively worse penalty, so the solver avoids placing PO games at
+    # slots that create short RR→PO transitions for any candidate team.
+    #
+    # Same TARGET as Phase 1 (240 min). Aggregation across candidates is a
+    # soft signal — only one candidate ends up at the placeholder, but
+    # avoiding tight gaps for any of them is a strict improvement.
+    REST_TARGET_GAP_P2 = 240
+    for p, pg in enumerate(po_games):
+        div_name = pg['divName']
+        candidate_teams = []
+        for grp_letter in pg.get('groups', []):
+            candidate_teams.extend(groups.get((div_name, grp_letter), []))
+        if not candidate_teams:
+            continue
+        for d in range(n_days):
+            for po_s in range(len(day_slots[d])):
+                po_m = day_slots[d][po_s]
+                penalty = 0
+                for team in candidate_teams:
+                    for rr_s, rr_m, rr_c, rr_v in rr_by_team_day.get((div_name, team, d), []):
+                        if po_s == rr_s:
+                            continue  # already a hard 0 from earlier rest constraints
+                        gap = abs(po_m - rr_m)
+                        if gap >= REST_TARGET_GAP_P2:
+                            continue
+                        deficit = REST_TARGET_GAP_P2 - gap
+                        penalty += deficit * deficit
+                if penalty == 0:
+                    continue
+                for po_c in range(num_courts):
+                    obj_terms.append(penalty * y[p, d, po_s, po_c])
 
     if obj_terms:
         po_model.minimize(sum(obj_terms))
