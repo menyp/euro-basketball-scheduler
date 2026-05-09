@@ -80,26 +80,36 @@ def build_group_index(divisions: list):
 def measure(sched: dict, divisions: list, n_days: int) -> dict:
     """Build per-team-per-day game accounting and surface real blank days.
 
-    A team is considered to play on day d if any of these hold:
-      (a) Concrete: a game on day d names the team as t1 or t2.
-      (b) Placeholder: a game on day d has a placeholder ("Nth Group X")
-          referencing the team's group letter.
-      (c) Downstream: a game on day d in the team's division has empty
-          t1/t2 (TBD Final / 3rd Place / medal final waiting on SF). These
-          are downstream of SFs that referenced groups, so the team is
-          potentially involved.
+    A team T in group X with positions 1..k is considered to play on day d
+    iff any of these hold:
+      (a) Concrete: a game on day d names T as t1 or t2.
+      (b) Position-covered: ALL k positions of group X are covered by
+          placeholder games on day d (so regardless of which position T
+          ends up at, T plays on day d).
+      (c) Downstream TBD: a game on day d in the team's division has empty
+          t1/t2 (Final / 3rd Place / medal final waiting on SF). The
+          downstream game involves the SF winners/losers, which in turn
+          come from games referencing T's group via SFs, so T is involved
+          regardless of position. (Strictly safe assumption.)
 
     A "blank pair" is (team, day) where none of (a)/(b)/(c) hold.
+
+    Note: an earlier version of this function used a per-group "active"
+    flag set to True whenever any concrete team in the group played. That
+    was a false-negative bug — it credited team T for playing whenever
+    any other team in T's group played. The fixed version below tracks
+    per-position coverage from placeholder references only, never crediting
+    a team based on another team's concrete game.
     """
-    team_to_group, _ = build_group_index(divisions)
+    team_to_group, group_to_teams = build_group_index(divisions)
 
     concrete_games: dict[tuple[str, str], list[int]] = defaultdict(
         lambda: [0] * n_days
     )
-    # (div, group_letter) -> [bool] per day: any game references this group?
-    group_active: dict[tuple[str, str], list[bool]] = defaultdict(
-        lambda: [False] * n_days
-    )
+    # (div, group_letter, day) -> set of position labels covered by
+    # placeholder games on that day. e.g. {'1st', '2nd', '3rd'} means
+    # all three Group-X positions are covered.
+    position_coverage: dict[tuple[str, str, int], set] = defaultdict(set)
     # (div) -> [int] per day: count of TBD games (downstream of SFs).
     tbd_games_per_div: dict[str, list[int]] = defaultdict(
         lambda: [0] * n_days
@@ -117,25 +127,35 @@ def measure(sched: dict, divisions: list, n_days: int) -> dict:
                 continue
             m = PLACEHOLDER_RE.match(raw)
             if m:
-                group_active[(div_name, m.group(1))][d_idx] = True
+                # Placeholder — record exactly which position is covered.
+                position = raw.split(' Group ', 1)[0].strip()
+                position_coverage[(div_name, m.group(1), d_idx)].add(position)
             else:
-                letter = team_to_group.get((div_name, raw))
-                if letter:
-                    group_active[(div_name, letter)][d_idx] = True
+                # Concrete team — credit only this specific team.
+                # (No more group-wide credit; that was the bug.)
+                if (div_name, raw) in team_to_group:
                     concrete_games[(div_name, raw)][d_idx] += 1
+
+    POSITION_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th']
 
     teams = all_teams(divisions)
     blank_pairs: list[tuple[str, str, int]] = []
     rows: list = []
     for div_name, team in teams:
         letter = team_to_group.get((div_name, team), '')
+        group_size = len(group_to_teams.get((div_name, letter), {team}))
+        required_positions = set(POSITION_LABELS[:group_size])
         counts = list(concrete_games.get((div_name, team), [0] * n_days))
-        active = group_active.get((div_name, letter), [False] * n_days)
         tbd = tbd_games_per_div.get(div_name, [0] * n_days)
         team_blanks = 0
         for d_idx in range(n_days):
-            if counts[d_idx] > 0 or active[d_idx] or tbd[d_idx] > 0:
-                continue
+            if counts[d_idx] > 0:
+                continue  # team plays a concrete game this day
+            if tbd[d_idx] > 0:
+                continue  # downstream TBD covers all positions of all groups in div
+            covered = position_coverage.get((div_name, letter, d_idx), set())
+            if required_positions.issubset(covered):
+                continue  # every position of team's group has a game on d
             blank_pairs.append((div_name, team, d_idx))
             team_blanks += 1
         rows.append((div_name, team, counts, team_blanks))

@@ -67,6 +67,200 @@ def _progress_done(phase='Done'):
     _progress_state['phase'] = phase
 
 
+def _detect_blank_days(assembled, divisions, n_days):
+    """Walk an assembled schedule and return blank (team, day) pairs.
+
+    A team T in group X with positions 1..k is non-blank on day d iff:
+      (a) Concrete: a game on d names T as t1 or t2.
+      (b) Position-covered: ALL k positions of group X are covered by
+          placeholder games on day d (regardless of which position T
+          ends up at, T plays).
+      (c) Downstream TBD: a game on d in T's division has empty t1/t2
+          (Final / 3rd Place / medal final waiting on SF results).
+
+    Mirrors measure_blank_days.measure() exactly so verification scripts
+    and live solver runs agree on what constitutes a blank.
+    """
+    import re
+    placeholder_re = re.compile(
+        r'^(?:1st|2nd|3rd|4th|5th|6th|7th|8th)\s+Group\s+([A-Z])$'
+    )
+
+    sched = assembled.get('sched', {})
+    team_to_group = {}
+    group_to_size = {}
+    all_teams = []
+    for div in divisions:
+        div_name = div.get('name', '')
+        mg = div.get('manualGroups') or []
+        for gi, grp in enumerate(mg):
+            letter = chr(65 + gi)
+            group_to_size[(div_name, letter)] = len(grp)
+            for t in grp:
+                team_to_group[(div_name, t)] = letter
+                all_teams.append((div_name, t))
+
+    concrete = {}
+    position_coverage = {}
+    div_tbd = {}
+
+    for d_blk in sched.get('gameDays', []):
+        d_idx = d_blk.get('dayIndex')
+        if d_idx is None or d_idx >= n_days:
+            continue
+        for divb in d_blk.get('divs', []):
+            dn = divb.get('name', '')
+            buckets = []
+            if divb.get('groups'):
+                for gv in divb['groups'].values():
+                    buckets.append(gv.get('games', []))
+            elif divb.get('games'):
+                buckets.append(divb['games'])
+            for games in buckets:
+                for g in games:
+                    t1 = g.get('t1', '')
+                    t2 = g.get('t2', '')
+                    if not t1 and not t2:
+                        div_tbd.setdefault(dn, [0] * n_days)[d_idx] += 1
+                        continue
+                    for raw in (t1, t2):
+                        if not raw:
+                            continue
+                        m = placeholder_re.match(raw)
+                        if m:
+                            position = raw.split(' Group ', 1)[0].strip()
+                            position_coverage.setdefault(
+                                (dn, m.group(1), d_idx), set()
+                            ).add(position)
+                        else:
+                            if (dn, raw) in team_to_group:
+                                concrete.setdefault(
+                                    (dn, raw), [0] * n_days
+                                )[d_idx] += 1
+
+    POSITION_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th']
+    blank_pairs = []
+    for div_name, team in all_teams:
+        letter = team_to_group.get((div_name, team), '')
+        group_size = group_to_size.get((div_name, letter), 1)
+        required = set(POSITION_LABELS[:group_size])
+        counts = concrete.get((div_name, team), [0] * n_days)
+        tbd = div_tbd.get(div_name, [0] * n_days)
+        for d_idx in range(n_days):
+            if counts[d_idx] > 0 or tbd[d_idx] > 0:
+                continue
+            covered = position_coverage.get((div_name, letter, d_idx), set())
+            if required.issubset(covered):
+                continue
+            blank_pairs.append({'divName': div_name, 'team': team, 'day': d_idx})
+    return blank_pairs
+
+
+def _place_training_games(assembled, blank_pairs, ctx):
+    """Pair blank teams within the same division on the same day into
+    training games and place each pair in a free (court, time) slot.
+
+    Returns (training_games, remaining_blanks).
+
+    Pairing policy: same-division only. Odd-team-out stays blank (no
+    cross-division fallback to avoid age/skill mismatches).
+    Slot policy: any free, non-blacked-out (court, time) on the blank day.
+    """
+    if not blank_pairs:
+        return [], []
+
+    sched = assembled.get('sched', {})
+    courts = ctx['courts']
+    day_slots = ctx['day_slots']
+
+    # Build occupied set: {(day, time_str, court_name)} from already-placed
+    # RR/PO games. Training games may not collide with these.
+    occupied = set()
+    for d_blk in sched.get('gameDays', []):
+        d = d_blk.get('dayIndex')
+        if d is None:
+            continue
+        for divb in d_blk.get('divs', []):
+            game_lists = []
+            if divb.get('groups'):
+                for gv in divb['groups'].values():
+                    game_lists.append(gv.get('games', []))
+            elif divb.get('games'):
+                game_lists.append(divb['games'])
+            for games in game_lists:
+                for g in games:
+                    occupied.add((d, g.get('time', ''), g.get('court', '')))
+
+    # Bucket blank teams by (divName, day).
+    buckets = {}
+    for b in blank_pairs:
+        buckets.setdefault((b['divName'], b['day']), []).append(b['team'])
+
+    training_games = []
+    remaining = []
+
+    # Iterate buckets in deterministic order for reproducibility.
+    for (div_name, day) in sorted(buckets.keys()):
+        teams_sorted = sorted(buckets[(div_name, day)])
+        i = 0
+        while i + 1 < len(teams_sorted):
+            t1, t2 = teams_sorted[i], teams_sorted[i + 1]
+            i += 2
+
+            placed = False
+            for s_min in day_slots[day]:
+                t_str = _min_to_time(s_min)
+                for c_idx, c in enumerate(courts):
+                    if (day, t_str, c['name']) in occupied:
+                        continue
+                    if _is_blacked_out(ctx, c_idx, day, s_min):
+                        continue
+                    occupied.add((day, t_str, c['name']))
+                    training_games.append({
+                        'day': day,
+                        'divName': div_name,
+                        't1': t1, 't2': t2,
+                        'time': t_str,
+                        'court': c['name'],
+                        'loc': c['venue'],
+                        'isTraining': True,
+                    })
+                    placed = True
+                    break
+                if placed:
+                    break
+
+            if not placed:
+                # No free slot: both teams stay blank.
+                remaining.append({'divName': div_name, 'team': t1, 'day': day})
+                remaining.append({'divName': div_name, 'team': t2, 'day': day})
+
+        if i < len(teams_sorted):
+            # Odd team — no partner in this division on this day.
+            remaining.append({'divName': div_name, 'team': teams_sorted[i], 'day': day})
+
+    return training_games, remaining
+
+
+def _apply_no_blank_day_check(assembled, ctx):
+    """Run post-hoc no-blank-day detection on the assembled schedule.
+
+    Single flow: solver runs with hard NBD weights to minimize blanks; any
+    surviving blanks are auto-filled by training games where pairable
+    (same-division, same-day). Leftover unpairable blanks (odd-team-out
+    or no free slot) are attached as warnings for manual admin handling.
+    Rule disabled: pass-through.
+    """
+    if not ctx.get('rule_no_blank_day', False):
+        return assembled
+    blank_pairs = _detect_blank_days(assembled, ctx['divisions'], ctx['n_days'])
+    training_games, remaining = _place_training_games(assembled, blank_pairs, ctx)
+    sched = assembled.setdefault('sched', {})
+    sched['trainingGames'] = training_games
+    sched['noBlankDayWarnings'] = remaining
+    return assembled
+
+
 def solve_schedule(config, time_limit=120):
     """Iterative two-phase solver. Returns frontend-compatible schedule dict."""
     start_time = time.time()
@@ -79,7 +273,6 @@ def solve_schedule(config, time_limit=120):
     last_rr_occupied = None
     last_po_result = None
     last_blocked = None
-    last_nbd_violations = []
     # Lever B: hints carried across iterations (None on iter 1).
     rr_hints = None  # {g: (d, s, c)} from previous iteration's RR placements
     po_hints = None  # {p: (d, s, c)} from previous iteration's PO placements
@@ -116,20 +309,8 @@ def solve_schedule(config, time_limit=120):
                   f"using last good result from iteration {iteration}")
             break
 
-        # Daily Game Distribution (no blank days). Slack-relaxed Phase 1 always
-        # solves; if any slack is set, the rule was violated. In Mandatory mode
-        # we surface this as a fatal generation error so the admin can soften
-        # the rule. In High Priority mode we keep going and attach the warnings
-        # to the final response (handled by _assemble_sched).
-        if iteration == 0 and nbd_violations and ctx.get('nbd_mode') == 'mandatory':
-            _progress_done('Daily Game Distribution rule violated')
-            return {
-                'error': ('Daily Game Distribution rule (Mandatory) cannot be satisfied: '
-                          f'{len(nbd_violations)} team-day pair(s) would have zero games.'),
-                'reason': 'no_blank_day_mandatory_infeasible',
-                'status': 'NBD_MANDATORY_VIOLATED',
-                'blocked_team_days': nbd_violations,
-            }
+        # No-Blank-Day check now happens post-hoc (after Phase 2 places PO
+        # games), in this function below the iterative loop.
 
         po_result, blocked, p2_status, po_placements = _solve_phase2(
             ctx, rr_result, rr_occupied, time_limit, po_excluded_cells,
@@ -146,7 +327,6 @@ def solve_schedule(config, time_limit=120):
         last_rr_occupied = rr_occupied
         last_po_result = po_result
         last_blocked = blocked
-        last_nbd_violations = nbd_violations
 
         if not blocked:
             # All games placed.
@@ -154,8 +334,8 @@ def solve_schedule(config, time_limit=120):
             _progress(f"Done: {len(rr_result)} RR + {len(po_result)} PO "
                       f"in {total_elapsed:.1f}s ({iteration+1} iteration(s))")
             _progress_done()
-            return _assemble_sched(rr_result, po_result, [], ctx, config,
-                                   nbd_violations=nbd_violations)
+            assembled = _assemble_sched(rr_result, po_result, [], ctx, config)
+            return _apply_no_blank_day_check(assembled, ctx)
 
         # Lever C: plateau detection — if blocked count didn't shrink, we're
         # not making progress. Bail before wasting another full iteration.
@@ -202,8 +382,8 @@ def solve_schedule(config, time_limit=120):
                 'status': 'INFEASIBLE'}
 
     unscheduled = [_blocked_to_unsched(pg) for pg in (last_blocked or [])]
-    return _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config,
-                           nbd_violations=last_nbd_violations)
+    assembled = _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config)
+    return _apply_no_blank_day_check(assembled, ctx)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -225,13 +405,12 @@ def _build_context(config):
     rule_rest = sf.get('ruleRest', True)
     rule_venue_rest = sf.get('ruleVenueRest', True)
     # Daily Game Distribution (no blank days) — every team plays >=1 game per day.
-    # Mandatory: hard constraint (slack pays a huge penalty so solver avoids it
-    # unless absolutely impossible). After solving, any non-zero slack triggers
-    # a generation failure with a per-(team, day) diagnostic.
-    # High Priority: same shape, smaller penalty — solver minimizes blank days
-    # but accepts unavoidable ones, surfaced as audit warnings.
+    # Single flow: solver runs with hard NBD weights to minimize blanks;
+    # any surviving blanks are auto-filled by training games (paired
+    # within the same division on the same day) post-hoc. Unpairable
+    # leftovers (odd-team-out or no free slot) become warnings for
+    # manual admin handling.
     rule_no_blank_day = sf.get('ruleNoBlankDay', True)
-    nbd_mode = sf.get('noBlankDayMode', 'mandatory')
     main_venue_final = sf.get('mainVenueFinal', True)
     main_venue_3rd = sf.get('mainVenue3rd', True)
     main_venue_sf = sf.get('mainVenueSF', False)
@@ -462,7 +641,7 @@ def _build_context(config):
         'day_slots': day_slots, 'n_days': n_days,
         'max_gpd': max_gpd,
         'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
-        'rule_no_blank_day': rule_no_blank_day, 'nbd_mode': nbd_mode,
+        'rule_no_blank_day': rule_no_blank_day,
         'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
         'main_venue_sf': main_venue_sf,
         'main_venue_final_mode': main_venue_final_mode,
@@ -598,45 +777,54 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 effective_gpd = max(max_gpd - 1, 1)
             model.add(sum(terms) <= effective_gpd)
 
-    # Daily Game Distribution (no blank days). For each team, ensure >=1 RR
-    # game on every day that is RR-eligible AND has no PO games for the
-    # team's division. On mixed RR/PO days the structural bracket coverage
-    # in Phase 2 takes care of the team's day. On PO-only days the
-    # placeholder game generation in Phase 2 handles it.
+    # Phase 1 No-Blank-Day prevention (RR-only days). Day 0 (and any other
+    # RR-only day, when n_days > 3) has no PO slots. If a team ends up with
+    # 0 RR on such a day, the day is structurally blank and Phase 2 cannot
+    # cover it. Force ≥1 RR per team on every RR-only day to eliminate the
+    # 0+N distributions that would otherwise be unrecoverable.
     #
-    # Slack-relaxed formulation: every constraint allows a Bool slack var
-    # that pays a penalty when set. Mandatory mode uses a huge penalty so
-    # the solver only sets slack when truly infeasible; we then return an
-    # error. High Priority mode uses a smaller penalty and surfaces any
-    # remaining slacks as audit warnings.
-    nbd_slacks = {}  # (div, team, d) -> Bool slack var (1 if rule violated)
-    rule_no_blank_day = ctx.get('rule_no_blank_day', False)
-    nbd_mode = ctx.get('nbd_mode', 'mandatory')
-    NBD_HARD_PENALTY = 10 ** 6  # dominates other penalty terms
-    NBD_SOFT_PENALTY = 100      # comparable to existing soft prefs
-    nbd_penalty_terms = []
-    if rule_no_blank_day:
-        weight = NBD_HARD_PENALTY if nbd_mode == 'mandatory' else NBD_SOFT_PENALTY
+    # For 3-team groups: this combines with max-games-per-day=2 to force a
+    # 2+1 distribution where one team plays both their games on the RR-only
+    # day (a 2+0 pattern). That team's blank day (the mixed RR/PO day) is
+    # then the only one Phase 2 needs to cover via the cross-phase
+    # constraint. For 4-team and 5-team groups, the max-gpd rule already
+    # forces ≥1 per team per day, so this constraint is a no-op.
+    nbd_phase1_slack_terms = []
+    rule_no_blank_day_p1 = ctx.get('rule_no_blank_day', False)
+    NBD_PH1_WEIGHT = 100_000  # hard pressure to minimize blanks; surviving blanks are auto-filled by training games
+    po_start_day_p1 = ctx['po_start_day']
+    if rule_no_blank_day_p1:
+        weight_p1 = NBD_PH1_WEIGHT
         for d in range(n_days):
-            # Skip days that have no RR slots at all (RR cannot be placed there).
+            # RR-only days only: rr_slot_mask non-empty AND no PO scheduled.
             if not rr_slot_mask.get(d):
                 continue
+            if d >= po_start_day_p1:
+                continue  # mixed RR/PO day — Phase 2 cross-phase covers
             for (div, team), g_list in team_games.items():
-                # Skip days where this division has PO games — Phase 2
-                # ensures the team's group has a placeholder game that day,
-                # so a blank day cannot occur even with 0 RR games.
-                if d in po_days_per_div.get(div, set()):
-                    continue
                 terms = [x[g, d, s, c]
                          for g in g_list
                          for s in range(len(day_slots[d]))
                          for c in range(num_courts)]
                 if not terms:
                     continue
-                slack = model.new_bool_var(f'nbd_{d}_{div}_{team}')
+                safe = (div + '_' + team + '_' + str(d)).replace(' ', '_')
+                slack = model.new_bool_var('nbdph1_' + safe)
                 model.add(sum(terms) + slack >= 1)
-                nbd_slacks[(div, team, d)] = slack
-                nbd_penalty_terms.append(weight * slack)
+                nbd_phase1_slack_terms.append(weight_p1 * slack)
+
+    # Daily Game Distribution (no blank days) — detection happens AFTER
+    # both phases place games, in solve_schedule via _detect_blank_days().
+    # The earlier Phase 1 slack-relaxed constraint here was incorrect (it
+    # skipped days where the division had ANY PO game, on the wrong
+    # assumption that PO covers every team in the division — but PO games
+    # are group-specific). The post-hoc detection mirrors the helper logic
+    # exactly: a team is non-blank on day d iff it has a concrete game on
+    # day d, OR every position of its group has a placeholder PO game on
+    # day d, OR there's a TBD downstream game (Final / 3rd Place / medal
+    # final) in its division on day d.
+    nbd_slacks = {}            # kept for return signature; always empty.
+    nbd_penalty_terms = []     # kept for objective merge; always empty.
 
     # Rest between games (Rules 6 & 7).
     for (div, team), g_list in team_games.items():
@@ -728,7 +916,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
     # Combine venue-preference penalties with No-Blank-Day slack penalties.
-    all_penalty_terms = penalty_terms + nbd_penalty_terms
+    all_penalty_terms = penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms
     if all_penalty_terms:
         model.minimize(sum(all_penalty_terms))
 
@@ -1017,6 +1205,68 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
         po_model.add(sum(cell_vars) == placed_p)
         placed_vars.append(placed_p)
 
+    # ── Cross-phase No-Blank-Day constraint ────────────────────────────────
+    # For each (div, group, day) where any team in the group has 0 RR games on
+    # day d (per Phase 1's frozen placement), require ALL positions of that
+    # group to have at least one PO game on day d. Whichever rank the team
+    # ends up at, they will play a PO game and not be blank.
+    #
+    # Slack-relaxed: in Mandatory mode the slack pays a huge penalty so the
+    # solver only sets it when truly infeasible. In High Priority mode the
+    # penalty is moderate so the solver can trade NBD off against other soft
+    # prefs (Blanes priority, finals timing). The post-hoc check in
+    # _apply_no_blank_day_check decides whether surviving slack triggers a
+    # generation failure (Mandatory) or just attaches as warnings (High).
+    nbd_phase2_slack_terms = []
+    rule_no_blank_day = ctx.get('rule_no_blank_day', False)
+    NBD_PH2_WEIGHT = 100_000  # below UNPLACED_WEIGHT so placement still wins
+    if rule_no_blank_day:
+        nbd_weight = NBD_PH2_WEIGHT
+        # rr_count[(div, team, day)] = # of RR games for team on that day.
+        rr_count = defaultdict(int)
+        for rg in rr_result:
+            rr_count[(rg['divName'], rg['t1'], rg['day'])] += 1
+            rr_count[(rg['divName'], rg['t2'], rg['day'])] += 1
+        # placeholder_games[(div, "Nth Group X")] = list of p indices.
+        placeholder_games = defaultdict(list)
+        for p, pg in enumerate(po_games):
+            for slot in (pg.get('t1', ''), pg.get('t2', '')):
+                if slot and ' Group ' in slot:
+                    placeholder_games[(pg['divName'], slot)].append(p)
+        POSITION_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th']
+        po_start_day = ctx['po_start_day']
+        for (div_name, letter), teams in groups.items():
+            k = len(teams)
+            positions = POSITION_LABELS[:k]
+            for d in range(n_days):
+                # Only fire on mixed RR/PO days. Day 0 (RR-only) has no PO
+                # slots — forcing coverage there is impossible. The finals
+                # day has only TBD downstream games whose placeholders are
+                # empty; the post-hoc check handles those structurally.
+                if not (po_start_day <= d < finals_day):
+                    continue
+                # If every team in the group has at least one RR on day d,
+                # they are already non-blank — no constraint needed.
+                if all(rr_count.get((div_name, t, d), 0) > 0 for t in teams):
+                    continue
+                # Some team has 0 RR on d. Require coverage of every position
+                # of the group on day d so that team plays regardless of rank.
+                for pos in positions:
+                    placeholder = pos + ' Group ' + letter
+                    p_games = placeholder_games.get((div_name, placeholder), [])
+                    if not p_games:
+                        continue  # this position has no PO game in the bracket
+                    terms = [y[p, d, s, c]
+                             for p in p_games
+                             for s in range(len(day_slots[d]))
+                             for c in range(num_courts)]
+                    if not terms:
+                        continue
+                    safe = (div_name + '_' + letter + '_' + pos + '_' + str(d)).replace(' ', '_')
+                    slack = po_model.new_bool_var('nbdph2_' + safe)
+                    po_model.add(sum(terms) + slack >= 1)
+                    nbd_phase2_slack_terms.append(nbd_weight * slack)
+
     obj_terms = []
     for p, pg in enumerate(po_games):
         w = UNPLACED_WEIGHT
@@ -1170,6 +1420,11 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
         po_model.add(third_g >= final_g).only_enforce_if(bad_order)
         po_model.add(third_g < final_g).only_enforce_if(bad_order.Not())
         obj_terms.append(PENALTY_3RD_AFTER_FINAL * bad_order)
+
+    # Append No-Blank-Day slack penalty terms to the objective (they were
+    # collected earlier alongside the cross-phase constraint).
+    if nbd_phase2_slack_terms:
+        obj_terms.extend(nbd_phase2_slack_terms)
 
     if obj_terms:
         po_model.minimize(sum(obj_terms))
@@ -1463,8 +1718,13 @@ def _build_po_structure(divisions, groups):
     return po_games
 
 
-def _assemble_sched(rr_result, po_result, unscheduled, ctx, config, nbd_violations=None):
-    """Assemble the schedule in the format the frontend expects."""
+def _assemble_sched(rr_result, po_result, unscheduled, ctx, config):
+    """Assemble the schedule in the format the frontend expects.
+
+    No-Blank-Day warnings are added downstream by _apply_no_blank_day_check
+    in solve_schedule (post-hoc detection), so this function intentionally
+    leaves `sched.noBlankDayWarnings` unset.
+    """
     divisions = ctx['divisions']
     courts = ctx['courts']
     day_slots = ctx['day_slots']
@@ -1569,9 +1829,6 @@ def _assemble_sched(rr_result, po_result, unscheduled, ctx, config, nbd_violatio
             'total': len(rr_result) + len(po_result),
             'unscheduled': len(unscheduled),
         },
-        # No-Blank-Day warnings (High Priority mode only — Mandatory mode
-        # short-circuits with an error response upstream).
-        'noBlankDayWarnings': list(nbd_violations or []),
     }
 
 
