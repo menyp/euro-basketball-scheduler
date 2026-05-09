@@ -245,30 +245,15 @@ def _place_training_games(assembled, blank_pairs, ctx):
 def _apply_no_blank_day_check(assembled, ctx):
     """Run post-hoc no-blank-day detection on the assembled schedule.
 
-    - Mandatory mode + any blanks: return a fail-loudly error response so
-      the frontend can show the existing failure modal with the per-team
-      diagnostic and the "Switch to High Priority and retry" button.
-    - High Priority mode: pair blank teams into training games where
-      possible, then attach `sched.trainingGames` and
-      `sched.noBlankDayWarnings` (leftover unpairable blanks) so the UI
-      can surface both.
-    - Rule disabled: pass-through.
+    Single flow: solver runs with hard NBD weights to minimize blanks; any
+    surviving blanks are auto-filled by training games where pairable
+    (same-division, same-day). Leftover unpairable blanks (odd-team-out
+    or no free slot) are attached as warnings for manual admin handling.
+    Rule disabled: pass-through.
     """
     if not ctx.get('rule_no_blank_day', False):
         return assembled
     blank_pairs = _detect_blank_days(assembled, ctx['divisions'], ctx['n_days'])
-    if blank_pairs and ctx.get('nbd_mode', 'mandatory') == 'mandatory':
-        _progress_done('Daily Game Distribution rule violated')
-        return {
-            'error': ('Daily Game Distribution rule (Mandatory) cannot be satisfied: '
-                      f'{len(blank_pairs)} team-day pair(s) would have zero games.'),
-            'reason': 'no_blank_day_mandatory_infeasible',
-            'status': 'NBD_MANDATORY_VIOLATED',
-            'blocked_team_days': blank_pairs,
-        }
-    # High Priority mode (or Mandatory with zero blanks): try to pair
-    # blanks into training games, then attach warnings for whatever
-    # remains unpaired.
     training_games, remaining = _place_training_games(assembled, blank_pairs, ctx)
     sched = assembled.setdefault('sched', {})
     sched['trainingGames'] = training_games
@@ -420,13 +405,12 @@ def _build_context(config):
     rule_rest = sf.get('ruleRest', True)
     rule_venue_rest = sf.get('ruleVenueRest', True)
     # Daily Game Distribution (no blank days) — every team plays >=1 game per day.
-    # Mandatory: hard constraint (slack pays a huge penalty so solver avoids it
-    # unless absolutely impossible). After solving, any non-zero slack triggers
-    # a generation failure with a per-(team, day) diagnostic.
-    # High Priority: same shape, smaller penalty — solver minimizes blank days
-    # but accepts unavoidable ones, surfaced as audit warnings.
+    # Single flow: solver runs with hard NBD weights to minimize blanks;
+    # any surviving blanks are auto-filled by training games (paired
+    # within the same division on the same day) post-hoc. Unpairable
+    # leftovers (odd-team-out or no free slot) become warnings for
+    # manual admin handling.
     rule_no_blank_day = sf.get('ruleNoBlankDay', True)
-    nbd_mode = sf.get('noBlankDayMode', 'mandatory')
     main_venue_final = sf.get('mainVenueFinal', True)
     main_venue_3rd = sf.get('mainVenue3rd', True)
     main_venue_sf = sf.get('mainVenueSF', False)
@@ -657,7 +641,7 @@ def _build_context(config):
         'day_slots': day_slots, 'n_days': n_days,
         'max_gpd': max_gpd,
         'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
-        'rule_no_blank_day': rule_no_blank_day, 'nbd_mode': nbd_mode,
+        'rule_no_blank_day': rule_no_blank_day,
         'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
         'main_venue_sf': main_venue_sf,
         'main_venue_final_mode': main_venue_final_mode,
@@ -807,12 +791,10 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # forces ≥1 per team per day, so this constraint is a no-op.
     nbd_phase1_slack_terms = []
     rule_no_blank_day_p1 = ctx.get('rule_no_blank_day', False)
-    nbd_mode_p1 = ctx.get('nbd_mode', 'mandatory')
-    NBD_PH1_HARD = 100_000
-    NBD_PH1_SOFT = 1_000
+    NBD_PH1_WEIGHT = 100_000  # hard pressure to minimize blanks; surviving blanks are auto-filled by training games
     po_start_day_p1 = ctx['po_start_day']
     if rule_no_blank_day_p1:
-        weight_p1 = NBD_PH1_HARD if nbd_mode_p1 == 'mandatory' else NBD_PH1_SOFT
+        weight_p1 = NBD_PH1_WEIGHT
         for d in range(n_days):
             # RR-only days only: rr_slot_mask non-empty AND no PO scheduled.
             if not rr_slot_mask.get(d):
@@ -1237,11 +1219,9 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # generation failure (Mandatory) or just attaches as warnings (High).
     nbd_phase2_slack_terms = []
     rule_no_blank_day = ctx.get('rule_no_blank_day', False)
-    nbd_mode = ctx.get('nbd_mode', 'mandatory')
-    NBD_PH2_HARD = 100_000   # below UNPLACED_WEIGHT so placement still wins
-    NBD_PH2_SOFT = 1_000     # above most cosmetic prefs but soft
+    NBD_PH2_WEIGHT = 100_000  # below UNPLACED_WEIGHT so placement still wins
     if rule_no_blank_day:
-        nbd_weight = NBD_PH2_HARD if nbd_mode == 'mandatory' else NBD_PH2_SOFT
+        nbd_weight = NBD_PH2_WEIGHT
         # rr_count[(div, team, day)] = # of RR games for team on that day.
         rr_count = defaultdict(int)
         for rg in rr_result:

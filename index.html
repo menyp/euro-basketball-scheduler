@@ -428,24 +428,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
         <div style="display:flex;align-items:flex-start;gap:14px">
           <label class="rule-toggle" style="margin:0">
-            <input type="checkbox" id="ruleNoBlankDay" checked onchange="document.getElementById('noBlankDayModeWrap').style.display=this.checked?'flex':'none'">
+            <input type="checkbox" id="ruleNoBlankDay" checked>
             <span class="rule-slider"></span>
           </label>
           <div class="rule-lbl" style="flex:1">
             <strong>Daily Game Distribution (No Blank Days)</strong>
-            <small>When ON, every team must play at least 1 game on every tournament day. Prevents wasted travel days for teams flying in for the whole event. Acts as a safety rail — for the default 8/12/16-team mix this is already satisfied by other rules, but the constraint catches regressions if the configuration changes.</small>
-            <div id="noBlankDayModeWrap" style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
-              <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--g);white-space:nowrap">Mode:</span>
-              <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="radio" name="noBlankDayMode" id="noBlankDayModePriority" value="priority" onchange="updateNoBlankDayDesc()" style="width:auto;margin:0;accent-color:var(--o)">
-                <span style="font-size:12px;font-family:'Montserrat',sans-serif;font-weight:700;color:#fff">High Priority</span>
-              </label>
-              <label style="margin:0;display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="radio" name="noBlankDayMode" id="noBlankDayModeMandatory" value="mandatory" checked onchange="updateNoBlankDayDesc()" style="width:auto;margin:0;accent-color:var(--o)">
-                <span style="font-size:12px;font-family:'Montserrat',sans-serif;font-weight:700;color:#fff">Mandatory</span>
-              </label>
-              <span id="noBlankDayModeDesc" style="font-size:11px;color:var(--g);width:100%;margin-top:2px">Hard constraint: if any team would have a blank day, generation fails and the conflict is reported so you can soften the rule.</span>
-            </div>
+            <small>When ON, the solver minimizes blank days (0-game days for any team). Any blanks that remain are auto-filled with <strong>training games</strong> — pairing two same-division teams on the same day on a free court. If a team can't be paired (odd-team-out in its division on that day), it's flagged in red so you can resolve it manually. Disable only if blanks are acceptable for your event.</small>
           </div>
         </div>
 
@@ -663,22 +651,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     <div class="modal-buttons">
       <button class="modal-btn cancel" id="resetModalCancel">Cancel</button>
       <button class="modal-btn confirm" id="resetModalConfirm" style="background:#c53030">Reset</button>
-    </div>
-  </div>
-</div>
-
-<div id="nbdFailureModal" class="modal-overlay">
-  <div class="modal-card" style="max-width:560px">
-    <h3 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">
-      <span style="color:#fc8181">&#9888;</span>
-      <span>Daily Game Distribution rule cannot be satisfied</span>
-    </h3>
-    <p id="nbdFailureSummary" style="font-size:13px;opacity:.8;margin:6px 0 14px;line-height:1.6"></p>
-    <div id="nbdFailureList" style="background:rgba(0,0,0,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.7;max-height:240px;overflow-y:auto;font-family:'Montserrat',sans-serif"></div>
-    <p style="font-size:12px;opacity:.7;margin:0 0 18px;line-height:1.5">Switch the rule to <strong>High Priority</strong> to allow these blank days (the solver will minimize them but accept the unavoidable ones), or cancel and adjust the configuration manually (e.g. add days, change group sizes).</p>
-    <div class="modal-buttons">
-      <button class="modal-btn cancel" id="nbdFailureCancel">Cancel</button>
-      <button class="modal-btn confirm" id="nbdFailureRetry" style="background:#f6ad55;color:#1a202c">Switch to High Priority &amp; retry</button>
     </div>
   </div>
 </div>
@@ -1154,15 +1126,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     el.textContent = mandatory
       ? 'Hard constraint: games that cannot satisfy the 3-hour gap will be left unscheduled (shown as failures).'
       : 'Soft constraint: games may violate the rule if no other slot exists \u2014 a warning is shown.';
-  };
-
-  window.updateNoBlankDayDesc = function updateNoBlankDayDesc() {
-    var el = document.getElementById('noBlankDayModeDesc');
-    if (!el) return;
-    var mandatory = document.getElementById('noBlankDayModeMandatory').checked;
-    el.textContent = mandatory
-      ? 'Hard constraint: if any team would have a blank day, generation fails and the conflict is reported so you can soften the rule.'
-      : 'Soft constraint: solver minimizes blank days but accepts unavoidable ones \u2014 surviving blanks are listed as audit warnings.';
   };
 
   // venueRules: per-category Blanes priority rules set by the admin.
@@ -1899,10 +1862,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     lines.push('10b. Every team plays at least **one RR game at the main venue** (**' + (rules.mainVenue || 'Blanes') + '**)');
     lines.push('10c. **PO-day safety:** If a division has playoff games (SFs) on a day, each team in that division should play at most **' + (gpd - 1) + ' RR games** on that day — so an advancing team doesn\'t exceed ' + gpd + ' total games (RR + SF)');
     var nbdEl = document.getElementById('ruleNoBlankDay');
-    var nbdMandEl = document.getElementById('noBlankDayModeMandatory');
     if (nbdEl && nbdEl.checked) {
-      var nbdMand = !!(nbdMandEl && nbdMandEl.checked);
-      lines.push('10d. **Daily Game Distribution (No Blank Days):** every team should play at least **1 game on every tournament day**. Mode: **' + (nbdMand ? 'Mandatory' : 'High Priority') + '**' + (nbdMand ? '' : ' — soft preference, may be relaxed when structurally unavoidable') + '.');
+      lines.push('10d. **Daily Game Distribution (No Blank Days):** the solver minimizes blank days; any unavoidable blanks are auto-filled with **training games** (paired same-division, same-day) and surfaced for admin review. Training games are intentionally excluded from this audit and from standings.');
     }
     var mvName = rules.mainVenue || 'Blanes';
     var secName = rules.secondaryVenue || '';
@@ -2836,7 +2797,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var ruleVR        = document.getElementById('ruleVenueRest') && document.getElementById('ruleVenueRest').checked;
     var vrMandatory   = document.getElementById('venueRestModeMandatory') && document.getElementById('venueRestModeMandatory').checked;
     var ruleNBD       = !!(document.getElementById('ruleNoBlankDay') && document.getElementById('ruleNoBlankDay').checked);
-    var nbdMandatory  = !!(document.getElementById('noBlankDayModeMandatory') && document.getElementById('noBlankDayModeMandatory').checked);
     var mvFinal       = document.getElementById('mainVenueFinal') && document.getElementById('mainVenueFinal').checked;
     var mv3rd         = document.getElementById('mainVenue3rd')   && document.getElementById('mainVenue3rd').checked;
     var mvSF          = document.getElementById('mainVenueSF')    && document.getElementById('mainVenueSF').checked;
@@ -2986,13 +2946,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<p style="margin-top:10px"><strong>Rule 4 — Semi-final timing:</strong> a semi-final must start at least <strong>90 min before</strong> any later game in its bracket (Final, 3rd Place, or medal). The Final and 3rd Place games always begin at least <strong>180 min after</strong> their SFs (3-slot gap when on the main venue, more if a venue change is involved).</p>'
       + '<p style="margin-top:10px"><strong>Daily Game Distribution (No Blank Days)</strong> ' + on(ruleNBD) + '<br>'
       + (ruleNBD
-          ? 'Every team must play at least <strong>1 game on every tournament day</strong> (no wasted travel days). '
-            + 'Mode: <strong>' + (nbdMandatory ? 'Mandatory' : 'High Priority') + '</strong>. '
-            + (nbdMandatory
-                ? 'Hard constraint — if any team would have a blank day, generation fails and the conflict is reported with the offending (team, day) pairs. Soften by switching to High Priority.'
-                : 'Best-effort — the solver minimizes blank days but accepts unavoidable ones. Surviving blanks appear as audit warnings.')
-            + ' Acts as a safety rail — for the default 8/12/16-team mix this is satisfied automatically by Rule 5 (max games/day) plus the post-RR-2026 bracket structure, but the constraint catches regressions if the configuration changes (e.g., adding 10-team divisions, raising max games/day, or splitting playoffs across days).'
-          : 'Currently <em>disabled</em> — some teams may have blank days depending on solver choices.')
+          ? 'The solver minimizes blank days (a team having 0 games on a day). Any blanks that survive are auto-filled with <strong>training games</strong> &mdash; pairing two same-division teams on the same day on a free court. Training games are flagged distinctly in the schedule and Excel export, are excluded from standings, brackets, and the audit. If a team has no same-division partner on its blank day (odd-team-out or no free slot), it is flagged in red in the Schedule view for manual handling.'
+          : 'Currently <em>disabled</em> — teams may have blank days; no training games will be placed.')
       + '</p></div>'
 
       // ── 5. Venue Priority ──────────────────────────────────────────────────
@@ -3135,40 +3090,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     document.getElementById('resetModal').classList.remove('active');
   });
   document.getElementById('resetModal').addEventListener('click', function (e) {
-    if (e.target === this) this.classList.remove('active');
-  });
-
-  // ── No-Blank-Day Mandatory failure modal ───────────────
-  function _showNoBlankDayFailureModal(blocked) {
-    var summary = document.getElementById('nbdFailureSummary');
-    var listEl  = document.getElementById('nbdFailureList');
-    var modal   = document.getElementById('nbdFailureModal');
-    if (!summary || !listEl || !modal) return;
-    summary.textContent = 'The schedule cannot give every team a game on every tournament day. '
-      + blocked.length + ' team-day pair(s) would have zero games:';
-    var items = blocked.map(function (b) {
-      return '<div>&middot; <strong>' + escapeHtml(b.divName) + '</strong> / '
-        + escapeHtml(b.team) + ' &mdash; <span style="color:#fc8181">Day ' + (b.day + 1) + '</span></div>';
-    }).join('');
-    listEl.innerHTML = items || '<em style="opacity:.6">(no details)</em>';
-    modal.classList.add('active');
-  }
-  function escapeHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-  document.getElementById('nbdFailureCancel').addEventListener('click', function () {
-    document.getElementById('nbdFailureModal').classList.remove('active');
-  });
-  document.getElementById('nbdFailureRetry').addEventListener('click', function () {
-    document.getElementById('nbdFailureModal').classList.remove('active');
-    var prio = document.getElementById('noBlankDayModePriority');
-    var mand = document.getElementById('noBlankDayModeMandatory');
-    if (prio) prio.checked = true;
-    if (mand) mand.checked = false;
-    if (typeof window.updateNoBlankDayDesc === 'function') window.updateNoBlankDayDesc();
-    _runCPSatGenerate();
-  });
-  document.getElementById('nbdFailureModal').addEventListener('click', function (e) {
     if (e.target === this) this.classList.remove('active');
   });
 
@@ -3603,7 +3524,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         ruleVenueRest: document.getElementById('ruleVenueRest').checked,
         venueRestMandatory: document.getElementById('venueRestModeMandatory').checked,
         ruleNoBlankDay: (document.getElementById('ruleNoBlankDay') || {}).checked !== false,
-        noBlankDayMode: (document.getElementById('noBlankDayModeMandatory') || {}).checked === false ? 'priority' : 'mandatory',
         mainVenueFinal: document.getElementById('mainVenueFinal').checked,
         mainVenue3rd: document.getElementById('mainVenue3rd').checked,
         mainVenueSF: document.getElementById('mainVenueSF').checked,
@@ -3680,13 +3600,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       try {
         var data = JSON.parse(xhr.responseText);
         if (data.error) {
-          // Specialized handling for the No-Blank-Day Mandatory failure: offer
-          // a one-click "Switch to High Priority and retry" instead of falling
-          // back to the greedy algorithm (which doesn't enforce the rule).
-          if (data.reason === 'no_blank_day_mandatory_infeasible') {
-            _showNoBlankDayFailureModal(data.blocked_team_days || []);
-            return;
-          }
           alert('CP-SAT solver error: ' + data.error + '\nFalling back to greedy algorithm.');
           _runGreedyGenerate();
           return;
@@ -6053,6 +5966,26 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         d.groups[gk].games.forEach(function(g, gi) { addGame(g, gi, gk); });
       });
     });
+    // Training games — placed by the backend on free slots to fill blank
+    // days. Render them in the grid alongside real games, but tagged so
+    // the cell shows the TRAINING badge and styling.
+    (sched.trainingGames || []).filter(function(tg) { return tg.day === _gridActiveDay; }).forEach(function(tg) {
+      if (!tg.time || !tg.court) return;
+      if (!gameMap[tg.time]) gameMap[tg.time] = {};
+      var divDef = (divisions || []).find(function(dd) { return dd.name === tg.divName; });
+      gameMap[tg.time][tg.court] = {
+        divName: tg.divName,
+        divColor: (divDef && divDef.color) || '#94a3b8',
+        t1: tg.t1 || '', t2: tg.t2 || '',
+        lbl: 'TRAINING',
+        locked: false, score1: null, score2: null,
+        quotaViolation: false,
+        loc: tg.loc || '',
+        dIdx: _gridActiveDay,
+        gi: -1, gk: '',
+        isTraining: true
+      };
+    });
 
     var times = Object.keys(gameMap).sort();
     if (!times.length) {
@@ -6086,16 +6019,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           var divShort = gm.divName.length > 20 ? gm.divName.slice(0, 18) + '…' : gm.divName;
           // data-* attributes mirror the .gc card so openMoveGameModal works unchanged
           var quotaClass = gm.quotaViolation ? ' cg-quota-warn' : '';
-          rows += '<td class="cg-game-cell' + quotaClass + '" style="border-left:3px solid ' + gm.divColor + '"'
+          var trainingStyle = gm.isTraining ? ';background:rgba(148,163,184,.10);font-style:italic' : '';
+          rows += '<td class="cg-game-cell' + quotaClass + '" style="border-left:3px solid ' + gm.divColor + trainingStyle + '"'
             + ' data-div="' + escH(gm.divName) + '"'
             + ' data-t1="' + escH(gm.t1) + '"'
             + ' data-t2="' + escH(gm.t2) + '"'
             + ' data-venue="' + escH(gm.loc) + '"'
             + ' data-day="' + gm.dIdx + '"'
             + ' data-gi="' + gm.gi + '"'
-            + ' data-gk="' + escH(gm.gk) + '">'
-            + '<div class="cg-cell-div" style="color:' + gm.divColor + '">' + escH(divShort)
-            +   (gm.lbl ? ' <span class="cg-cell-label">' + escH(gm.lbl) + '</span>' : '') + '</div>'
+            + ' data-gk="' + escH(gm.gk) + '"'
+            + (gm.isTraining ? ' title="Training game (placed to fill a blank day)"' : '') + '>'
+            + '<div class="cg-cell-div" style="color:' + (gm.isTraining ? '#94a3b8' : gm.divColor) + '">' + escH(divShort)
+            +   (gm.lbl ? ' <span class="cg-cell-label"' + (gm.isTraining ? ' style="color:#94a3b8;border-color:#94a3b8"' : '') + '>' + escH(gm.lbl) + '</span>' : '') + '</div>'
             + '<div class="cg-cell-teams">' + escH(gm.t1) + '<span class="cg-vs">vs</span>' + escH(gm.t2) + '</div>'
             + (score ? '<div class="cg-cell-score">' + escH(score) + '</div>' : '')
             + '</td>';
@@ -6218,20 +6153,21 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         }).join('');
         sections += '<div>'
           + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
-          + 'text-transform:uppercase;letter-spacing:1.5px;color:#f6ad55;margin-bottom:8px">'
-          + '⚠️ ' + nbdWarn.length + ' blank-day warning'
-          + (nbdWarn.length === 1 ? '' : 's') + ' &mdash; no partner available</div>'
-          + '<p style="font-size:12px;line-height:1.5;margin:0 0 8px 0;color:#cbd5e1">'
-          + 'These teams could not be paired into a training game (odd team out in their division, '
-          + 'or no free court/time slot on the day).</p>'
+          + 'text-transform:uppercase;letter-spacing:1.5px;color:#fc8181;margin-bottom:8px">'
+          + '⚠️ ' + nbdWarn.length + ' blank' + (nbdWarn.length === 1 ? '' : 's')
+          + ' &mdash; needs manual handling</div>'
+          + '<p style="font-size:12px;line-height:1.5;margin:0 0 8px 0;color:#fecaca">'
+          + 'These teams have no game on the listed day(s) and could not be paired into a training '
+          + 'game (no same-division partner on that day, or no free court/time slot). '
+          + '<strong>Please resolve manually</strong> before publishing the schedule.</p>'
           + '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.6;'
           + 'font-family:Montserrat,sans-serif;color:#e2e8f0">' + nbdRows + '</ul>'
           + '</div>';
       }
 
-      var headerColor = nbdWarn.length > 0 ? '#f6ad55' : '#a3e635';
-      var headerBg = nbdWarn.length > 0 ? 'rgba(246,173,85,.08)' : 'rgba(163,230,53,.08)';
-      var headerBorder = nbdWarn.length > 0 ? 'rgba(246,173,85,.4)' : 'rgba(163,230,53,.4)';
+      var headerColor = nbdWarn.length > 0 ? '#fc8181' : '#a3e635';
+      var headerBg = nbdWarn.length > 0 ? 'rgba(252,129,129,.08)' : 'rgba(163,230,53,.08)';
+      var headerBorder = nbdWarn.length > 0 ? 'rgba(252,129,129,.45)' : 'rgba(163,230,53,.4)';
       h += '<div style="background:' + headerBg + ';border:1px solid ' + headerBorder + ';'
         + 'border-radius:8px;padding:14px 18px;margin-bottom:14px">'
         + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:11px;'
@@ -6659,6 +6595,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           });
         }
       });
+    });
+    // Training games — append rows tagged TRAINING in the Type column.
+    (sched.trainingGames || []).forEach(function(tg) {
+      var dayLabel = (sched.gameDays[tg.day] || {}).label || ('Day ' + ((tg.day || 0) + 1));
+      rows.push([dayLabel, tg.time || '', tg.divName || '', '', tg.t1 || '', tg.t2 || '', tg.court || '', 'TRAINING']);
     });
     var csv = rows.map(function(r) {
       return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
@@ -7120,6 +7061,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (d.games) d.games.forEach(addGame);
         else if (d.groups) Object.keys(d.groups).forEach(function(gk) { d.groups[gk].games.forEach(addGame); });
       });
+      // Training games — render in print grid with the TRAINING label.
+      var dayIdx = (typeof day.dayIndex === 'number') ? day.dayIndex : sched.gameDays.indexOf(day);
+      (sched.trainingGames || []).filter(function(tg) { return tg.day === dayIdx; }).forEach(function(tg) {
+        if (!tg.time || !tg.court) return;
+        if (!gameMap[tg.time]) gameMap[tg.time] = {};
+        var divDef = (divisions || []).find(function(dd) { return dd.name === tg.divName; });
+        gameMap[tg.time][tg.court] = {
+          divName: tg.divName,
+          divColor: (divDef && divDef.color) || '#94a3b8',
+          t1: tg.t1 || '', t2: tg.t2 || '',
+          lbl: 'TRAINING', score: '', isTraining: true
+        };
+      });
 
       var times = Object.keys(gameMap).sort();
       if (!times.length) return '';
@@ -7372,7 +7326,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         ruleVenueRest:         getFieldChecked('ruleVenueRest'),
         venueRestModeMandatory:getFieldChecked('venueRestModeMandatory'),
         ruleNoBlankDay:        getFieldChecked('ruleNoBlankDay'),
-        noBlankDayMode:        ((document.getElementById('noBlankDayModeMandatory') || {}).checked === false ? 'priority' : 'mandatory'),
         mainVenueFinal:        getFieldChecked('mainVenueFinal'),
         mainVenue3rd:          getFieldChecked('mainVenue3rd'),
         mainVenueSF:           getFieldChecked('mainVenueSF'),
@@ -7622,16 +7575,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         setChecked('ruleVenueRest',         sf.ruleVenueRest);
         setChecked('venueRestModeMandatory',sf.venueRestModeMandatory);
         setChecked('venueRestModePriority', sf.venueRestModeMandatory === false);
-        // Daily Game Distribution (No Blank Days). Default ON / Mandatory if
-        // legacy snapshot has no fields (matches new defaults).
-        var nbdEnabled = sf.ruleNoBlankDay !== false;
-        var nbdMandatory = sf.noBlankDayMode !== 'priority';
-        setChecked('ruleNoBlankDay',        nbdEnabled);
-        setChecked('noBlankDayModeMandatory', nbdMandatory);
-        setChecked('noBlankDayModePriority',  !nbdMandatory);
-        var nbdWrap = document.getElementById('noBlankDayModeWrap');
-        if (nbdWrap) nbdWrap.style.display = nbdEnabled ? 'flex' : 'none';
-        if (typeof window.updateNoBlankDayDesc === 'function') window.updateNoBlankDayDesc();
+        // Daily Game Distribution (No Blank Days). Default ON if legacy
+        // snapshot has no field. Mode field (noBlankDayMode) is ignored —
+        // the rule is now always "minimize + auto-fill with training".
+        setChecked('ruleNoBlankDay', sf.ruleNoBlankDay !== false);
         setChecked('mainVenueFinal',        sf.mainVenueFinal);
         setChecked('mainVenue3rd',          sf.mainVenue3rd);
         setChecked('mainVenueSF',           sf.mainVenueSF);
