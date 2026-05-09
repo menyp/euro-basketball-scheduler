@@ -2931,7 +2931,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<p><strong>Rule 6 — Team Rest Between Games</strong> ' + on(ruleRest) + '<br>'
       + (ruleRest
           ? 'A team must have at least <strong>one clear slot (90 min)</strong> between any two games on the same day. '
-            + 'Example: a team playing at 09:00 cannot play again until 12:00.'
+            + 'Example: a team playing at 09:00 cannot play again until 12:00.<br>'
+            + '<em>Soft preference (always on):</em> when multiple slot options satisfy the 90-min floor, the solver prefers larger same-day gaps using a convex (squared) penalty up to a 240-min target. Result: tight cases like 90&ndash;180 min get fixed first; gaps already at 240+ pay no penalty. Worst-rested teams take priority over moderately-rested ones.'
           : 'Currently <em>disabled</em> — teams may be scheduled back-to-back. Enable this when player welfare allows it.')
       + '</p>'
       + '<p style="margin-top:10px"><strong>Rule 7 — Venue Change Rest (180 min actual rest)</strong> ' + on(ruleVR) + '<br>'
