@@ -667,6 +667,22 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   </div>
 </div>
 
+<div id="nbdFailureModal" class="modal-overlay">
+  <div class="modal-card" style="max-width:560px">
+    <h3 style="margin:0 0 6px 0;display:flex;align-items:center;gap:8px">
+      <span style="color:#fc8181">&#9888;</span>
+      <span>Daily Game Distribution rule cannot be satisfied</span>
+    </h3>
+    <p id="nbdFailureSummary" style="font-size:13px;opacity:.8;margin:6px 0 14px;line-height:1.6"></p>
+    <div id="nbdFailureList" style="background:rgba(0,0,0,.25);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.7;max-height:240px;overflow-y:auto;font-family:'Montserrat',sans-serif"></div>
+    <p style="font-size:12px;opacity:.7;margin:0 0 18px;line-height:1.5">Switch the rule to <strong>High Priority</strong> to allow these blank days (the solver will minimize them but accept the unavoidable ones), or cancel and adjust the configuration manually (e.g. add days, change group sizes).</p>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="nbdFailureCancel">Cancel</button>
+      <button class="modal-btn confirm" id="nbdFailureRetry" style="background:#f6ad55;color:#1a202c">Switch to High Priority &amp; retry</button>
+    </div>
+  </div>
+</div>
+
 <div id="auditModal" class="modal-overlay">
   <div class="modal-card modal-wide" style="max-width:760px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -3121,6 +3137,41 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   document.getElementById('resetModal').addEventListener('click', function (e) {
     if (e.target === this) this.classList.remove('active');
   });
+
+  // ── No-Blank-Day Mandatory failure modal ───────────────
+  function _showNoBlankDayFailureModal(blocked) {
+    var summary = document.getElementById('nbdFailureSummary');
+    var listEl  = document.getElementById('nbdFailureList');
+    var modal   = document.getElementById('nbdFailureModal');
+    if (!summary || !listEl || !modal) return;
+    summary.textContent = 'The schedule cannot give every team a game on every tournament day. '
+      + blocked.length + ' team-day pair(s) would have zero games:';
+    var items = blocked.map(function (b) {
+      return '<div>&middot; <strong>' + escapeHtml(b.divName) + '</strong> / '
+        + escapeHtml(b.team) + ' &mdash; <span style="color:#fc8181">Day ' + (b.day + 1) + '</span></div>';
+    }).join('');
+    listEl.innerHTML = items || '<em style="opacity:.6">(no details)</em>';
+    modal.classList.add('active');
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  document.getElementById('nbdFailureCancel').addEventListener('click', function () {
+    document.getElementById('nbdFailureModal').classList.remove('active');
+  });
+  document.getElementById('nbdFailureRetry').addEventListener('click', function () {
+    document.getElementById('nbdFailureModal').classList.remove('active');
+    var prio = document.getElementById('noBlankDayModePriority');
+    var mand = document.getElementById('noBlankDayModeMandatory');
+    if (prio) prio.checked = true;
+    if (mand) mand.checked = false;
+    if (typeof window.updateNoBlankDayDesc === 'function') window.updateNoBlankDayDesc();
+    _runCPSatGenerate();
+  });
+  document.getElementById('nbdFailureModal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+
   document.getElementById('algoModalClose').addEventListener('click', function () {
     document.getElementById('algoModal').classList.remove('active');
   });
@@ -3633,24 +3684,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           // a one-click "Switch to High Priority and retry" instead of falling
           // back to the greedy algorithm (which doesn't enforce the rule).
           if (data.reason === 'no_blank_day_mandatory_infeasible') {
-            var blocked = data.blocked_team_days || [];
-            var details = blocked.slice(0, 12).map(function(b) {
-              return '  • ' + b.divName + ' / ' + b.team + ' — Day ' + (b.day + 1);
-            }).join('\n');
-            if (blocked.length > 12) details += '\n  …and ' + (blocked.length - 12) + ' more.';
-            var msg = 'Daily Game Distribution rule (Mandatory) cannot be satisfied:\n' +
-                      blocked.length + ' team-day pair(s) would have zero games.\n\n' +
-                      details + '\n\n' +
-                      'Click OK to switch the rule to High Priority and retry.\n' +
-                      'Click Cancel to leave the schedule unchanged.';
-            if (confirm(msg)) {
-              var prio = document.getElementById('noBlankDayModePriority');
-              var mand = document.getElementById('noBlankDayModeMandatory');
-              if (prio) prio.checked = true;
-              if (mand) mand.checked = false;
-              if (typeof window.updateNoBlankDayDesc === 'function') window.updateNoBlankDayDesc();
-              _runCPSatGenerate();
-            }
+            _showNoBlankDayFailureModal(data.blocked_team_days || []);
             return;
           }
           alert('CP-SAT solver error: ' + data.error + '\nFalling back to greedy algorithm.');
