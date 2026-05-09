@@ -5842,6 +5842,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         });
       }
     });
+    // Training games are placed by the backend to fill blank days. They live
+    // in `sched.trainingGames[]` (parallel to gameDays) so they don't pollute
+    // standings/brackets, but get rendered inline by time on the matching day.
+    var trainingForDay = (sched.trainingGames || []).filter(function(tg) { return tg.day === dayIdx; });
+    trainingForDay.forEach(function(tg) {
+      var divDef = divisions.find(function(dd) { return dd.name === tg.divName; });
+      var col = (divDef && divDef.color) || '#94a3b8';
+      all.push({
+        g: { time: tg.time, t1: tg.t1, t2: tg.t2, court: tg.court, loc: tg.loc, isTraining: true },
+        name: tg.divName, color: col, isTraining: true
+      });
+    });
     all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
 
     // Build occupied map for ghost cards: "time|court" → true
@@ -5917,6 +5929,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         lastGroup = item.group;
       }
       var p = fmt(g.time).split(' ');
+      // Training games: render distinct (no scores, "TRAINING" badge).
+      if (item.isTraining) {
+        h += '<div class="gc" style="border-left-color:' + item.color
+          + ';opacity:.85;background:rgba(148,163,184,.08);font-style:italic"'
+          + ' title="Training game (placed to fill a blank day) - Venue: ' + (g.loc || 'unknown') + '">'
+          + '<div class="gt" style="opacity:.7">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
+          + '<span class="rb" style="border-color:#94a3b8;color:#94a3b8;background:rgba(148,163,184,.12);white-space:nowrap;flex-shrink:0">TRAINING</span>'
+          + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
+          + '<div class="gm"><span>' + g.court + '</span></div></div>'
+          + '<div style="margin-left:8px;font-size:11px;color:#94a3b8;font-family:Montserrat,sans-serif;font-weight:600">No score</div>'
+          + '</div>';
+        return;
+      }
       // score inputs or display
       var scoreHtml = '';
       if (g.score1 !== null && g.score2 !== null && g.locked) {
@@ -6147,38 +6172,72 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     // ── Daily Game Distribution warnings ──────────────────
     // High Priority mode may produce a schedule where some teams have a blank
-    // day (no RR or PO game). Surface those team-day pairs so the admin can
-    // decide whether to accept them or rerun with a different config.
+    // day. The solver pairs same-division blanks into TRAINING games on free
+    // slots; whatever remains (odd-team-out or no free slot) is surfaced here
+    // so the admin can manually fill or accept it.
+    var nbdTraining = (sched.trainingGames || []);
     var nbdWarn = (sched.noBlankDayWarnings || []);
-    if (nbdWarn.length > 0) {
-      var byTeam = {};
-      nbdWarn.forEach(function (w) {
-        var key = (w.divName || '') + ' / ' + (w.team || '');
-        if (!byTeam[key]) byTeam[key] = [];
-        byTeam[key].push((w.day || 0) + 1);
-      });
-      var nbdRows = Object.keys(byTeam).sort().map(function (k) {
-        var days = byTeam[k].sort(function(a,b){return a-b;}).map(function(d){return 'Day ' + d;}).join(', ');
-        var parts = k.split(' / ');
-        var divName = parts[0] || '';
-        var team = parts.slice(1).join(' / ');
-        return '<li style="margin-bottom:4px"><strong>' + escHtml(team) + '</strong>'
-          + ' <span style="opacity:.65;font-size:11px">(' + escHtml(divName) + ')</span>'
-          + ' &mdash; <span style="color:#fc8181">no game on ' + escHtml(days) + '</span></li>';
-      }).join('');
-      h += '<div style="background:rgba(246,173,85,.08);border:1px solid rgba(246,173,85,.4);'
+    if (nbdTraining.length > 0 || nbdWarn.length > 0) {
+      var sections = '';
+
+      if (nbdTraining.length > 0) {
+        var trainRows = nbdTraining.slice().sort(function(a,b){
+          return (a.day - b.day) || a.divName.localeCompare(b.divName) || a.time.localeCompare(b.time);
+        }).map(function(tg) {
+          return '<li style="margin-bottom:4px">'
+            + '<strong>' + escHtml(tg.t1) + '</strong> vs <strong>' + escHtml(tg.t2) + '</strong>'
+            + ' <span style="opacity:.65;font-size:11px">(' + escHtml(tg.divName) + ')</span>'
+            + ' &mdash; <span style="color:#a3e635">Day ' + ((tg.day || 0) + 1) + ' '
+            + escHtml(tg.time) + ' &middot; ' + escHtml(tg.court) + '</span></li>';
+        }).join('');
+        sections += '<div style="margin-bottom:' + (nbdWarn.length > 0 ? '14px' : '0') + '">'
+          + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
+          + 'text-transform:uppercase;letter-spacing:1.5px;color:#a3e635;margin-bottom:8px">'
+          + '✓ ' + nbdTraining.length + ' training game'
+          + (nbdTraining.length === 1 ? '' : 's') + ' placed to fill blank days</div>'
+          + '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.6;'
+          + 'font-family:Montserrat,sans-serif;color:#e2e8f0">' + trainRows + '</ul>'
+          + '</div>';
+      }
+
+      if (nbdWarn.length > 0) {
+        var byTeam = {};
+        nbdWarn.forEach(function (w) {
+          var key = (w.divName || '') + ' / ' + (w.team || '');
+          if (!byTeam[key]) byTeam[key] = [];
+          byTeam[key].push((w.day || 0) + 1);
+        });
+        var nbdRows = Object.keys(byTeam).sort().map(function (k) {
+          var days = byTeam[k].sort(function(a,b){return a-b;}).map(function(d){return 'Day ' + d;}).join(', ');
+          var parts = k.split(' / ');
+          var divName = parts[0] || '';
+          var team = parts.slice(1).join(' / ');
+          return '<li style="margin-bottom:4px"><strong>' + escHtml(team) + '</strong>'
+            + ' <span style="opacity:.65;font-size:11px">(' + escHtml(divName) + ')</span>'
+            + ' &mdash; <span style="color:#fc8181">no game on ' + escHtml(days) + '</span></li>';
+        }).join('');
+        sections += '<div>'
+          + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
+          + 'text-transform:uppercase;letter-spacing:1.5px;color:#f6ad55;margin-bottom:8px">'
+          + '⚠️ ' + nbdWarn.length + ' blank-day warning'
+          + (nbdWarn.length === 1 ? '' : 's') + ' &mdash; no partner available</div>'
+          + '<p style="font-size:12px;line-height:1.5;margin:0 0 8px 0;color:#cbd5e1">'
+          + 'These teams could not be paired into a training game (odd team out in their division, '
+          + 'or no free court/time slot on the day).</p>'
+          + '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.6;'
+          + 'font-family:Montserrat,sans-serif;color:#e2e8f0">' + nbdRows + '</ul>'
+          + '</div>';
+      }
+
+      var headerColor = nbdWarn.length > 0 ? '#f6ad55' : '#a3e635';
+      var headerBg = nbdWarn.length > 0 ? 'rgba(246,173,85,.08)' : 'rgba(163,230,53,.08)';
+      var headerBorder = nbdWarn.length > 0 ? 'rgba(246,173,85,.4)' : 'rgba(163,230,53,.4)';
+      h += '<div style="background:' + headerBg + ';border:1px solid ' + headerBorder + ';'
         + 'border-radius:8px;padding:14px 18px;margin-bottom:14px">'
-        + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
-        + 'text-transform:uppercase;letter-spacing:1.5px;color:#f6ad55;margin-bottom:10px">'
-        + '⚠️ Daily Game Distribution &mdash; ' + nbdWarn.length + ' blank-day warning'
-        + (nbdWarn.length === 1 ? '' : 's') + '</div>'
-        + '<p style="font-size:13px;line-height:1.5;margin:0 0 10px 0;color:#e2e8f0">'
-        + 'High Priority mode produced this schedule, but the solver could not give every team '
-        + 'a game on every day. The teams below have <strong>no game</strong> on the listed '
-        + 'day(s).</p>'
-        + '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.6;'
-        + 'font-family:Montserrat,sans-serif;color:#e2e8f0">' + nbdRows + '</ul>'
-        + '</div>';
+        + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:11px;'
+        + 'text-transform:uppercase;letter-spacing:1.5px;color:' + headerColor + ';margin-bottom:10px">'
+        + 'Daily Game Distribution</div>'
+        + sections + '</div>';
     }
 
     // ── Unscheduled games alert banner ────────────────────
@@ -6347,6 +6406,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     (sched.bracketDays || []).forEach(function(d) {
       d.divs.forEach(function(dv) { if (dv.games) dv.games.forEach(walkCU); });
     });
+    // Training games occupy real (court, time) slots, so include them in
+    // utilization so the stat matches reality.
+    (sched.trainingGames || []).forEach(walkCU);
     var courtNames = Object.keys(courtCount).sort();
     if (courtNames.length) {
       var maxC = Math.max.apply(null, courtNames.map(function(c){ return courtCount[c]; }));
@@ -6760,6 +6822,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         d.games.forEach(function(g) { pushGame(g, ''); });
       }
     });
+    // Training games — placed by the backend on free slots to fill blank
+    // days. Marked with `isTraining` so the row is rendered with a distinct
+    // "TRAINING" stage label and italic gray styling.
+    (sched.trainingGames || []).filter(function(tg) { return tg.day === dayIdx; }).forEach(function(tg) {
+      var meta = _xlsxParseDivision(tg.divName);
+      var k = (tg.time || '') + '|' + (tg.court || '');
+      lookup[k] = {
+        g: { time: tg.time, court: tg.court, loc: tg.loc, t1: tg.t1, t2: tg.t2, lbl: 'TRAINING' },
+        divName: tg.divName, meta: meta, groupKey: '', isTraining: true
+      };
+    });
+    var trainingRows = {};
 
     // Determine the day's time slots and court list. Use whatever is on sched, else derive.
     var lS = document.getElementById('lS').value || '13:30';
@@ -6789,12 +6863,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (hit) {
           var g = hit.g;
           var pc = _xlsxParseCourt(g);
+          var isT = !!hit.isTraining;
+          if (isT) trainingRows[rows.length] = true;
           rows.push([
             slotFrac,
-            matchCounter.next(),
-            _xlsxStageLabel(g),
+            isT ? '' : matchCounter.next(),
+            isT ? 'TRAINING' : _xlsxStageLabel(g),
             hit.meta.category,
-            _xlsxGroupLetter(hit.groupKey, hit.divName),
+            isT ? '' : _xlsxGroupLetter(hit.groupKey, hit.divName),
             hit.meta.gender,
             pc.courtNum,
             pc.city,
@@ -6816,7 +6892,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       slotIdx++;
     });
 
-    return { rows: rows, slotBoundaries: slotBoundaries };
+    return { rows: rows, slotBoundaries: slotBoundaries, trainingRows: trainingRows };
   }
 
   // ── Cell styling (xlsx-js-style) ──────────────────────
@@ -6848,7 +6924,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                    alignment:{horizontal:'left',vertical:'center'} },
     teamRow:     { alignment:{horizontal:'left',vertical:'center'} },
     totalRow:    { font:{name:'Calibri',sz:12,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'FFE699'}},
-                   alignment:{horizontal:'left',vertical:'center'} }
+                   alignment:{horizontal:'left',vertical:'center'} },
+    // Training games (placed to fill blank days) — italic gray fill.
+    trainingCell: { font:{name:'Calibri',sz:11,italic:true,color:{rgb:'4B5563'}},
+                    fill:{fgColor:{rgb:'E5E7EB'}}, alignment:{horizontal:'center',vertical:'center'} },
+    trainingTeamL:{ font:{name:'Calibri',sz:11,italic:true,color:{rgb:'4B5563'}},
+                    fill:{fgColor:{rgb:'E5E7EB'}}, alignment:{horizontal:'left',vertical:'center'} }
   };
 
   function _xlsxApplyStyle(ws, ref, style) {
@@ -6861,10 +6942,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     else if (!ws[ref].s.border) ws[ref].s.border = _XLSX_STYLE.border;
   }
 
-  function _xlsxStyleDaySheet(ws, slotBoundaries) {
+  function _xlsxStyleDaySheet(ws, slotBoundaries, trainingRows) {
     // slotBoundaries: array of {startRow, endRow, banded:bool} for each time-slot block.
+    // trainingRows: optional {rowIdx: true} map — training game rows get the
+    // distinct gray-italic style override.
     // Rows are 0-indexed in this notation (matches XLSX.utils.encode_cell).
     var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    trainingRows = trainingRows || {};
 
     // Banner (row 0) and Day title (row 1) — apply to merged A1:M1 / A2:M2
     _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:0,c:0}), _XLSX_STYLE.bannerCell);
@@ -6884,8 +6968,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           }
           continue;
         }
-        var base = block.banded ? _XLSX_STYLE.bandedCell : _XLSX_STYLE.plainCell;
-        var teamStyle = block.banded ? _XLSX_STYLE.bandedTeamL : _XLSX_STYLE.teamCellL;
+        var isTraining = !!trainingRows[r];
+        var base, teamStyle;
+        if (isTraining) {
+          base = _XLSX_STYLE.trainingCell;
+          teamStyle = _XLSX_STYLE.trainingTeamL;
+        } else {
+          base = block.banded ? _XLSX_STYLE.bandedCell : _XLSX_STYLE.plainCell;
+          teamStyle = block.banded ? _XLSX_STYLE.bandedTeamL : _XLSX_STYLE.teamCellL;
+        }
         for (var c = 0; c < 13; c++) {
           // Local Team (col I=8) and Visiting Team (col J=9) get left alignment
           var style = (c === 8 || c === 9) ? teamStyle : base;
@@ -6972,7 +7063,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         ref: 'A3:M' + (range.e.r + 1)
       };
       // Apply colour styling
-      _xlsxStyleDaySheet(ws, dayResult.slotBoundaries);
+      _xlsxStyleDaySheet(ws, dayResult.slotBoundaries, dayResult.trainingRows);
 
       XLSX.utils.book_append_sheet(wb, ws, _xlsxSheetName(dayIdx));
     });

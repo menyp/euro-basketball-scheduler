@@ -156,14 +156,102 @@ def _detect_blank_days(assembled, divisions, n_days):
     return blank_pairs
 
 
+def _place_training_games(assembled, blank_pairs, ctx):
+    """Pair blank teams within the same division on the same day into
+    training games and place each pair in a free (court, time) slot.
+
+    Returns (training_games, remaining_blanks).
+
+    Pairing policy: same-division only. Odd-team-out stays blank (no
+    cross-division fallback to avoid age/skill mismatches).
+    Slot policy: any free, non-blacked-out (court, time) on the blank day.
+    """
+    if not blank_pairs:
+        return [], []
+
+    sched = assembled.get('sched', {})
+    courts = ctx['courts']
+    day_slots = ctx['day_slots']
+
+    # Build occupied set: {(day, time_str, court_name)} from already-placed
+    # RR/PO games. Training games may not collide with these.
+    occupied = set()
+    for d_blk in sched.get('gameDays', []):
+        d = d_blk.get('dayIndex')
+        if d is None:
+            continue
+        for divb in d_blk.get('divs', []):
+            game_lists = []
+            if divb.get('groups'):
+                for gv in divb['groups'].values():
+                    game_lists.append(gv.get('games', []))
+            elif divb.get('games'):
+                game_lists.append(divb['games'])
+            for games in game_lists:
+                for g in games:
+                    occupied.add((d, g.get('time', ''), g.get('court', '')))
+
+    # Bucket blank teams by (divName, day).
+    buckets = {}
+    for b in blank_pairs:
+        buckets.setdefault((b['divName'], b['day']), []).append(b['team'])
+
+    training_games = []
+    remaining = []
+
+    # Iterate buckets in deterministic order for reproducibility.
+    for (div_name, day) in sorted(buckets.keys()):
+        teams_sorted = sorted(buckets[(div_name, day)])
+        i = 0
+        while i + 1 < len(teams_sorted):
+            t1, t2 = teams_sorted[i], teams_sorted[i + 1]
+            i += 2
+
+            placed = False
+            for s_min in day_slots[day]:
+                t_str = _min_to_time(s_min)
+                for c_idx, c in enumerate(courts):
+                    if (day, t_str, c['name']) in occupied:
+                        continue
+                    if _is_blacked_out(ctx, c_idx, day, s_min):
+                        continue
+                    occupied.add((day, t_str, c['name']))
+                    training_games.append({
+                        'day': day,
+                        'divName': div_name,
+                        't1': t1, 't2': t2,
+                        'time': t_str,
+                        'court': c['name'],
+                        'loc': c['venue'],
+                        'isTraining': True,
+                    })
+                    placed = True
+                    break
+                if placed:
+                    break
+
+            if not placed:
+                # No free slot: both teams stay blank.
+                remaining.append({'divName': div_name, 'team': t1, 'day': day})
+                remaining.append({'divName': div_name, 'team': t2, 'day': day})
+
+        if i < len(teams_sorted):
+            # Odd team — no partner in this division on this day.
+            remaining.append({'divName': div_name, 'team': teams_sorted[i], 'day': day})
+
+    return training_games, remaining
+
+
 def _apply_no_blank_day_check(assembled, ctx):
     """Run post-hoc no-blank-day detection on the assembled schedule.
 
     - Mandatory mode + any blanks: return a fail-loudly error response so
       the frontend can show the existing failure modal with the per-team
       diagnostic and the "Switch to High Priority and retry" button.
-    - High Priority mode: attach blanks as `sched.noBlankDayWarnings` so
-      audits / UI can surface them but generation still succeeds.
+    - High Priority mode: pair blank teams into training games where
+      possible, then attach `sched.trainingGames` and
+      `sched.noBlankDayWarnings` (leftover unpairable blanks) so the UI
+      can surface both.
     - Rule disabled: pass-through.
     """
     if not ctx.get('rule_no_blank_day', False):
@@ -178,8 +266,13 @@ def _apply_no_blank_day_check(assembled, ctx):
             'status': 'NBD_MANDATORY_VIOLATED',
             'blocked_team_days': blank_pairs,
         }
-    # High Priority mode (or Mandatory with zero blanks): attach as warnings.
-    assembled.setdefault('sched', {})['noBlankDayWarnings'] = blank_pairs
+    # High Priority mode (or Mandatory with zero blanks): try to pair
+    # blanks into training games, then attach warnings for whatever
+    # remains unpaired.
+    training_games, remaining = _place_training_games(assembled, blank_pairs, ctx)
+    sched = assembled.setdefault('sched', {})
+    sched['trainingGames'] = training_games
+    sched['noBlankDayWarnings'] = remaining
     return assembled
 
 
