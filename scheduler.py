@@ -700,6 +700,44 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 effective_gpd = max(max_gpd - 1, 1)
             model.add(sum(terms) <= effective_gpd)
 
+    # Phase 1 No-Blank-Day prevention (RR-only days). Day 0 (and any other
+    # RR-only day, when n_days > 3) has no PO slots. If a team ends up with
+    # 0 RR on such a day, the day is structurally blank and Phase 2 cannot
+    # cover it. Force ≥1 RR per team on every RR-only day to eliminate the
+    # 0+N distributions that would otherwise be unrecoverable.
+    #
+    # For 3-team groups: this combines with max-games-per-day=2 to force a
+    # 2+1 distribution where one team plays both their games on the RR-only
+    # day (a 2+0 pattern). That team's blank day (the mixed RR/PO day) is
+    # then the only one Phase 2 needs to cover via the cross-phase
+    # constraint. For 4-team and 5-team groups, the max-gpd rule already
+    # forces ≥1 per team per day, so this constraint is a no-op.
+    nbd_phase1_slack_terms = []
+    rule_no_blank_day_p1 = ctx.get('rule_no_blank_day', False)
+    nbd_mode_p1 = ctx.get('nbd_mode', 'mandatory')
+    NBD_PH1_HARD = 100_000
+    NBD_PH1_SOFT = 1_000
+    po_start_day_p1 = ctx['po_start_day']
+    if rule_no_blank_day_p1:
+        weight_p1 = NBD_PH1_HARD if nbd_mode_p1 == 'mandatory' else NBD_PH1_SOFT
+        for d in range(n_days):
+            # RR-only days only: rr_slot_mask non-empty AND no PO scheduled.
+            if not rr_slot_mask.get(d):
+                continue
+            if d >= po_start_day_p1:
+                continue  # mixed RR/PO day — Phase 2 cross-phase covers
+            for (div, team), g_list in team_games.items():
+                terms = [x[g, d, s, c]
+                         for g in g_list
+                         for s in range(len(day_slots[d]))
+                         for c in range(num_courts)]
+                if not terms:
+                    continue
+                safe = (div + '_' + team + '_' + str(d)).replace(' ', '_')
+                slack = model.new_bool_var('nbdph1_' + safe)
+                model.add(sum(terms) + slack >= 1)
+                nbd_phase1_slack_terms.append(weight_p1 * slack)
+
     # Daily Game Distribution (no blank days) — detection happens AFTER
     # both phases place games, in solve_schedule via _detect_blank_days().
     # The earlier Phase 1 slack-relaxed constraint here was incorrect (it
@@ -803,7 +841,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
     # Combine venue-preference penalties with No-Blank-Day slack penalties.
-    all_penalty_terms = penalty_terms + nbd_penalty_terms
+    all_penalty_terms = penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms
     if all_penalty_terms:
         model.minimize(sum(all_penalty_terms))
 
@@ -1092,6 +1130,70 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
         po_model.add(sum(cell_vars) == placed_p)
         placed_vars.append(placed_p)
 
+    # ── Cross-phase No-Blank-Day constraint ────────────────────────────────
+    # For each (div, group, day) where any team in the group has 0 RR games on
+    # day d (per Phase 1's frozen placement), require ALL positions of that
+    # group to have at least one PO game on day d. Whichever rank the team
+    # ends up at, they will play a PO game and not be blank.
+    #
+    # Slack-relaxed: in Mandatory mode the slack pays a huge penalty so the
+    # solver only sets it when truly infeasible. In High Priority mode the
+    # penalty is moderate so the solver can trade NBD off against other soft
+    # prefs (Blanes priority, finals timing). The post-hoc check in
+    # _apply_no_blank_day_check decides whether surviving slack triggers a
+    # generation failure (Mandatory) or just attaches as warnings (High).
+    nbd_phase2_slack_terms = []
+    rule_no_blank_day = ctx.get('rule_no_blank_day', False)
+    nbd_mode = ctx.get('nbd_mode', 'mandatory')
+    NBD_PH2_HARD = 100_000   # below UNPLACED_WEIGHT so placement still wins
+    NBD_PH2_SOFT = 1_000     # above most cosmetic prefs but soft
+    if rule_no_blank_day:
+        nbd_weight = NBD_PH2_HARD if nbd_mode == 'mandatory' else NBD_PH2_SOFT
+        # rr_count[(div, team, day)] = # of RR games for team on that day.
+        rr_count = defaultdict(int)
+        for rg in rr_result:
+            rr_count[(rg['divName'], rg['t1'], rg['day'])] += 1
+            rr_count[(rg['divName'], rg['t2'], rg['day'])] += 1
+        # placeholder_games[(div, "Nth Group X")] = list of p indices.
+        placeholder_games = defaultdict(list)
+        for p, pg in enumerate(po_games):
+            for slot in (pg.get('t1', ''), pg.get('t2', '')):
+                if slot and ' Group ' in slot:
+                    placeholder_games[(pg['divName'], slot)].append(p)
+        POSITION_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th']
+        po_start_day = ctx['po_start_day']
+        for (div_name, letter), teams in groups.items():
+            k = len(teams)
+            positions = POSITION_LABELS[:k]
+            for d in range(n_days):
+                # Only fire on mixed RR/PO days. Day 0 (RR-only) has no PO
+                # slots — forcing coverage there is impossible. The finals
+                # day has only TBD downstream games whose placeholders are
+                # empty; the post-hoc check handles those structurally.
+                if not (po_start_day <= d < finals_day):
+                    continue
+                # If every team in the group has at least one RR on day d,
+                # they are already non-blank — no constraint needed.
+                if all(rr_count.get((div_name, t, d), 0) > 0 for t in teams):
+                    continue
+                # Some team has 0 RR on d. Require coverage of every position
+                # of the group on day d so that team plays regardless of rank.
+                for pos in positions:
+                    placeholder = pos + ' Group ' + letter
+                    p_games = placeholder_games.get((div_name, placeholder), [])
+                    if not p_games:
+                        continue  # this position has no PO game in the bracket
+                    terms = [y[p, d, s, c]
+                             for p in p_games
+                             for s in range(len(day_slots[d]))
+                             for c in range(num_courts)]
+                    if not terms:
+                        continue
+                    safe = (div_name + '_' + letter + '_' + pos + '_' + str(d)).replace(' ', '_')
+                    slack = po_model.new_bool_var('nbdph2_' + safe)
+                    po_model.add(sum(terms) + slack >= 1)
+                    nbd_phase2_slack_terms.append(nbd_weight * slack)
+
     obj_terms = []
     for p, pg in enumerate(po_games):
         w = UNPLACED_WEIGHT
@@ -1245,6 +1347,11 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
         po_model.add(third_g >= final_g).only_enforce_if(bad_order)
         po_model.add(third_g < final_g).only_enforce_if(bad_order.Not())
         obj_terms.append(PENALTY_3RD_AFTER_FINAL * bad_order)
+
+    # Append No-Blank-Day slack penalty terms to the objective (they were
+    # collected earlier alongside the cross-phase constraint).
+    if nbd_phase2_slack_terms:
+        obj_terms.extend(nbd_phase2_slack_terms)
 
     if obj_terms:
         po_model.minimize(sum(obj_terms))
