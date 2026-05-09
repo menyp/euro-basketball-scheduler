@@ -67,6 +67,122 @@ def _progress_done(phase='Done'):
     _progress_state['phase'] = phase
 
 
+def _detect_blank_days(assembled, divisions, n_days):
+    """Walk an assembled schedule and return blank (team, day) pairs.
+
+    A team T in group X with positions 1..k is non-blank on day d iff:
+      (a) Concrete: a game on d names T as t1 or t2.
+      (b) Position-covered: ALL k positions of group X are covered by
+          placeholder games on day d (regardless of which position T
+          ends up at, T plays).
+      (c) Downstream TBD: a game on d in T's division has empty t1/t2
+          (Final / 3rd Place / medal final waiting on SF results).
+
+    Mirrors measure_blank_days.measure() exactly so verification scripts
+    and live solver runs agree on what constitutes a blank.
+    """
+    import re
+    placeholder_re = re.compile(
+        r'^(?:1st|2nd|3rd|4th|5th|6th|7th|8th)\s+Group\s+([A-Z])$'
+    )
+
+    sched = assembled.get('sched', {})
+    team_to_group = {}
+    group_to_size = {}
+    all_teams = []
+    for div in divisions:
+        div_name = div.get('name', '')
+        mg = div.get('manualGroups') or []
+        for gi, grp in enumerate(mg):
+            letter = chr(65 + gi)
+            group_to_size[(div_name, letter)] = len(grp)
+            for t in grp:
+                team_to_group[(div_name, t)] = letter
+                all_teams.append((div_name, t))
+
+    concrete = {}
+    position_coverage = {}
+    div_tbd = {}
+
+    for d_blk in sched.get('gameDays', []):
+        d_idx = d_blk.get('dayIndex')
+        if d_idx is None or d_idx >= n_days:
+            continue
+        for divb in d_blk.get('divs', []):
+            dn = divb.get('name', '')
+            buckets = []
+            if divb.get('groups'):
+                for gv in divb['groups'].values():
+                    buckets.append(gv.get('games', []))
+            elif divb.get('games'):
+                buckets.append(divb['games'])
+            for games in buckets:
+                for g in games:
+                    t1 = g.get('t1', '')
+                    t2 = g.get('t2', '')
+                    if not t1 and not t2:
+                        div_tbd.setdefault(dn, [0] * n_days)[d_idx] += 1
+                        continue
+                    for raw in (t1, t2):
+                        if not raw:
+                            continue
+                        m = placeholder_re.match(raw)
+                        if m:
+                            position = raw.split(' Group ', 1)[0].strip()
+                            position_coverage.setdefault(
+                                (dn, m.group(1), d_idx), set()
+                            ).add(position)
+                        else:
+                            if (dn, raw) in team_to_group:
+                                concrete.setdefault(
+                                    (dn, raw), [0] * n_days
+                                )[d_idx] += 1
+
+    POSITION_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th']
+    blank_pairs = []
+    for div_name, team in all_teams:
+        letter = team_to_group.get((div_name, team), '')
+        group_size = group_to_size.get((div_name, letter), 1)
+        required = set(POSITION_LABELS[:group_size])
+        counts = concrete.get((div_name, team), [0] * n_days)
+        tbd = div_tbd.get(div_name, [0] * n_days)
+        for d_idx in range(n_days):
+            if counts[d_idx] > 0 or tbd[d_idx] > 0:
+                continue
+            covered = position_coverage.get((div_name, letter, d_idx), set())
+            if required.issubset(covered):
+                continue
+            blank_pairs.append({'divName': div_name, 'team': team, 'day': d_idx})
+    return blank_pairs
+
+
+def _apply_no_blank_day_check(assembled, ctx):
+    """Run post-hoc no-blank-day detection on the assembled schedule.
+
+    - Mandatory mode + any blanks: return a fail-loudly error response so
+      the frontend can show the existing failure modal with the per-team
+      diagnostic and the "Switch to High Priority and retry" button.
+    - High Priority mode: attach blanks as `sched.noBlankDayWarnings` so
+      audits / UI can surface them but generation still succeeds.
+    - Rule disabled: pass-through.
+    """
+    if not ctx.get('rule_no_blank_day', False):
+        return assembled
+    blank_pairs = _detect_blank_days(assembled, ctx['divisions'], ctx['n_days'])
+    if blank_pairs and ctx.get('nbd_mode', 'mandatory') == 'mandatory':
+        _progress_done('Daily Game Distribution rule violated')
+        return {
+            'error': ('Daily Game Distribution rule (Mandatory) cannot be satisfied: '
+                      f'{len(blank_pairs)} team-day pair(s) would have zero games.'),
+            'reason': 'no_blank_day_mandatory_infeasible',
+            'status': 'NBD_MANDATORY_VIOLATED',
+            'blocked_team_days': blank_pairs,
+        }
+    # High Priority mode (or Mandatory with zero blanks): attach as warnings.
+    assembled.setdefault('sched', {})['noBlankDayWarnings'] = blank_pairs
+    return assembled
+
+
 def solve_schedule(config, time_limit=120):
     """Iterative two-phase solver. Returns frontend-compatible schedule dict."""
     start_time = time.time()
@@ -79,7 +195,6 @@ def solve_schedule(config, time_limit=120):
     last_rr_occupied = None
     last_po_result = None
     last_blocked = None
-    last_nbd_violations = []
     # Lever B: hints carried across iterations (None on iter 1).
     rr_hints = None  # {g: (d, s, c)} from previous iteration's RR placements
     po_hints = None  # {p: (d, s, c)} from previous iteration's PO placements
@@ -116,20 +231,8 @@ def solve_schedule(config, time_limit=120):
                   f"using last good result from iteration {iteration}")
             break
 
-        # Daily Game Distribution (no blank days). Slack-relaxed Phase 1 always
-        # solves; if any slack is set, the rule was violated. In Mandatory mode
-        # we surface this as a fatal generation error so the admin can soften
-        # the rule. In High Priority mode we keep going and attach the warnings
-        # to the final response (handled by _assemble_sched).
-        if iteration == 0 and nbd_violations and ctx.get('nbd_mode') == 'mandatory':
-            _progress_done('Daily Game Distribution rule violated')
-            return {
-                'error': ('Daily Game Distribution rule (Mandatory) cannot be satisfied: '
-                          f'{len(nbd_violations)} team-day pair(s) would have zero games.'),
-                'reason': 'no_blank_day_mandatory_infeasible',
-                'status': 'NBD_MANDATORY_VIOLATED',
-                'blocked_team_days': nbd_violations,
-            }
+        # No-Blank-Day check now happens post-hoc (after Phase 2 places PO
+        # games), in this function below the iterative loop.
 
         po_result, blocked, p2_status, po_placements = _solve_phase2(
             ctx, rr_result, rr_occupied, time_limit, po_excluded_cells,
@@ -146,7 +249,6 @@ def solve_schedule(config, time_limit=120):
         last_rr_occupied = rr_occupied
         last_po_result = po_result
         last_blocked = blocked
-        last_nbd_violations = nbd_violations
 
         if not blocked:
             # All games placed.
@@ -154,8 +256,8 @@ def solve_schedule(config, time_limit=120):
             _progress(f"Done: {len(rr_result)} RR + {len(po_result)} PO "
                       f"in {total_elapsed:.1f}s ({iteration+1} iteration(s))")
             _progress_done()
-            return _assemble_sched(rr_result, po_result, [], ctx, config,
-                                   nbd_violations=nbd_violations)
+            assembled = _assemble_sched(rr_result, po_result, [], ctx, config)
+            return _apply_no_blank_day_check(assembled, ctx)
 
         # Lever C: plateau detection — if blocked count didn't shrink, we're
         # not making progress. Bail before wasting another full iteration.
@@ -202,8 +304,8 @@ def solve_schedule(config, time_limit=120):
                 'status': 'INFEASIBLE'}
 
     unscheduled = [_blocked_to_unsched(pg) for pg in (last_blocked or [])]
-    return _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config,
-                           nbd_violations=last_nbd_violations)
+    assembled = _assemble_sched(last_rr_result, last_po_result or [], unscheduled, ctx, config)
+    return _apply_no_blank_day_check(assembled, ctx)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -598,45 +700,18 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 effective_gpd = max(max_gpd - 1, 1)
             model.add(sum(terms) <= effective_gpd)
 
-    # Daily Game Distribution (no blank days). For each team, ensure >=1 RR
-    # game on every day that is RR-eligible AND has no PO games for the
-    # team's division. On mixed RR/PO days the structural bracket coverage
-    # in Phase 2 takes care of the team's day. On PO-only days the
-    # placeholder game generation in Phase 2 handles it.
-    #
-    # Slack-relaxed formulation: every constraint allows a Bool slack var
-    # that pays a penalty when set. Mandatory mode uses a huge penalty so
-    # the solver only sets slack when truly infeasible; we then return an
-    # error. High Priority mode uses a smaller penalty and surfaces any
-    # remaining slacks as audit warnings.
-    nbd_slacks = {}  # (div, team, d) -> Bool slack var (1 if rule violated)
-    rule_no_blank_day = ctx.get('rule_no_blank_day', False)
-    nbd_mode = ctx.get('nbd_mode', 'mandatory')
-    NBD_HARD_PENALTY = 10 ** 6  # dominates other penalty terms
-    NBD_SOFT_PENALTY = 100      # comparable to existing soft prefs
-    nbd_penalty_terms = []
-    if rule_no_blank_day:
-        weight = NBD_HARD_PENALTY if nbd_mode == 'mandatory' else NBD_SOFT_PENALTY
-        for d in range(n_days):
-            # Skip days that have no RR slots at all (RR cannot be placed there).
-            if not rr_slot_mask.get(d):
-                continue
-            for (div, team), g_list in team_games.items():
-                # Skip days where this division has PO games — Phase 2
-                # ensures the team's group has a placeholder game that day,
-                # so a blank day cannot occur even with 0 RR games.
-                if d in po_days_per_div.get(div, set()):
-                    continue
-                terms = [x[g, d, s, c]
-                         for g in g_list
-                         for s in range(len(day_slots[d]))
-                         for c in range(num_courts)]
-                if not terms:
-                    continue
-                slack = model.new_bool_var(f'nbd_{d}_{div}_{team}')
-                model.add(sum(terms) + slack >= 1)
-                nbd_slacks[(div, team, d)] = slack
-                nbd_penalty_terms.append(weight * slack)
+    # Daily Game Distribution (no blank days) — detection happens AFTER
+    # both phases place games, in solve_schedule via _detect_blank_days().
+    # The earlier Phase 1 slack-relaxed constraint here was incorrect (it
+    # skipped days where the division had ANY PO game, on the wrong
+    # assumption that PO covers every team in the division — but PO games
+    # are group-specific). The post-hoc detection mirrors the helper logic
+    # exactly: a team is non-blank on day d iff it has a concrete game on
+    # day d, OR every position of its group has a placeholder PO game on
+    # day d, OR there's a TBD downstream game (Final / 3rd Place / medal
+    # final) in its division on day d.
+    nbd_slacks = {}            # kept for return signature; always empty.
+    nbd_penalty_terms = []     # kept for objective merge; always empty.
 
     # Rest between games (Rules 6 & 7).
     for (div, team), g_list in team_games.items():
@@ -1463,8 +1538,13 @@ def _build_po_structure(divisions, groups):
     return po_games
 
 
-def _assemble_sched(rr_result, po_result, unscheduled, ctx, config, nbd_violations=None):
-    """Assemble the schedule in the format the frontend expects."""
+def _assemble_sched(rr_result, po_result, unscheduled, ctx, config):
+    """Assemble the schedule in the format the frontend expects.
+
+    No-Blank-Day warnings are added downstream by _apply_no_blank_day_check
+    in solve_schedule (post-hoc detection), so this function intentionally
+    leaves `sched.noBlankDayWarnings` unset.
+    """
     divisions = ctx['divisions']
     courts = ctx['courts']
     day_slots = ctx['day_slots']
@@ -1569,9 +1649,6 @@ def _assemble_sched(rr_result, po_result, unscheduled, ctx, config, nbd_violatio
             'total': len(rr_result) + len(po_result),
             'unscheduled': len(unscheduled),
         },
-        # No-Blank-Day warnings (High Priority mode only — Mandatory mode
-        # short-circuits with an error response upstream).
-        'noBlankDayWarnings': list(nbd_violations or []),
     }
 
 
