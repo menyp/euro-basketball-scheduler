@@ -678,6 +678,21 @@ def _is_blacked_out(ctx, court_idx, day_idx, slot_min):
     return False
 
 
+def _age_weight(divname):
+    """Older brackets get higher priority weight. Used by:
+      - Finals/3rd Place target-time soft objectives (older divs get the
+        17:30 prime slot first when it saturates).
+      - SF-position bias on finals day (older divs anchored earliest).
+      - No-Blank-Day slack penalties (older divs are protected from blanks
+        first; younger divs absorb structurally-unavoidable blanks).
+    Returns 1..4 so the existing weight constants stay in sensible ranges.
+    """
+    m_age = re.search(r'U(\d{2})', divname or '')
+    if not m_age:
+        return 1
+    return {18: 4, 16: 3, 14: 2, 12: 1}.get(int(m_age.group(1)), 1)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PHASE 1 — RR PLACEMENT
 # ══════════════════════════════════════════════════════════════════════════════
@@ -791,10 +806,20 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # forces ≥1 per team per day, so this constraint is a no-op.
     nbd_phase1_slack_terms = []
     rule_no_blank_day_p1 = ctx.get('rule_no_blank_day', False)
-    NBD_PH1_WEIGHT = 100_000  # hard pressure to minimize blanks; surviving blanks are auto-filled by training games
+    # Base weight dominates the objective so total blank-count is minimized
+    # first. The age-priority tie-breaker (NBD_AGE_PREF) is much smaller so
+    # it only differentiates between solutions with the same blank count:
+    # when blanks are unavoidable, push them to younger divisions (U12 < U14
+    # < U16 < U18) so older "showcase" divisions stay full.
+    # Calibration: NBD_AGE_PREF must be (a) large enough to override
+    # competing soft objectives (rest-fairness, SF placement bias) which
+    # can be in the 10k-100k range, but (b) small enough that BIG_K (the
+    # base weight) × min_blanks > AGE_PREF × max_age_weight_diff × total_blanks
+    # so total-blank minimization stays primary.
+    NBD_PH1_WEIGHT = 100_000
+    NBD_AGE_PREF = 5_000  # << NBD_PH1_WEIGHT; biased tie-breaker
     po_start_day_p1 = ctx['po_start_day']
     if rule_no_blank_day_p1:
-        weight_p1 = NBD_PH1_WEIGHT
         for d in range(n_days):
             # RR-only days only: rr_slot_mask non-empty AND no PO scheduled.
             if not rr_slot_mask.get(d):
@@ -811,6 +836,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 safe = (div + '_' + team + '_' + str(d)).replace(' ', '_')
                 slack = model.new_bool_var('nbdph1_' + safe)
                 model.add(sum(terms) + slack >= 1)
+                weight_p1 = NBD_PH1_WEIGHT + NBD_AGE_PREF * _age_weight(div)
                 nbd_phase1_slack_terms.append(weight_p1 * slack)
 
     # Daily Game Distribution (no blank days) — detection happens AFTER
@@ -1226,14 +1252,7 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # tournament tradition.
     FINAL_TARGET = ctx['final_target']
     THIRD_TARGET = ctx['third_target']
-
-    def _age_weight(divname):
-        """Older brackets get higher weight → larger penalty for being away
-        from their target → solver protects them first when 17:30 is saturated."""
-        m_age = re.search(r'U(\d{2})', divname or '')
-        if not m_age:
-            return 1
-        return {18: 4, 16: 3, 14: 2, 12: 1}.get(int(m_age.group(1)), 1)
+    # _age_weight is now at module scope (used by Phase 1 NBD too).
 
     placed_vars = []
     for p in range(num_po):
@@ -1258,9 +1277,15 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # generation failure (Mandatory) or just attaches as warnings (High).
     nbd_phase2_slack_terms = []
     rule_no_blank_day = ctx.get('rule_no_blank_day', False)
+    # Same age-priority shape as Phase 1: base weight dominates total
+    # blank-count minimization; per-age tie-breaker pushes unavoidable
+    # blanks to younger divisions. The tie-breaker is sized to override
+    # rest-fairness penalties (10k-100k range) which would otherwise
+    # bias the solver toward placing PO games for divs with simpler RR
+    # constellations (often the younger ones).
     NBD_PH2_WEIGHT = 100_000  # below UNPLACED_WEIGHT so placement still wins
+    NBD_PH2_AGE_PREF = 5_000
     if rule_no_blank_day:
-        nbd_weight = NBD_PH2_WEIGHT
         # rr_count[(div, team, day)] = # of RR games for team on that day.
         rr_count = defaultdict(int)
         for rg in rr_result:
@@ -1304,6 +1329,7 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                     safe = (div_name + '_' + letter + '_' + pos + '_' + str(d)).replace(' ', '_')
                     slack = po_model.new_bool_var('nbdph2_' + safe)
                     po_model.add(sum(terms) + slack >= 1)
+                    nbd_weight = NBD_PH2_WEIGHT + NBD_PH2_AGE_PREF * _age_weight(div_name)
                     nbd_phase2_slack_terms.append(nbd_weight * slack)
 
     obj_terms = []
