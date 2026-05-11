@@ -519,10 +519,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     </div>
 
     <div class="card" style="margin-top:14px">
-      <div class="stitle">Team Venue Rules <span style="font-weight:400;font-size:11px;opacity:0.7">(Round-Robin only)</span></div>
-      <p class="help" style="margin-bottom:10px">Restrict specific teams to specific venues for <strong>round-robin games only</strong>. Playoffs are not affected. Mandatory rules silently include the main venue so every team still plays at least one RR there.</p>
+      <div class="stitle">Team Venue Blocks <span style="font-weight:400;font-size:11px;opacity:0.7">(Round-Robin only)</span></div>
+      <p class="help" style="margin-bottom:10px">Pick teams and pick venues those teams <strong>cannot play at</strong> during round-robin games. Playoffs are not affected. The main venue cannot be blocked — every team must play at least one RR there.</p>
       <div id="teamVenueRulesList" style="display:flex;flex-direction:column;gap:8px"></div>
-      <button class="add-btn" id="addTeamVenueRuleBtn" style="margin-top:10px">+ Add Team Rule</button>
+      <button class="add-btn" id="addTeamVenueRuleBtn" style="margin-top:10px">+ Add Block Rule</button>
     </div>
 
     <div class="card" style="margin-top:14px">
@@ -1921,9 +1921,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (!venues.length || !teams.length) return;
         var teamLabels = teams.map(function(t) { return t.team + ' (' + t.div + ')'; }).join('; ');
         if (r.mode === 'mandatory') {
-          lines.push('- **Team rule (RR only) — Mandatory:** [' + teamLabels + '] must play their round-robin games at: ' + venues.join(', '));
+          lines.push('- **Team block rule (RR only) — Mandatory:** [' + teamLabels + '] must NOT play their round-robin games at: ' + venues.join(', '));
         } else if (r.mode === 'high-priority') {
-          lines.push('- **Team rule (RR only) — High Priority:** [' + teamLabels + '] should prefer their round-robin games at: ' + venues.join(', '));
+          lines.push('- **Team block rule (RR only) — High Priority:** [' + teamLabels + '] should AVOID their round-robin games at: ' + venues.join(', '));
         }
       });
     }
@@ -2224,14 +2224,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         teamPanel = '<div style="opacity:0.6;font-size:12px;padding:6px">Parse teams first to populate this list.</div>';
       }
 
-      // Venue checkboxes
+      // Venue checkboxes (blocked venues)
+      var mvNow = (document.getElementById('mainVenue') || {}).value || 'Blanes';
       var venueChecks = siteNames.length
         ? siteNames.map(function(v) {
             var esc = v.replace(/"/g, '&quot;');
+            var isMain = (v || '').toLowerCase() === (mvNow || '').toLowerCase();
             var checked = rule.venues.indexOf(v) !== -1 ? ' checked' : '';
-            return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:pointer">'
-              + '<input type="checkbox" class="tvr-venue" data-idx="' + idx + '" data-venue="' + esc + '"' + checked + '>'
-              + v + '</label>';
+            var disabledAttr = isMain ? ' disabled' : '';
+            var tooltip = isMain ? ' title="Main venue cannot be blocked (Blanes guarantee)"' : '';
+            return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:' + (isMain ? 'not-allowed' : 'pointer') + ';' + (isMain ? 'opacity:0.45' : '') + '"' + tooltip + '>'
+              + '<input type="checkbox" class="tvr-venue" data-idx="' + idx + '" data-venue="' + esc + '"' + checked + disabledAttr + '>'
+              + v + (isMain ? ' (cannot block)' : '') + '</label>';
           }).join('')
         : '<span style="opacity:0.6;font-size:12px">Add at least one venue above to pick from.</span>';
       // Mode radios
@@ -2239,12 +2243,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:16px;cursor:pointer">'
         +   '<input type="radio" name="tvr-mode-' + idx + '" class="tvr-mode" data-idx="' + idx + '" value="mandatory"'
         +     (rule.mode === 'mandatory' ? ' checked' : '') + '>'
-        +   '<span><strong>Mandatory</strong> <span style="opacity:0.7;font-size:12px">&mdash; MUST play at these venues (RR)</span></span>'
+        +   '<span><strong>Mandatory</strong> <span style="opacity:0.7;font-size:12px">&mdash; MUST NOT play at these venues (RR)</span></span>'
         + '</label>'
         + '<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">'
         +   '<input type="radio" name="tvr-mode-' + idx + '" class="tvr-mode" data-idx="' + idx + '" value="high-priority"'
         +     (rule.mode === 'high-priority' ? ' checked' : '') + '>'
-        +   '<span><strong>High Priority</strong> <span style="opacity:0.7;font-size:12px">&mdash; SHOULD prefer these venues (RR)</span></span>'
+        +   '<span><strong>High Priority</strong> <span style="opacity:0.7;font-size:12px">&mdash; SHOULD AVOID these venues (RR)</span></span>'
         + '</label>';
       // Card
       var row = document.createElement('div');
@@ -2264,7 +2268,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         +   '</div>'
         +   '<button class="rm-btn tvr-del" data-idx="' + idx + '" title="Remove this rule">x</button>'
         + '</div>'
-        + '<div style="font-size:12px;opacity:0.75">Venues (pick at least one):</div>'
+        + '<div style="font-size:12px;opacity:0.75">Venues to BLOCK for these teams:</div>'
         + '<div style="display:flex;flex-wrap:wrap">' + venueChecks + '</div>'
         + '<div style="font-size:12px;opacity:0.75">Rule type:</div>'
         + '<div style="display:flex;flex-wrap:wrap">' + modeRadios + '</div>';
@@ -3149,24 +3153,25 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '</ul>'
       + '<p><strong>Current rules:</strong></p>' + vrSection + '</div>'
 
-      // ── 5b. Per-team Venue Rules (RR only) ────────────────────────────────
-      + '<div class="algo-section"><h4>Team Venue Rules <span style="font-weight:400;font-size:11px">(Round-Robin only — Team Venue Rules card)</span></h4>'
-      + '<p>Per-team venue restriction for <strong>round-robin games only</strong>. Apply one rule to a single team or to multiple teams at once. <strong>Playoffs are not affected</strong> by these rules.</p>'
-      + '<p><strong>Interaction with other rules:</strong></p><ul>'
-      + '<li>Combines with a division’s Mandatory rule by <strong>intersection</strong> — if both rules apply, the game can only be placed at venues allowed by <em>both</em>. Empty intersection causes a generation failure with a clear error.</li>'
-      + '<li>Mandatory team rules <strong>silently include ' + mv + '</strong> so the at-least-one-' + mv + '-RR guarantee never becomes infeasible because of a team rule alone.</li>'
-      + '<li>High Priority team rules add a soft penalty to placements outside the listed venues; falls back when needed.</li>'
+      // ── 5b. Per-team Venue Blocks (RR only) ───────────────────────────────
+      + '<div class="algo-section"><h4>Team Venue Blocks <span style="font-weight:400;font-size:11px">(Round-Robin only — Team Venue Blocks card)</span></h4>'
+      + '<p>Per-team venue <strong>blocklist</strong> for <strong>round-robin games only</strong>. Pick one or more teams and pick venues those teams <strong>cannot play at</strong> during the group stage. <strong>Playoffs are not affected</strong> by these rules.</p>'
+      + '<p><strong>Modes &amp; interactions:</strong></p><ul>'
+      + '<li><strong>Mandatory</strong> — the team cannot be placed at the blocked venues for RR (hard constraint).</li>'
+      + '<li><strong>High Priority</strong> — the team should avoid the blocked venues; soft penalty so the engine falls back to those venues only when no better slot exists.</li>'
+      + '<li>The main venue <strong>(' + mv + ')</strong> cannot be blocked — every team must play at least one RR there.</li>'
+      + '<li>Combines with a division’s Mandatory venue list: effective allowed = division Mandatory venues minus the blocked venues.</li>'
       + '</ul>'
       + (Array.isArray(teamVenueRules) && teamVenueRules.length
-          ? '<p><strong>Current team rules:</strong></p><ul>'
+          ? '<p><strong>Current block rules:</strong></p><ul>'
             + teamVenueRules.map(function(r) {
                 var teamLabels = (r.teams || []).map(function(t) { return t.team + ' (' + t.div + ')'; }).join(', ');
                 var venueList = (r.venues || []).join(', ') || '(none)';
                 var mode = r.mode === 'mandatory' ? 'Mandatory' : 'High Priority';
-                return '<li><strong>' + mode + '</strong> — ' + (teamLabels || '(no teams)') + ' at <em>' + venueList + '</em></li>';
+                return '<li><strong>' + mode + '</strong> — ' + (teamLabels || '(no teams)') + ' cannot play at <em>' + venueList + '</em></li>';
               }).join('')
             + '</ul>'
-          : '<p style="color:var(--g);font-style:italic">No per-team rules configured — all teams follow their division’s rule. Add rules in the Team Venue Rules card.</p>')
+          : '<p style="color:var(--g);font-style:italic">No team venue blocks configured. Add blocks in the Team Venue Blocks card.</p>')
       + '</div>'
 
       // ── 6. Venue Exclusivity ───────────────────────────────────────────────

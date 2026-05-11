@@ -541,23 +541,32 @@ def _build_context(config):
         elif mode == 'high-priority':
             div_preferred_courts[dn] = court_set
 
-    # ── Per-team venue rules (RR only) ──────────────────────────────────────
+    # ── Per-team venue rules (RR only) — BLOCKLIST semantic ─────────────────
     # Shape per rule: {teams: [{div, team}], venues: [str], mode: 'mandatory'
-    # | 'high-priority'}. Mandatory auto-includes the main venue so the
-    # at-least-one-Blanes RR guarantee never becomes infeasible from this rule
-    # alone. Applies to Phase 1 (RR) only — Phase 2 ignores these.
+    # | 'high-priority'}. The selected venues are BLOCKED for the selected
+    # teams during round-robin placement.
+    #
+    # Mandatory: the team CANNOT play at the blocked venues (hard).
+    # High Priority: the team SHOULD AVOID the blocked venues (soft penalty).
+    #
+    # Main venue (Blanes) is silently stripped from the blocked set so the
+    # at-least-one-Blanes-RR guarantee always remains satisfiable.
+    # Multiple rules for the same team union their blocked sets.
+    # Applies to Phase 1 (RR) only — Phase 2 ignores these.
     team_venue_rules = config.get('teamVenueRules', [])
-    team_allowed_courts = {}     # (div, team) -> set(court_idx)  Mandatory
-    team_preferred_courts = {}   # (div, team) -> set(court_idx)  High Priority
+    team_blocked_courts = {}     # (div, team) -> set(court_idx)  Mandatory (hard block)
+    team_avoided_courts = {}     # (div, team) -> set(court_idx)  High Priority (soft avoid)
     for rule in team_venue_rules:
         rule_venues = [v for v in (rule.get('venues') or []) if v]
         if not rule_venues:
             continue
         rule_mode = rule.get('mode', 'high-priority')
         venues_lower = {v.lower() for v in rule_venues}
-        # Auto-include main venue for Mandatory rules.
-        if rule_mode == 'mandatory':
-            venues_lower.add(main_venue_lower)
+        # Strip main venue from blocked set — Blanes guarantee requires every
+        # team to play >=1 RR there.
+        venues_lower.discard(main_venue_lower)
+        if not venues_lower:
+            continue  # only Blanes was selected → effectively no rule
         court_set = {ci for ci, c in enumerate(courts)
                      if c['venue'].lower() in venues_lower}
         if not court_set:
@@ -569,12 +578,12 @@ def _build_context(config):
                 continue
             key = (div, team)
             if rule_mode == 'mandatory':
-                # If multiple rules apply to same team, intersect.
-                prev = team_allowed_courts.get(key)
-                team_allowed_courts[key] = court_set if prev is None else (prev & court_set)
+                # Multiple rules for same team: union the blocked courts.
+                prev = team_blocked_courts.get(key)
+                team_blocked_courts[key] = court_set if prev is None else (prev | court_set)
             else:
-                prev = team_preferred_courts.get(key)
-                team_preferred_courts[key] = court_set if prev is None else (prev & court_set)
+                prev = team_avoided_courts.get(key)
+                team_avoided_courts[key] = court_set if prev is None else (prev | court_set)
 
     blackout_map = defaultdict(list)
     for bo in venue_blackouts:
@@ -689,8 +698,8 @@ def _build_context(config):
         'rr_matchups': rr_matchups, 'num_rr': num_rr,
         'mandatory_divs': mandatory_divs, 'div_allowed_courts': div_allowed_courts,
         'div_preferred_courts': div_preferred_courts,
-        'team_allowed_courts': team_allowed_courts,
-        'team_preferred_courts': team_preferred_courts,
+        'team_blocked_courts': team_blocked_courts,
+        'team_avoided_courts': team_avoided_courts,
         'blackout_map': blackout_map,
         'po_games': po_games,
         'div_last_rr_day': div_last_rr_day, 'po_days_per_div': po_days_per_div,
@@ -919,22 +928,23 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
         if blanes_terms:
             model.add(sum(blanes_terms) >= 1)
 
-    # Division + per-team venue restrictions (RR only).
-    # For each game, allowed courts = division Mandatory ∩ both teams' team
-    # Mandatory sets. If any set is missing the intersection skips it.
-    # Empty intersection → all cells forbidden → solver returns INFEASIBLE,
-    # which the existing error path surfaces to the admin.
-    team_allowed_courts = ctx['team_allowed_courts']
+    # Division Mandatory + per-team blocked venues (RR only).
+    # For each game, allowed courts start from the division's Mandatory set
+    # (or all courts if none) and then have any team-level blocked courts
+    # subtracted. Both teams' blocks apply (union of blocks = subtracted).
+    # If allowed becomes empty, every cell is forbidden → solver returns
+    # INFEASIBLE, which the existing error path surfaces to the admin.
+    team_blocked_courts = ctx['team_blocked_courts']
+    all_courts_set = set(range(num_courts))
     for g, (div, grp, a, b) in enumerate(rr_matchups):
-        allowed = None
-        if div in div_allowed_courts:
-            allowed = div_allowed_courts[div]
+        allowed = set(div_allowed_courts[div]) if div in div_allowed_courts else set(all_courts_set)
+        # Subtract blocked courts contributed by either team.
         for team in (a, b):
-            ta = team_allowed_courts.get((div, team))
-            if ta is not None:
-                allowed = ta if allowed is None else (allowed & ta)
-        if allowed is None:
-            continue  # no Mandatory rule applies
+            tb = team_blocked_courts.get((div, team))
+            if tb:
+                allowed = allowed - tb
+        if allowed == all_courts_set:
+            continue  # no restriction applies to this matchup
         for d in range(n_days):
             for s in range(len(day_slots[d])):
                 for c in range(num_courts):
@@ -975,11 +985,11 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # Soft objective: prefer main venue for RR.
     outer_courts = [i for i in range(num_courts) if i not in blanes_courts]
     div_preferred_courts = ctx['div_preferred_courts']
-    team_preferred_courts = ctx['team_preferred_courts']
-    # Weight for per-team preferences: same magnitude as division priority
-    # so a team-level High Priority rule is roughly as strong as a
-    # division-level High Priority rule for that game.
-    TEAM_PREF_WEIGHT = 1
+    team_avoided_courts = ctx['team_avoided_courts']
+    # Weight for per-team High Priority "avoid" penalty: same magnitude as
+    # division priority so a team-level avoid is roughly as strong as a
+    # division-level High Priority preference for the same matchup.
+    TEAM_AVOID_WEIGHT = 1
     penalty_terms = []
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         w = div_priority.get(div, 1)
@@ -995,19 +1005,17 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
             for s in range(len(day_slots[d])):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
-        # Per-team High Priority venue preferences (RR only). Adds a penalty
-        # for each team in the matchup that has its own preferred set when
-        # the chosen court isn't in it. Multiple teams in the matchup with
-        # preferences stack (the cost reflects each team's discomfort).
+        # Per-team High Priority "avoid" penalty (RR only): for each team in
+        # the matchup with a soft-avoid set, penalize placement at those
+        # courts. Multiple teams in the matchup with avoid sets stack.
         for team in (a, b):
-            team_pref = team_preferred_courts.get((div, team))
-            if team_pref is None:
+            ta = team_avoided_courts.get((div, team))
+            if not ta:
                 continue
             for d in range(n_days):
                 for s in range(len(day_slots[d])):
-                    for c in range(num_courts):
-                        if c not in team_pref:
-                            penalty_terms.append(TEAM_PREF_WEIGHT * w * x[g, d, s, c])
+                    for c in ta:
+                        penalty_terms.append(TEAM_AVOID_WEIGHT * w * x[g, d, s, c])
 
     # Soft rest-fairness: prefer larger same-day gaps between a team's games.
     # For each (team, day, slot-pair) with gap < REST_TARGET_GAP, add a
