@@ -519,6 +519,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     </div>
 
     <div class="card" style="margin-top:14px">
+      <div class="stitle">Team Venue Rules <span style="font-weight:400;font-size:11px;opacity:0.7">(Round-Robin only)</span></div>
+      <p class="help" style="margin-bottom:10px">Restrict specific teams to specific venues for <strong>round-robin games only</strong>. Playoffs are not affected. Mandatory rules silently include the main venue so every team still plays at least one RR there.</p>
+      <div id="teamVenueRulesList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="add-btn" id="addTeamVenueRuleBtn" style="margin-top:10px">+ Add Team Rule</button>
+    </div>
+
+    <div class="card" style="margin-top:14px">
       <div class="stitle">Venue Availability Restrictions</div>
       <p class="help" style="margin-bottom:10px">Block specific venues during certain days or times. By default all venues are available for the full operating day.</p>
       <div id="venueBlackoutList" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -1074,6 +1081,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     venueRules.push({ divName: firstDiv, venues: [main], mode: 'mandatory' });
     renderVenueRules();
   });
+  document.getElementById('addTeamVenueRuleBtn').addEventListener('click', function () {
+    var mvEl = document.getElementById('mainVenue');
+    var main = (mvEl && mvEl.value) ? mvEl.value.trim() : 'Blanes';
+    teamVenueRules.push({ teams: [], venues: [main], mode: 'mandatory' });
+    renderTeamVenueRules();
+  });
   document.getElementById('addBlackoutBtn').addEventListener('click', function () {
     var firstVenue = sites.length ? sites[0].name : '';
     venueBlackouts.push({ venue: firstVenue, day: 0, afterTime: '', beforeTime: '' });
@@ -1132,6 +1145,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Each entry: { divName: string, prio: 'blanes-only' | 'blanes-pref-1' }
   // Any division not listed is implicitly 'any' (Flexible).
   var venueRules = [];
+
+  // teamVenueRules: per-team venue restriction for ROUND-ROBIN games only.
+  // Each entry: { teams: [{div, team}], venues: [str], mode: 'mandatory'|'high-priority' }.
+  // Intersects with division rules (both must allow). Mandatory rules
+  // auto-include the main venue so the at-least-one-Blanes RR rule holds.
+  var teamVenueRules = [];
 
   // venueBlackouts: per-venue, per-day time restrictions.
   // Each entry: { venue: string, day: number (0-indexed), afterTime: string, beforeTime: string }
@@ -1895,6 +1914,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         }
       });
     }
+    if (Array.isArray(teamVenueRules) && teamVenueRules.length) {
+      teamVenueRules.forEach(function(r) {
+        var venues = Array.isArray(r.venues) ? r.venues : [];
+        var teams = Array.isArray(r.teams) ? r.teams : [];
+        if (!venues.length || !teams.length) return;
+        var teamLabels = teams.map(function(t) { return t.team + ' (' + t.div + ')'; }).join('; ');
+        if (r.mode === 'mandatory') {
+          lines.push('- **Team rule (RR only) — Mandatory:** [' + teamLabels + '] must play their round-robin games at: ' + venues.join(', '));
+        } else if (r.mode === 'high-priority') {
+          lines.push('- **Team rule (RR only) — High Priority:** [' + teamLabels + '] should prefer their round-robin games at: ' + venues.join(', '));
+        }
+      });
+    }
     if (venueBlackouts && venueBlackouts.length) {
       venueBlackouts.forEach(function(b) {
         var parts = [];
@@ -2149,6 +2181,109 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     });
   }
 
+  // ── Per-team venue rule rendering (RR only) ──────────────
+  function renderTeamVenueRules() {
+    var el = document.getElementById('teamVenueRulesList');
+    if (!el) return;
+    el.innerHTML = '';
+    var siteNames = sites.map(function(s) { return s.name; }).filter(Boolean);
+    // Flat team list "TEAM (DIV)" — disambiguates teams that span divs.
+    var teamOptions = [];
+    divisions.forEach(function(d) {
+      (d.teams || []).forEach(function(t) {
+        teamOptions.push({ div: d.name, team: t, label: t + ' (' + d.name + ')' });
+      });
+    });
+    teamOptions.sort(function(a, b) { return a.label.localeCompare(b.label); });
+
+    teamVenueRules.forEach(function(rule, idx) {
+      if (!Array.isArray(rule.teams)) rule.teams = [];
+      if (!Array.isArray(rule.venues)) rule.venues = [];
+      // Build team multi-select options
+      var teamOpts = '';
+      if (teamOptions.length) {
+        teamOptions.forEach(function(t) {
+          var sel = rule.teams.some(function(rt) { return rt.div === t.div && rt.team === t.team; }) ? ' selected' : '';
+          var val = JSON.stringify({ div: t.div, team: t.team }).replace(/"/g, '&quot;');
+          teamOpts += '<option value="' + val + '"' + sel + '>' + t.label.replace(/</g, '&lt;') + '</option>';
+        });
+      } else {
+        teamOpts = '<option disabled>Parse teams first to populate this list.</option>';
+      }
+      var selectedCount = rule.teams.length;
+      // Venue checkboxes
+      var venueChecks = siteNames.length
+        ? siteNames.map(function(v) {
+            var esc = v.replace(/"/g, '&quot;');
+            var checked = rule.venues.indexOf(v) !== -1 ? ' checked' : '';
+            return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:pointer">'
+              + '<input type="checkbox" class="tvr-venue" data-idx="' + idx + '" data-venue="' + esc + '"' + checked + '>'
+              + v + '</label>';
+          }).join('')
+        : '<span style="opacity:0.6;font-size:12px">Add at least one venue above to pick from.</span>';
+      // Mode radios
+      var modeRadios =
+          '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:16px;cursor:pointer">'
+        +   '<input type="radio" name="tvr-mode-' + idx + '" class="tvr-mode" data-idx="' + idx + '" value="mandatory"'
+        +     (rule.mode === 'mandatory' ? ' checked' : '') + '>'
+        +   '<span><strong>Mandatory</strong> <span style="opacity:0.7;font-size:12px">&mdash; MUST play at these venues (RR)</span></span>'
+        + '</label>'
+        + '<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">'
+        +   '<input type="radio" name="tvr-mode-' + idx + '" class="tvr-mode" data-idx="' + idx + '" value="high-priority"'
+        +     (rule.mode === 'high-priority' ? ' checked' : '') + '>'
+        +   '<span><strong>High Priority</strong> <span style="opacity:0.7;font-size:12px">&mdash; SHOULD prefer these venues (RR)</span></span>'
+        + '</label>';
+      // Card
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #334;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.02)';
+      row.innerHTML =
+          '<div style="display:flex;align-items:center;gap:10px">'
+        +   '<div style="flex:1;display:flex;flex-direction:column;gap:4px">'
+        +     '<span style="font-size:11px;opacity:0.75">Teams (Ctrl/Cmd+click for multiple) &mdash; <strong>' + selectedCount + ' selected</strong></span>'
+        +     '<select class="tvr-teams" multiple size="5" data-idx="' + idx + '" style="width:100%;min-height:90px">' + teamOpts + '</select>'
+        +   '</div>'
+        +   '<button class="rm-btn tvr-del" data-idx="' + idx + '" title="Remove this rule">x</button>'
+        + '</div>'
+        + '<div style="font-size:12px;opacity:0.75">Venues (pick at least one):</div>'
+        + '<div style="display:flex;flex-wrap:wrap">' + venueChecks + '</div>'
+        + '<div style="font-size:12px;opacity:0.75">Rule type:</div>'
+        + '<div style="display:flex;flex-wrap:wrap">' + modeRadios + '</div>';
+      el.appendChild(row);
+    });
+    // Wire events
+    el.querySelectorAll('.tvr-teams').forEach(function(sel) {
+      sel.onchange = function() {
+        var idx = +this.dataset.idx;
+        var picked = [];
+        Array.prototype.forEach.call(this.selectedOptions, function(opt) {
+          try { picked.push(JSON.parse(opt.value)); } catch (e) { /* skip */ }
+        });
+        teamVenueRules[idx].teams = picked;
+        // Re-render to update the "N selected" label.
+        renderTeamVenueRules();
+      };
+    });
+    el.querySelectorAll('.tvr-venue').forEach(function(cb) {
+      cb.onchange = function() {
+        var idx = +this.dataset.idx;
+        var v = this.dataset.venue;
+        var rule = teamVenueRules[idx];
+        if (!Array.isArray(rule.venues)) rule.venues = [];
+        if (this.checked) {
+          if (rule.venues.indexOf(v) === -1) rule.venues.push(v);
+        } else {
+          rule.venues = rule.venues.filter(function(x) { return x !== v; });
+        }
+      };
+    });
+    el.querySelectorAll('.tvr-mode').forEach(function(rb) {
+      rb.onchange = function() { teamVenueRules[+this.dataset.idx].mode = this.value; };
+    });
+    el.querySelectorAll('.tvr-del').forEach(function(b) {
+      b.onclick = function() { teamVenueRules.splice(+this.dataset.idx, 1); renderTeamVenueRules(); };
+    });
+  }
+
   // Apply sensible defaults for newly parsed divisions (never overwrites user edits).
   // Seeds U18 BOYS → Mandatory at main venue. Every other category starts flexible.
   function applyDefaultVenueRules() {
@@ -2163,6 +2298,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       // All other categories start as Flexible (no rule entry)
     });
     renderVenueRules();
+    // Team venue rules don't have defaults — empty list is correct — but
+    // re-render in case the team roster changed (the multi-select needs to
+    // reflect the new teams).
+    renderTeamVenueRules();
   }
 
   // ── Venue Blackout (availability restriction) rendering ──────────────
@@ -2962,6 +3101,26 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '</ul>'
       + '<p><strong>Current rules:</strong></p>' + vrSection + '</div>'
 
+      // ── 5b. Per-team Venue Rules (RR only) ────────────────────────────────
+      + '<div class="algo-section"><h4>Team Venue Rules <span style="font-weight:400;font-size:11px">(Round-Robin only — Team Venue Rules card)</span></h4>'
+      + '<p>Per-team venue restriction for <strong>round-robin games only</strong>. Apply one rule to a single team or to multiple teams at once. <strong>Playoffs are not affected</strong> by these rules.</p>'
+      + '<p><strong>Interaction with other rules:</strong></p><ul>'
+      + '<li>Combines with a division’s Mandatory rule by <strong>intersection</strong> — if both rules apply, the game can only be placed at venues allowed by <em>both</em>. Empty intersection causes a generation failure with a clear error.</li>'
+      + '<li>Mandatory team rules <strong>silently include ' + mv + '</strong> so the at-least-one-' + mv + '-RR guarantee never becomes infeasible because of a team rule alone.</li>'
+      + '<li>High Priority team rules add a soft penalty to placements outside the listed venues; falls back when needed.</li>'
+      + '</ul>'
+      + (Array.isArray(teamVenueRules) && teamVenueRules.length
+          ? '<p><strong>Current team rules:</strong></p><ul>'
+            + teamVenueRules.map(function(r) {
+                var teamLabels = (r.teams || []).map(function(t) { return t.team + ' (' + t.div + ')'; }).join(', ');
+                var venueList = (r.venues || []).join(', ') || '(none)';
+                var mode = r.mode === 'mandatory' ? 'Mandatory' : 'High Priority';
+                return '<li><strong>' + mode + '</strong> — ' + (teamLabels || '(no teams)') + ' at <em>' + venueList + '</em></li>';
+              }).join('')
+            + '</ul>'
+          : '<p style="color:var(--g);font-style:italic">No per-team rules configured — all teams follow their division’s rule. Add rules in the Team Venue Rules card.</p>')
+      + '</div>'
+
       // ── 6. Venue Exclusivity ───────────────────────────────────────────────
       + '<div class="algo-section"><h4>Venue Exclusivity (Final / 3rd / Semi-finals) <span style="font-weight:400;font-size:11px">(Venue Exclusivity card)</span></h4>'
       + '<p>Each playoff category has its own toggle. When ON, choose between <strong>Mandatory</strong> (hard) and <strong>High Priority</strong> (soft, falls back to the Secondary Venue then to anywhere). When OFF, the game can land on any allowed court.</p>'
@@ -3535,6 +3694,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         finalTimes: (document.getElementById('finalTimes').value || '').trim(),
       },
       venueRules: venueRules,
+      teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
       solverTimeLimit: 300,
     };
@@ -7310,6 +7470,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       sched: sched,
       divisions: divisions,
       venueRules: venueRules,
+      teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
       unscheduledGames: unscheduledGames,
       sites: sites,
@@ -7554,6 +7715,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         var sanitizeFixes = sanitizeDivisionsAfterImport();
         venueRules       = data.venueRules       || [];
         migrateAllVenueRules();
+        teamVenueRules   = Array.isArray(data.teamVenueRules) ? data.teamVenueRules : [];
         venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
@@ -7617,6 +7779,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           : '';
         if (ftPick) setField('finalTimes', ftPick);
         renderVenueRules();
+        renderTeamVenueRules();
         renderVenueBlackouts();
         renderSched();
         switchTab('schedule');
@@ -7680,6 +7843,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     renderDayHours();           // also rebuilds the Finals dropdown
     setField('finalTimes', '17:30');
     renderVenueRules();
+    teamVenueRules = [];
+    renderTeamVenueRules();
     var dl = document.getElementById('divList');
     if (dl) dl.innerHTML = '';
     var so = document.getElementById('schedOut');

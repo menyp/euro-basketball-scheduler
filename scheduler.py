@@ -541,6 +541,41 @@ def _build_context(config):
         elif mode == 'high-priority':
             div_preferred_courts[dn] = court_set
 
+    # ── Per-team venue rules (RR only) ──────────────────────────────────────
+    # Shape per rule: {teams: [{div, team}], venues: [str], mode: 'mandatory'
+    # | 'high-priority'}. Mandatory auto-includes the main venue so the
+    # at-least-one-Blanes RR guarantee never becomes infeasible from this rule
+    # alone. Applies to Phase 1 (RR) only — Phase 2 ignores these.
+    team_venue_rules = config.get('teamVenueRules', [])
+    team_allowed_courts = {}     # (div, team) -> set(court_idx)  Mandatory
+    team_preferred_courts = {}   # (div, team) -> set(court_idx)  High Priority
+    for rule in team_venue_rules:
+        rule_venues = [v for v in (rule.get('venues') or []) if v]
+        if not rule_venues:
+            continue
+        rule_mode = rule.get('mode', 'high-priority')
+        venues_lower = {v.lower() for v in rule_venues}
+        # Auto-include main venue for Mandatory rules.
+        if rule_mode == 'mandatory':
+            venues_lower.add(main_venue_lower)
+        court_set = {ci for ci, c in enumerate(courts)
+                     if c['venue'].lower() in venues_lower}
+        if not court_set:
+            continue
+        for entry in (rule.get('teams') or []):
+            div = (entry.get('div') or '').strip()
+            team = (entry.get('team') or '').strip()
+            if not div or not team:
+                continue
+            key = (div, team)
+            if rule_mode == 'mandatory':
+                # If multiple rules apply to same team, intersect.
+                prev = team_allowed_courts.get(key)
+                team_allowed_courts[key] = court_set if prev is None else (prev & court_set)
+            else:
+                prev = team_preferred_courts.get(key)
+                team_preferred_courts[key] = court_set if prev is None else (prev & court_set)
+
     blackout_map = defaultdict(list)
     for bo in venue_blackouts:
         key = (bo['venue'], bo['day'])
@@ -654,6 +689,8 @@ def _build_context(config):
         'rr_matchups': rr_matchups, 'num_rr': num_rr,
         'mandatory_divs': mandatory_divs, 'div_allowed_courts': div_allowed_courts,
         'div_preferred_courts': div_preferred_courts,
+        'team_allowed_courts': team_allowed_courts,
+        'team_preferred_courts': team_preferred_courts,
         'blackout_map': blackout_map,
         'po_games': po_games,
         'div_last_rr_day': div_last_rr_day, 'po_days_per_div': po_days_per_div,
@@ -882,15 +919,27 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
         if blanes_terms:
             model.add(sum(blanes_terms) >= 1)
 
-    # Division venue restrictions.
+    # Division + per-team venue restrictions (RR only).
+    # For each game, allowed courts = division Mandatory ∩ both teams' team
+    # Mandatory sets. If any set is missing the intersection skips it.
+    # Empty intersection → all cells forbidden → solver returns INFEASIBLE,
+    # which the existing error path surfaces to the admin.
+    team_allowed_courts = ctx['team_allowed_courts']
     for g, (div, grp, a, b) in enumerate(rr_matchups):
+        allowed = None
         if div in div_allowed_courts:
             allowed = div_allowed_courts[div]
-            for d in range(n_days):
-                for s in range(len(day_slots[d])):
-                    for c in range(num_courts):
-                        if c not in allowed:
-                            model.add(x[g, d, s, c] == 0)
+        for team in (a, b):
+            ta = team_allowed_courts.get((div, team))
+            if ta is not None:
+                allowed = ta if allowed is None else (allowed & ta)
+        if allowed is None:
+            continue  # no Mandatory rule applies
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                for c in range(num_courts):
+                    if c not in allowed:
+                        model.add(x[g, d, s, c] == 0)
 
     # Venue blackouts.
     for g in range(num_rr):
@@ -926,6 +975,11 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # Soft objective: prefer main venue for RR.
     outer_courts = [i for i in range(num_courts) if i not in blanes_courts]
     div_preferred_courts = ctx['div_preferred_courts']
+    team_preferred_courts = ctx['team_preferred_courts']
+    # Weight for per-team preferences: same magnitude as division priority
+    # so a team-level High Priority rule is roughly as strong as a
+    # division-level High Priority rule for that game.
+    TEAM_PREF_WEIGHT = 1
     penalty_terms = []
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         w = div_priority.get(div, 1)
@@ -941,6 +995,19 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
             for s in range(len(day_slots[d])):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
+        # Per-team High Priority venue preferences (RR only). Adds a penalty
+        # for each team in the matchup that has its own preferred set when
+        # the chosen court isn't in it. Multiple teams in the matchup with
+        # preferences stack (the cost reflects each team's discomfort).
+        for team in (a, b):
+            team_pref = team_preferred_courts.get((div, team))
+            if team_pref is None:
+                continue
+            for d in range(n_days):
+                for s in range(len(day_slots[d])):
+                    for c in range(num_courts):
+                        if c not in team_pref:
+                            penalty_terms.append(TEAM_PREF_WEIGHT * w * x[g, d, s, c])
 
     # Soft rest-fairness: prefer larger same-day gaps between a team's games.
     # For each (team, day, slot-pair) with gap < REST_TARGET_GAP, add a
