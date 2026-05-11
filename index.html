@@ -2187,30 +2187,43 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (!el) return;
     el.innerHTML = '';
     var siteNames = sites.map(function(s) { return s.name; }).filter(Boolean);
-    // Flat team list "TEAM (DIV)" — disambiguates teams that span divs.
-    var teamOptions = [];
-    divisions.forEach(function(d) {
-      (d.teams || []).forEach(function(t) {
-        teamOptions.push({ div: d.name, team: t, label: t + ' (' + d.name + ')' });
-      });
-    });
-    teamOptions.sort(function(a, b) { return a.label.localeCompare(b.label); });
+
+    function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
     teamVenueRules.forEach(function(rule, idx) {
       if (!Array.isArray(rule.teams)) rule.teams = [];
       if (!Array.isArray(rule.venues)) rule.venues = [];
-      // Build team multi-select options
-      var teamOpts = '';
-      if (teamOptions.length) {
-        teamOptions.forEach(function(t) {
-          var sel = rule.teams.some(function(rt) { return rt.div === t.div && rt.team === t.team; }) ? ' selected' : '';
-          var val = JSON.stringify({ div: t.div, team: t.team }).replace(/"/g, '&quot;');
-          teamOpts += '<option value="' + val + '"' + sel + '>' + t.label.replace(/</g, '&lt;') + '</option>';
-        });
-      } else {
-        teamOpts = '<option disabled>Parse teams first to populate this list.</option>';
-      }
       var selectedCount = rule.teams.length;
+
+      // Team picker: scrollable panel with checkboxes grouped by division.
+      // Each row is a <label> with a checkbox + team name. Selected teams
+      // are also visually highlighted so it's obvious what's chosen.
+      var teamPanel = '';
+      if (divisions.length) {
+        teamPanel = divisions.map(function(d) {
+          var teams = d.teams || [];
+          if (!teams.length) return '';
+          var rows = teams.map(function(t) {
+            var isSel = rule.teams.some(function(rt) { return rt.div === d.name && rt.team === t; });
+            return '<label class="tvr-team-row" style="display:flex;align-items:center;gap:6px;padding:3px 6px;cursor:pointer;border-radius:3px;'
+              + (isSel ? 'background:rgba(255,107,0,0.18)' : '') + '">'
+              + '<input type="checkbox" class="tvr-team-cb" data-idx="' + idx
+              + '" data-div="' + escH(d.name) + '" data-team="' + escH(t) + '"'
+              + (isSel ? ' checked' : '') + '>'
+              + '<span style="font-size:13px;color:#e2e8f0">' + escH(t) + '</span>'
+              + '</label>';
+          }).join('');
+          return '<div style="margin-bottom:6px">'
+            + '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#FF6B00;padding:4px 6px 2px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:2px">'
+            + escH(d.name)
+            + '</div>'
+            + rows
+            + '</div>';
+        }).join('');
+      } else {
+        teamPanel = '<div style="opacity:0.6;font-size:12px;padding:6px">Parse teams first to populate this list.</div>';
+      }
+
       // Venue checkboxes
       var venueChecks = siteNames.length
         ? siteNames.map(function(v) {
@@ -2237,10 +2250,17 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #334;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.02)';
       row.innerHTML =
-          '<div style="display:flex;align-items:center;gap:10px">'
+          '<div style="display:flex;align-items:flex-start;gap:10px">'
         +   '<div style="flex:1;display:flex;flex-direction:column;gap:4px">'
-        +     '<span style="font-size:11px;opacity:0.75">Teams (Ctrl/Cmd+click for multiple) &mdash; <strong>' + selectedCount + ' selected</strong></span>'
-        +     '<select class="tvr-teams" multiple size="5" data-idx="' + idx + '" style="width:100%;min-height:90px">' + teamOpts + '</select>'
+        +     '<div style="display:flex;justify-content:space-between;align-items:center">'
+        +       '<span style="font-size:11px;opacity:0.75">Teams &mdash; <strong>' + selectedCount + ' selected</strong></span>'
+        +       (selectedCount > 0
+                  ? '<button class="tvr-clear" data-idx="' + idx + '" style="background:transparent;border:none;color:var(--g);font-size:11px;cursor:pointer;text-decoration:underline;padding:2px 0">Clear all</button>'
+                  : '')
+        +     '</div>'
+        +     '<div class="tvr-teams-panel" style="max-height:220px;overflow-y:auto;border:1px solid #334;border-radius:4px;padding:6px;background:rgba(0,0,0,0.25)">'
+        +       teamPanel
+        +     '</div>'
         +   '</div>'
         +   '<button class="rm-btn tvr-del" data-idx="' + idx + '" title="Remove this rule">x</button>'
         + '</div>'
@@ -2251,15 +2271,43 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       el.appendChild(row);
     });
     // Wire events
-    el.querySelectorAll('.tvr-teams').forEach(function(sel) {
-      sel.onchange = function() {
+    el.querySelectorAll('.tvr-team-cb').forEach(function(cb) {
+      cb.onchange = function() {
         var idx = +this.dataset.idx;
-        var picked = [];
-        Array.prototype.forEach.call(this.selectedOptions, function(opt) {
-          try { picked.push(JSON.parse(opt.value)); } catch (e) { /* skip */ }
-        });
-        teamVenueRules[idx].teams = picked;
-        // Re-render to update the "N selected" label.
+        var div = this.dataset.div;
+        var team = this.dataset.team;
+        var rule = teamVenueRules[idx];
+        if (!Array.isArray(rule.teams)) rule.teams = [];
+        if (this.checked) {
+          if (!rule.teams.some(function(rt) { return rt.div === div && rt.team === team; })) {
+            rule.teams.push({ div: div, team: team });
+          }
+        } else {
+          rule.teams = rule.teams.filter(function(rt) { return !(rt.div === div && rt.team === team); });
+        }
+        // Update visual highlight + count without losing scroll position.
+        var label = this.closest('.tvr-team-row');
+        if (label) label.style.background = this.checked ? 'rgba(255,107,0,0.18)' : '';
+        var card = this.closest('div[style*="border:1px solid #334"]');
+        if (card) {
+          var countEl = card.querySelector('span[style*="opacity:0.75"] + strong, [style*="opacity:0.75"]');
+          // Simpler: just re-render but preserve scroll
+          var panel = this.closest('.tvr-teams-panel');
+          var scrollTop = panel ? panel.scrollTop : 0;
+          renderTeamVenueRules();
+          // Restore scroll position on the same card's panel.
+          var newCard = document.getElementById('teamVenueRulesList').children[idx];
+          if (newCard) {
+            var newPanel = newCard.querySelector('.tvr-teams-panel');
+            if (newPanel) newPanel.scrollTop = scrollTop;
+          }
+        }
+      };
+    });
+    el.querySelectorAll('.tvr-clear').forEach(function(b) {
+      b.onclick = function(e) {
+        e.preventDefault();
+        teamVenueRules[+this.dataset.idx].teams = [];
         renderTeamVenueRules();
       };
     });
