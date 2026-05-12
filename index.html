@@ -1082,9 +1082,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     renderVenueRules();
   });
   document.getElementById('addTeamVenueRuleBtn').addEventListener('click', function () {
-    var mvEl = document.getElementById('mainVenue');
-    var main = (mvEl && mvEl.value) ? mvEl.value.trim() : 'Blanes';
-    teamVenueRules.push({ teams: [], venues: [main], mode: 'mandatory' });
+    teamVenueRules.push({ teams: [], venues: [], mode: 'mandatory' });
     renderTeamVenueRules();
   });
   document.getElementById('addBlackoutBtn').addEventListener('click', function () {
@@ -1915,8 +1913,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
     }
     if (Array.isArray(teamVenueRules) && teamVenueRules.length) {
+      var _tvrMvEl = document.getElementById('mainVenue');
+      var _tvrMainVenue = (_tvrMvEl && _tvrMvEl.value) ? _tvrMvEl.value.trim().toLowerCase() : 'blanes';
       teamVenueRules.forEach(function(r) {
-        var venues = Array.isArray(r.venues) ? r.venues : [];
+        var venues = (Array.isArray(r.venues) ? r.venues : [])
+          .filter(function(v) { return v && v.toLowerCase() !== _tvrMainVenue; });
         var teams = Array.isArray(r.teams) ? r.teams : [];
         if (!venues.length || !teams.length) return;
         var teamLabels = teams.map(function(t) { return t.team + ' (' + t.div + ')'; }).join('; ');
@@ -3749,7 +3750,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueRules: venueRules,
       teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
-      solverTimeLimit: 300,
+      solverTimeLimit: 3000,
     };
 
     // Show loading state with live timer
@@ -3808,7 +3809,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/generate', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.timeout = 1800000; // 30 min — iterative two-phase solver can run up to 4 iterations × (P1 + P2 at 300s each)
+    xhr.timeout = 3300000; // 55 min — matches solverTimeLimit (3000s) + 5 min slack for network/serialization
     xhr.onload = function() {
       _stopSolveTimer();
       try {
