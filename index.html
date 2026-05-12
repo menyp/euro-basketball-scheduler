@@ -526,6 +526,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     </div>
 
     <div class="card" style="margin-top:14px">
+      <div class="stitle">Team Late-Arrival Rules</div>
+      <p class="help" style="margin-bottom:10px">For teams arriving late on a tournament day, block scheduling games before the arrival time. Applies to <strong>all games</strong> on that day (round-robin and playoffs).</p>
+      <div id="teamAvailabilityList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="add-btn" id="addTeamAvailabilityBtn" style="margin-top:10px">+ Add Late-Arrival Rule</button>
+    </div>
+
+    <div class="card" style="margin-top:14px">
       <div class="stitle">Venue Availability Restrictions</div>
       <p class="help" style="margin-bottom:10px">Block specific venues during certain days or times. By default all venues are available for the full operating day.</p>
       <div id="venueBlackoutList" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -1085,6 +1092,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     teamVenueRules.push({ teams: [], venues: [], mode: 'mandatory' });
     renderTeamVenueRules();
   });
+  document.getElementById('addTeamAvailabilityBtn').addEventListener('click', function () {
+    teamAvailability.push({ teams: [], day: 0, notBefore: '16:00' });
+    renderTeamAvailability();
+  });
   document.getElementById('addBlackoutBtn').addEventListener('click', function () {
     var firstVenue = sites.length ? sites[0].name : '';
     venueBlackouts.push({ venue: firstVenue, day: 0, afterTime: '', beforeTime: '' });
@@ -1155,6 +1166,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Empty string = no restriction on that end. Default: no blackouts (all venues fully available).
   var venueBlackouts = [];
 
+  // teamAvailability: per-team late-arrival rules. Hard constraint applied to
+  // both RR and PO games on the specified day.
+  // Each entry: { teams: [{div, team}], day: number (0-indexed), notBefore: 'HH:MM' }
+  var teamAvailability = [];
+
   // ── Per-day operating hours ────────────────────────────
   // Returns [{start:'09:00', end:'19:00'}, ...] for each tournament day.
   // Falls back to defaults when inputs are missing (e.g. before first render).
@@ -1194,6 +1210,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     h += '</div>';
     document.getElementById('dayHoursContainer').innerHTML = h;
     renderVenueBlackouts(); // refresh day dropdowns when nDays changes
+    renderTeamAvailability(); // refresh day dropdowns when nDays changes
     renderFinalsDropdown(); // refresh target-slot options when finals day hours change
     // Wire change-listeners on day-hours inputs so the Finals dropdown stays in sync.
     var n2 = parseInt(document.getElementById('nDays').value) || 3;
@@ -1928,6 +1945,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         }
       });
     }
+    if (Array.isArray(teamAvailability) && teamAvailability.length) {
+      teamAvailability.forEach(function(r) {
+        var teams = Array.isArray(r.teams) ? r.teams : [];
+        if (!teams.length || !r.notBefore) return;
+        var teamLabels = teams.map(function(t) { return t.team + ' (' + t.div + ')'; }).join('; ');
+        lines.push('- **Team late-arrival rule (Mandatory):** [' + teamLabels + '] are not available before ' + r.notBefore + ' on Day ' + ((r.day || 0) + 1) + ' — no games (RR or playoffs).');
+      });
+    }
     if (venueBlackouts && venueBlackouts.length) {
       venueBlackouts.forEach(function(b) {
         var parts = [];
@@ -2355,6 +2380,134 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // re-render in case the team roster changed (the multi-select needs to
     // reflect the new teams).
     renderTeamVenueRules();
+    renderTeamAvailability();
+  }
+
+  // ── Team Late-Arrival rules rendering ────────────────────────────────
+  function renderTeamAvailability() {
+    var el = document.getElementById('teamAvailabilityList');
+    if (!el) return;
+    el.innerHTML = '';
+    var nDays = parseInt(document.getElementById('nDays').value) || 3;
+    // Prune entries whose day exceeds current nDays
+    teamAvailability = teamAvailability.filter(function(r) { return r.day < nDays; });
+
+    function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    if (!teamAvailability.length) {
+      el.innerHTML = '<p class="help" style="opacity:.5;margin:0">No late-arrival rules — all teams assumed available from the start of each day.</p>';
+      return;
+    }
+
+    teamAvailability.forEach(function(rule, idx) {
+      if (!Array.isArray(rule.teams)) rule.teams = [];
+      if (typeof rule.day !== 'number') rule.day = 0;
+      if (!rule.notBefore) rule.notBefore = '09:00';
+      var selectedCount = rule.teams.length;
+
+      // Team picker grouped by division (mirrors team-block-rule UI).
+      var teamPanel = '';
+      if (divisions.length) {
+        teamPanel = divisions.map(function(d) {
+          var teams = d.teams || [];
+          if (!teams.length) return '';
+          var rows = teams.map(function(t) {
+            var isSel = rule.teams.some(function(rt) { return rt.div === d.name && rt.team === t; });
+            return '<label class="tav-team-row" style="display:flex;align-items:center;gap:6px;padding:3px 6px;cursor:pointer;border-radius:3px;'
+              + (isSel ? 'background:rgba(255,107,0,0.18)' : '') + '">'
+              + '<input type="checkbox" class="tav-team-cb" data-idx="' + idx
+              + '" data-div="' + escH(d.name) + '" data-team="' + escH(t) + '"'
+              + (isSel ? ' checked' : '') + '>'
+              + '<span style="font-size:13px;color:#e2e8f0">' + escH(t) + '</span>'
+              + '</label>';
+          }).join('');
+          return '<div style="margin-bottom:6px">'
+            + '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#FF6B00;padding:4px 6px 2px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:2px">'
+            + escH(d.name)
+            + '</div>'
+            + rows
+            + '</div>';
+        }).join('');
+      } else {
+        teamPanel = '<div style="opacity:0.6;font-size:12px;padding:6px">Parse teams first to populate this list.</div>';
+      }
+
+      // Day dropdown
+      var dayOpts = '';
+      for (var di = 0; di < nDays; di++) {
+        dayOpts += '<option value="' + di + '"' + (rule.day === di ? ' selected' : '') + '>Day ' + (di + 1) + '</option>';
+      }
+
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #334;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.02)';
+      row.innerHTML =
+          '<div style="display:flex;align-items:flex-start;gap:10px">'
+        +   '<div style="flex:1;display:flex;flex-direction:column;gap:4px">'
+        +     '<div style="display:flex;justify-content:space-between;align-items:center">'
+        +       '<span style="font-size:11px;opacity:0.75">Teams &mdash; <strong>' + selectedCount + ' selected</strong></span>'
+        +       (selectedCount > 0
+                  ? '<button class="tav-clear" data-idx="' + idx + '" style="background:transparent;border:none;color:var(--g);font-size:11px;cursor:pointer;text-decoration:underline;padding:2px 0">Clear all</button>'
+                  : '')
+        +     '</div>'
+        +     '<div class="tav-teams-panel" style="max-height:220px;overflow-y:auto;border:1px solid #334;border-radius:4px;padding:6px;background:rgba(0,0,0,0.25)">'
+        +       teamPanel
+        +     '</div>'
+        +   '</div>'
+        +   '<button class="rm-btn tav-del" data-idx="' + idx + '" title="Remove this rule">x</button>'
+        + '</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+        +   '<span style="font-size:12px;opacity:0.75">Not available on</span>'
+        +   '<select class="tav-day" data-idx="' + idx + '" style="width:90px">' + dayOpts + '</select>'
+        +   '<span style="font-size:12px;opacity:0.75">before</span>'
+        +   '<input type="time" class="tav-not-before" data-idx="' + idx + '" value="' + escH(rule.notBefore) + '" style="width:110px">'
+        +   '<span style="font-size:11px;opacity:0.6">(applies to RR + playoffs)</span>'
+        + '</div>';
+      el.appendChild(row);
+    });
+
+    // Wire events.
+    el.querySelectorAll('.tav-team-cb').forEach(function(cb) {
+      cb.onchange = function() {
+        var idx = +this.dataset.idx;
+        var div = this.dataset.div;
+        var team = this.dataset.team;
+        var rule = teamAvailability[idx];
+        if (!Array.isArray(rule.teams)) rule.teams = [];
+        if (this.checked) {
+          if (!rule.teams.some(function(rt) { return rt.div === div && rt.team === team; })) {
+            rule.teams.push({ div: div, team: team });
+          }
+        } else {
+          rule.teams = rule.teams.filter(function(rt) { return !(rt.div === div && rt.team === team); });
+        }
+        var label = this.closest('.tav-team-row');
+        if (label) label.style.background = this.checked ? 'rgba(255,107,0,0.18)' : '';
+        var panel = this.closest('.tav-teams-panel');
+        var scrollTop = panel ? panel.scrollTop : 0;
+        renderTeamAvailability();
+        var newCard = document.getElementById('teamAvailabilityList').children[idx];
+        if (newCard) {
+          var newPanel = newCard.querySelector('.tav-teams-panel');
+          if (newPanel) newPanel.scrollTop = scrollTop;
+        }
+      };
+    });
+    el.querySelectorAll('.tav-clear').forEach(function(b) {
+      b.onclick = function(e) {
+        e.preventDefault();
+        teamAvailability[+this.dataset.idx].teams = [];
+        renderTeamAvailability();
+      };
+    });
+    el.querySelectorAll('.tav-day').forEach(function(s) {
+      s.onchange = function() { teamAvailability[+this.dataset.idx].day = +this.value; };
+    });
+    el.querySelectorAll('.tav-not-before').forEach(function(s) {
+      s.onchange = function() { teamAvailability[+this.dataset.idx].notBefore = this.value; };
+    });
+    el.querySelectorAll('.tav-del').forEach(function(b) {
+      b.onclick = function() { teamAvailability.splice(+this.dataset.idx, 1); renderTeamAvailability(); };
+    });
   }
 
   // ── Venue Blackout (availability restriction) rendering ──────────────
@@ -3750,6 +3903,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueRules: venueRules,
       teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
+      teamAvailability: teamAvailability,
       solverTimeLimit: 3000,
     };
 
@@ -7526,6 +7680,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueRules: venueRules,
       teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
+      teamAvailability: teamAvailability,
       unscheduledGames: unscheduledGames,
       sites: sites,
       setupFields: {
@@ -7770,6 +7925,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         venueRules       = data.venueRules       || [];
         migrateAllVenueRules();
         teamVenueRules   = Array.isArray(data.teamVenueRules) ? data.teamVenueRules : [];
+        teamAvailability = Array.isArray(data.teamAvailability) ? data.teamAvailability : [];
         venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
@@ -7834,6 +7990,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (ftPick) setField('finalTimes', ftPick);
         renderVenueRules();
         renderTeamVenueRules();
+        renderTeamAvailability();
         renderVenueBlackouts();
         renderSched();
         switchTab('schedule');
@@ -7899,6 +8056,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     renderVenueRules();
     teamVenueRules = [];
     renderTeamVenueRules();
+    teamAvailability = [];
+    renderTeamAvailability();
     var dl = document.getElementById('divList');
     if (dl) dl.innerHTML = '';
     var so = document.getElementById('schedOut');
