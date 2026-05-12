@@ -541,12 +541,84 @@ def _build_context(config):
         elif mode == 'high-priority':
             div_preferred_courts[dn] = court_set
 
+    # ── Per-team venue rules (RR only) — BLOCKLIST semantic ─────────────────
+    # Shape per rule: {teams: [{div, team}], venues: [str], mode: 'mandatory'
+    # | 'high-priority'}. The selected venues are BLOCKED for the selected
+    # teams during round-robin placement.
+    #
+    # Mandatory: the team CANNOT play at the blocked venues (hard).
+    # High Priority: the team SHOULD AVOID the blocked venues (soft penalty).
+    #
+    # Main venue (Blanes) is silently stripped from the blocked set so the
+    # at-least-one-Blanes-RR guarantee always remains satisfiable.
+    # Multiple rules for the same team union their blocked sets.
+    # Applies to Phase 1 (RR) only — Phase 2 ignores these.
+    team_venue_rules = config.get('teamVenueRules', [])
+    team_blocked_courts = {}     # (div, team) -> set(court_idx)  Mandatory (hard block)
+    team_avoided_courts = {}     # (div, team) -> set(court_idx)  High Priority (soft avoid)
+    for rule in team_venue_rules:
+        rule_venues = [v for v in (rule.get('venues') or []) if v]
+        if not rule_venues:
+            continue
+        rule_mode = rule.get('mode', 'high-priority')
+        venues_lower = {v.lower() for v in rule_venues}
+        # Strip main venue from blocked set — Blanes guarantee requires every
+        # team to play >=1 RR there.
+        venues_lower.discard(main_venue_lower)
+        if not venues_lower:
+            continue  # only Blanes was selected → effectively no rule
+        court_set = {ci for ci, c in enumerate(courts)
+                     if c['venue'].lower() in venues_lower}
+        if not court_set:
+            continue
+        for entry in (rule.get('teams') or []):
+            div = (entry.get('div') or '').strip()
+            team = (entry.get('team') or '').strip()
+            if not div or not team:
+                continue
+            key = (div, team)
+            if rule_mode == 'mandatory':
+                # Multiple rules for same team: union the blocked courts.
+                prev = team_blocked_courts.get(key)
+                team_blocked_courts[key] = court_set if prev is None else (prev | court_set)
+            else:
+                prev = team_avoided_courts.get(key)
+                team_avoided_courts[key] = court_set if prev is None else (prev | court_set)
+
     blackout_map = defaultdict(list)
     for bo in venue_blackouts:
         key = (bo['venue'], bo['day'])
         after = _time_to_min(bo['afterTime']) if bo.get('afterTime') else -1
         before = _time_to_min(bo['beforeTime']) if bo.get('beforeTime') else -1
         blackout_map[key].append((after, before))
+
+    # ── Team late-arrival rules (Mandatory, RR + PO) ────────────────────────
+    # Shape per rule: {teams: [{div, team}], day: int, notBefore: 'HH:MM'}.
+    # Hard constraint: the listed teams cannot be scheduled on `day` at any
+    # slot whose start time is earlier than `notBefore`. Applies to both RR
+    # (Phase 1) and playoff (Phase 2) games.
+    # Multiple rules for the same (team, day) → take the latest notBefore.
+    team_arrival_min = {}  # (div, team, day_idx) -> minimum slot-start minute
+    for rule in (config.get('teamAvailability') or []):
+        nb = rule.get('notBefore')
+        if not nb:
+            continue
+        try:
+            min_start = _time_to_min(nb)
+        except Exception:
+            continue
+        day_idx = rule.get('day', 0)
+        if not isinstance(day_idx, int) or day_idx < 0 or day_idx >= n_days:
+            continue
+        for entry in (rule.get('teams') or []):
+            dn = (entry.get('div') or '').strip()
+            tm = (entry.get('team') or '').strip()
+            if not dn or not tm:
+                continue
+            key = (dn, tm, day_idx)
+            prev = team_arrival_min.get(key, 0)
+            if min_start > prev:
+                team_arrival_min[key] = min_start
 
     # Lever D helper: contiguous court-index groups for each multi-court venue.
     # Courts are appended sequentially per site in build order, so courts of
@@ -654,6 +726,9 @@ def _build_context(config):
         'rr_matchups': rr_matchups, 'num_rr': num_rr,
         'mandatory_divs': mandatory_divs, 'div_allowed_courts': div_allowed_courts,
         'div_preferred_courts': div_preferred_courts,
+        'team_blocked_courts': team_blocked_courts,
+        'team_avoided_courts': team_avoided_courts,
+        'team_arrival_min': team_arrival_min,
         'blackout_map': blackout_map,
         'po_games': po_games,
         'div_last_rr_day': div_last_rr_day, 'po_days_per_div': po_days_per_div,
@@ -882,15 +957,28 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
         if blanes_terms:
             model.add(sum(blanes_terms) >= 1)
 
-    # Division venue restrictions.
+    # Division Mandatory + per-team blocked venues (RR only).
+    # For each game, allowed courts start from the division's Mandatory set
+    # (or all courts if none) and then have any team-level blocked courts
+    # subtracted. Both teams' blocks apply (union of blocks = subtracted).
+    # If allowed becomes empty, every cell is forbidden → solver returns
+    # INFEASIBLE, which the existing error path surfaces to the admin.
+    team_blocked_courts = ctx['team_blocked_courts']
+    all_courts_set = set(range(num_courts))
     for g, (div, grp, a, b) in enumerate(rr_matchups):
-        if div in div_allowed_courts:
-            allowed = div_allowed_courts[div]
-            for d in range(n_days):
-                for s in range(len(day_slots[d])):
-                    for c in range(num_courts):
-                        if c not in allowed:
-                            model.add(x[g, d, s, c] == 0)
+        allowed = set(div_allowed_courts[div]) if div in div_allowed_courts else set(all_courts_set)
+        # Subtract blocked courts contributed by either team.
+        for team in (a, b):
+            tb = team_blocked_courts.get((div, team))
+            if tb:
+                allowed = allowed - tb
+        if allowed == all_courts_set:
+            continue  # no restriction applies to this matchup
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                for c in range(num_courts):
+                    if c not in allowed:
+                        model.add(x[g, d, s, c] == 0)
 
     # Venue blackouts.
     for g in range(num_rr):
@@ -899,6 +987,21 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 for c in range(num_courts):
                     if _is_blacked_out(ctx, c, d, day_slots[d][s]):
                         model.add(x[g, d, s, c] == 0)
+
+    # Team late-arrival rules (RR): forbid placements where the slot starts
+    # earlier than either team's arrival cutoff on that day.
+    team_arrival_min = ctx['team_arrival_min']
+    if team_arrival_min:
+        for g, (div, grp, a, b) in enumerate(rr_matchups):
+            for team in (a, b):
+                for d in range(n_days):
+                    min_start = team_arrival_min.get((div, team, d), 0)
+                    if min_start <= 0:
+                        continue
+                    for s, slot_start in enumerate(day_slots[d]):
+                        if slot_start < min_start:
+                            for c in range(num_courts):
+                                model.add(x[g, d, s, c] == 0)
 
     # Lever D: symmetry breaking on interchangeable courts. Within each
     # multi-court venue, force courts to fill in canonical order at every
@@ -926,6 +1029,11 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # Soft objective: prefer main venue for RR.
     outer_courts = [i for i in range(num_courts) if i not in blanes_courts]
     div_preferred_courts = ctx['div_preferred_courts']
+    team_avoided_courts = ctx['team_avoided_courts']
+    # Weight for per-team High Priority "avoid" penalty: same magnitude as
+    # division priority so a team-level avoid is roughly as strong as a
+    # division-level High Priority preference for the same matchup.
+    TEAM_AVOID_WEIGHT = 1
     penalty_terms = []
     for g, (div, grp, a, b) in enumerate(rr_matchups):
         w = div_priority.get(div, 1)
@@ -941,6 +1049,17 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
             for s in range(len(day_slots[d])):
                 for c in non_pref:
                     penalty_terms.append(w * x[g, d, s, c])
+        # Per-team High Priority "avoid" penalty (RR only): for each team in
+        # the matchup with a soft-avoid set, penalize placement at those
+        # courts. Multiple teams in the matchup with avoid sets stack.
+        for team in (a, b):
+            ta = team_avoided_courts.get((div, team))
+            if not ta:
+                continue
+            for d in range(n_days):
+                for s in range(len(day_slots[d])):
+                    for c in ta:
+                        penalty_terms.append(TEAM_AVOID_WEIGHT * w * x[g, d, s, c])
 
     # Soft rest-fairness: prefer larger same-day gaps between a team's games.
     # For each (team, day, slot-pair) with gap < REST_TARGET_GAP, add a
@@ -1126,6 +1245,34 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                     for c in range(num_courts):
                         if c not in allowed:
                             po_model.add(y[p, d, s, c] == 0)
+
+    # Team late-arrival rules (PO): a constrained team could occupy any seed
+    # from its own group, so forbid PO games involving that group on the
+    # constrained day at slots before the cutoff. Over-conservative but safe.
+    team_arrival_min = ctx['team_arrival_min']
+    if team_arrival_min:
+        # Build: (div, group_letter, day) -> max cutoff across teams in that group on that day.
+        team_div = ctx['team_div']
+        group_cutoff = {}
+        for (div, team, day_idx), min_start in team_arrival_min.items():
+            grp_letter = team_div.get((div, team))
+            if grp_letter is None:
+                continue
+            key = (div, grp_letter, day_idx)
+            prev = group_cutoff.get(key, 0)
+            if min_start > prev:
+                group_cutoff[key] = min_start
+        for p, pg in enumerate(po_games):
+            div = pg['divName']
+            for grp_letter in pg.get('groups', []) or []:
+                for d in range(n_days):
+                    cutoff = group_cutoff.get((div, grp_letter, d), 0)
+                    if cutoff <= 0:
+                        continue
+                    for s, slot_start in enumerate(day_slots[d]):
+                        if slot_start < cutoff:
+                            for c in range(num_courts):
+                                po_model.add(y[p, d, s, c] == 0)
 
     # Venue Exclusivity — driven by 3 toggles + per-toggle mode.
     # Toggle ON + mode='mandatory'  → hard constraint: must be at main venue.
