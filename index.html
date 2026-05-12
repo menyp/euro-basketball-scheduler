@@ -272,6 +272,11 @@ footer span{color:var(--o)}
 .cg-table td.cg-empty-cell::before{content:'\2014'}
 .cg-table tr.cg-lunch-row td{background:rgba(255,165,0,.1);border-top:1px solid rgba(255,165,0,.4);border-bottom:1px solid rgba(255,165,0,.4);color:#FFB94C;text-align:center;font-weight:800;font-size:11px;letter-spacing:1px;padding:7px;text-transform:uppercase}
 .cg-quota-warn{outline:2px solid #fbbf24;outline-offset:-2px}
+.cg-table td.cg-game-cell.cg-filtered{background:rgba(255,255,255,.015);border-left:3px solid transparent !important;pointer-events:none}
+.cg-table td.cg-game-cell.cg-filtered>*{visibility:hidden}
+#schedOut.empty-only .cg-table td.cg-game-cell{background:rgba(255,255,255,.015);border-left:3px solid transparent !important;pointer-events:none}
+#schedOut.empty-only .cg-table td.cg-game-cell>*{visibility:hidden}
+#schedOut.empty-only .cg-table td.cg-empty-cell{background:rgba(255,107,0,.18);color:#FF6B00}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 </head>
@@ -876,6 +881,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var matchTeam = !teamQ || (el.getAttribute('data-t1') || '').toLowerCase().indexOf(teamQ) !== -1
                               || (el.getAttribute('data-t2') || '').toLowerCase().indexOf(teamQ) !== -1;
       el.style.display = (matchCat && matchVen && matchTeam) ? '' : 'none';
+    });
+    // Grid view: dim non-matching cells (keeps table layout stable; cells
+    // become blank-looking via the .cg-filtered CSS class).
+    document.querySelectorAll('#schedOut .cg-game-cell').forEach(function(el) {
+      var matchCat  = !cat   || el.getAttribute('data-div') === cat;
+      var matchVen  = !ven   || (el.getAttribute('data-venue') || '').trim().toLowerCase() === venLower;
+      var matchTeam = !teamQ || (el.getAttribute('data-t1') || '').toLowerCase().indexOf(teamQ) !== -1
+                              || (el.getAttribute('data-t2') || '').toLowerCase().indexOf(teamQ) !== -1;
+      el.classList.toggle('cg-filtered', !(matchCat && matchVen && matchTeam));
     });
     // Filter ghost cards by venue (data-loc); hide entirely when team filter is active
     document.querySelectorAll('#schedOut .ghost-card').forEach(function(el) {
@@ -6889,9 +6903,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         applySchedFilters();
       };
 
-      // Re-apply filters if previously set
+      // Re-apply filters if previously set (covers view-toggle, edit, etc.)
       if ((curCat && divisions.some(function(d) { return d.name === curCat; })) ||
-          (venueSel && venueSel.value)) {
+          (venueSel && venueSel.value) ||
+          (teamSearchInp && teamSearchInp.value.trim())) {
         applySchedFilters();
       } else {
         updateEmptySlotCount();
