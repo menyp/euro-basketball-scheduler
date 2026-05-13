@@ -1129,6 +1129,13 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                 older_at = {s: sum(x[g, d, s, c] for g in older_g_list)
                              for s in range(len(day_slots[d]))}
                 for s in range(len(day_slots[d]) - 1):
+                    # Only penalise true 90-min back-to-back. When slot s and
+                    # s+1 are separated by the lunch break (slot interval > 90
+                    # min), the natural 60-min buffer between the earlier
+                    # game's end and the next slot's start absorbs typical
+                    # overruns — no cascade risk, so no penalty.
+                    if day_slots[d][s + 1] - day_slots[d][s] > 90:
+                        continue
                     btb = model.new_bool_var(f'btb_d{d}_c{c}_s{s}')
                     # btb = 1 iff BOTH (d, s, c) AND (d, s+1, c) host older-div games.
                     # When neither cell has an older game, the LHS is -1 ≤ btb and the
