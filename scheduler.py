@@ -1246,6 +1246,31 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                         if c not in allowed:
                             po_model.add(y[p, d, s, c] == 0)
 
+    # Team-block rules extended to PO: a blocked team could occupy any seed
+    # from its own group, so forbid PO games involving that group from the
+    # blocked venues. Conservative (over-restricts when only some teams in
+    # a group are blocked) but safe — never violates the user-stated rule.
+    team_blocked_courts = ctx['team_blocked_courts']
+    if team_blocked_courts:
+        team_div = ctx['team_div']
+        # group_blocked[(div, group_letter)] = union of blocked courts.
+        group_blocked = defaultdict(set)
+        for (div, team), blocked in team_blocked_courts.items():
+            grp_letter = team_div.get((div, team))
+            if grp_letter is None:
+                continue
+            group_blocked[(div, grp_letter)] |= blocked
+        for p, pg in enumerate(po_games):
+            div = pg['divName']
+            for grp_letter in pg.get('groups', []) or []:
+                blocked = group_blocked.get((div, grp_letter), set())
+                if not blocked:
+                    continue
+                for c in blocked:
+                    for d in range(n_days):
+                        for s in range(len(day_slots[d])):
+                            po_model.add(y[p, d, s, c] == 0)
+
     # Team late-arrival rules (PO): a constrained team could occupy any seed
     # from its own group, so forbid PO games involving that group on the
     # constrained day at slots before the cutoff. Over-conservative but safe.
