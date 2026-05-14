@@ -8186,8 +8186,61 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return out;
   }
 
+  // Builds the "Health vs. original" section appended below the hard-rule
+  // checks. health shape: { pct, improved, note, metrics:[{rule, original,
+  // edited, direction, culprits:[str]}] }.
+  function _healthHTML(health) {
+    if (!health) return '';
+    var pct = health.pct;
+    var color = pct >= 100 ? '#10B981' : (pct >= 90 ? '#f59e0b' : '#EF4444');
+    var rgb = pct >= 100 ? '16,185,129' : (pct >= 90 ? '245,158,11' : '239,68,68');
+    var headline = pct >= 100
+      ? 'Matches the original — no soft quality lost'
+      : 'Below the original — see which rules slipped';
+    var html = '<div style="margin-top:18px;border-top:1px solid var(--b);padding-top:14px">'
+      + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
+      + 'text-transform:uppercase;letter-spacing:1.5px;color:var(--g);margin-bottom:8px">Health vs. Original</div>'
+      + '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">'
+      + '<div style="background:rgba(' + rgb + ',.15);border:1px solid ' + color
+      + ';border-radius:8px;padding:8px 14px;font-family:Montserrat,sans-serif;'
+      + 'font-weight:900;font-size:18px;color:' + color + '">' + pct + '%</div>'
+      + '<div style="color:#cbd5e0;font-size:12px">' + escHtml(headline) + '</div>'
+      + '</div>';
+    if (health.note) {
+      html += '<div style="color:#ffd494;font-size:11px;margin-bottom:10px">⚠ '
+        + escHtml(health.note) + '</div>';
+    }
+    html += '<div style="border:1px solid var(--b);border-radius:8px;overflow:hidden">';
+    (health.metrics || []).forEach(function(m, i) {
+      var isLast = (i === health.metrics.length - 1);
+      var arrow, ac;
+      if (m.direction === 'worse')       { arrow = '↓'; ac = '#ff6060'; }
+      else if (m.direction === 'better') { arrow = '↑'; ac = '#10B981'; }
+      else                               { arrow = '=';      ac = '#8892a4'; }
+      html += '<div style="padding:9px 13px;font-size:12px'
+        + (isLast ? '' : ';border-bottom:1px solid var(--b)') + '">'
+        + '<div style="display:flex;justify-content:space-between;gap:10px">'
+        + '<span style="color:#e2e8f0;font-weight:600">' + escHtml(m.rule) + '</span>'
+        + '<span style="color:' + ac + ';font-weight:700;white-space:nowrap">'
+        + escHtml(String(m.original)) + ' → ' + escHtml(String(m.edited)) + ' ' + arrow
+        + '</span></div>';
+      if (m.culprits && m.culprits.length) {
+        html += '<ul style="margin:6px 0 0;padding:0 0 0 16px;color:#ffb8b8;font-size:11px;line-height:1.6">';
+        m.culprits.slice(0, 6).forEach(function(c) { html += '<li>' + escHtml(c) + '</li>'; });
+        if (m.culprits.length > 6) {
+          html += '<li style="opacity:.7">… and ' + (m.culprits.length - 6) + ' more</li>';
+        }
+        html += '</ul>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
   // Renders the backend validator response into the existing audit modal.
-  // Backend shape: { valid, checks:[{rule,passed,violations:[str]}], notes:[str] }
+  // Backend shape: { valid, checks:[{rule,passed,violations:[str]}],
+  // notes:[str], health:{...} }
   function renderValidationReport(data) {
     var checks = (data.checks || []).map(function(c) {
       return { label: c.rule, pass: !!c.passed,
@@ -8206,6 +8259,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       stats: { gamesScheduled: games.length, gamesFailed: 0,
         gamesTotal: games.length, courtUsage: courtUsage }
     });
+    // Append the health-comparison section below the hard-rule checks.
+    if (data.health) {
+      var ac = document.getElementById('auditContent');
+      if (ac) ac.innerHTML += _healthHTML(data.health);
+    }
     var modal = document.getElementById('auditModal');
     if (modal) modal.classList.add('active');
   }
@@ -8225,6 +8283,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         showToast('Could Not Read Excel', escHtml(ex.message), 'error', true);
         return;
       }
+      // rebuildSchedFromExcel reads but does not modify `sched`, so it is
+      // still the original (loaded from JSON) here — capture it for the
+      // health comparison before we swap in the rebuilt schedule.
+      var originalGames = _flattenGamesForValidate(sched);
       // Show the rebuilt schedule so the admin sees exactly what is validated.
       sched = rebuilt.sched;
       renderSched();
@@ -8233,10 +8295,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         showToast('Some Rows Skipped', rebuilt.skipped + ' game row(s) could not be matched '
           + 'to a division / group / court and were ignored.', 'warn', true);
       }
-      // Send {config, games} to the backend validator.
+      // Send {config, games, originalGames} to the backend validator.
       var payload = JSON.stringify({
         config: _buildSolverConfig(),
-        games: _flattenGamesForValidate(sched)
+        games: _flattenGamesForValidate(sched),
+        originalGames: originalGames
       });
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/validate', true);

@@ -54,16 +54,19 @@ def validate():
     """
     Check a manually-edited schedule against the original setup.
 
-    Body: {config, games} — `config` is the same shape /api/generate receives
-    (the rulebook, loaded from the original JSON); `games` is the flat schedule
-    rebuilt from the edited Excel. Does not re-solve; see validator.py.
+    Body: {config, games, originalGames} — `config` is the same shape
+    /api/generate receives (the rulebook, loaded from the original JSON);
+    `games` is the flat schedule rebuilt from the edited Excel; `originalGames`
+    (optional) is the original solver schedule, used for the health comparison.
+    Does not re-solve; see validator.py.
     """
     try:
         body = request.get_json()
         if not body or 'config' not in body or 'games' not in body:
             return jsonify({'error': 'Expected JSON body with {config, games}'}), 400
 
-        result = validate_schedule(body['config'], body['games'])
+        result = validate_schedule(body['config'], body['games'],
+                                   original_games=body.get('originalGames'))
         return jsonify(result)
 
     except Exception as e:
