@@ -7042,12 +7042,64 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var u = lbl.toUpperCase();
     if (u === 'FINAL')                                return 'FINAL';
     if (u.indexOf('3RD') === 0 || u.indexOf('3RD PLACE') !== -1) return '3RD PLACE';
-    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1)        return 'SEMI FINAL';
+    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1) {
+      // Only the Championship bracket holds real semifinals. Consolation
+      // brackets (Silver / Bronze / …) are placement playoffs — label them
+      // "<range> PLACEMENT" so "SEMI FINAL" in the sheet only ever means the
+      // actual cup semifinal, never a consolation game. The trailing number
+      // (SF 1 / SF 2) is kept so the deciders can reference "... 1" / "... 2".
+      var bk = (g && g.bracket) ? String(g.bracket) : '';
+      var sfNum = (u.match(/\d+/) || [''])[0];
+      var sfx = sfNum ? ' ' + sfNum : '';
+      if (!bk || /champ/i.test(bk)) return 'SEMI FINAL' + sfx;
+      var nums = bk.match(/\d+/g);
+      if (nums && nums.length >= 2) return nums[0] + '-' + nums[nums.length - 1] + ' PLACEMENT' + sfx;
+      return 'SEMI FINAL' + sfx;
+    }
     if (u.indexOf('5TH') === 0 || u.indexOf('5-6') !== -1)        return '5-6 POSITION';
     if (u.indexOf('7TH') === 0 || u.indexOf('7-8') !== -1)        return '7-8 POSITION';
     if (u.indexOf('9TH') === 0 || u.indexOf('9-10') !== -1)       return '9-10 POSITION';
     if (u.indexOf('11TH') === 0 || u.indexOf('11-12') !== -1)     return '11-12 POSITION';
     return lbl;
+  }
+
+  // Column I / J value for a game. Real team names pass straight through.
+  // An empty playoff slot — a decider (Final / 3rd Place / position game)
+  // whose teams aren't known yet — becomes a descriptive placeholder derived
+  // from the bracket structure, e.g. "Winner Semi Final 1", "Loser 5-8
+  // Placement 2". side is 1 for the local team (t1), 2 for the visitor (t2);
+  // the side number equals the feeder game's number (FINAL.t1 ← SF 1, etc.).
+  function _xlsxTeamLabel(g, side) {
+    var name = side === 1 ? (g && g.t1) : (g && g.t2);
+    if (name) return name;
+    var lbl = (g && g.lbl) ? String(g.lbl).trim().toUpperCase() : '';
+    if (!lbl) return '';
+    // Only deciders (Final / 3rd Place / position games) are derivable. A
+    // first-round game (SF / placement) is always seeded, so an empty one
+    // just stays blank — never invent a "Winner/Loser ..." label for it.
+    if (lbl.indexOf('SF') === 0 || lbl.indexOf('SEMI') !== -1) return '';
+    var bk = (g && g.bracket) ? String(g.bracket) : '';
+    var bkNums = bk.match(/\d+/g);
+    // Feeder label — title-cased to match the Stage labels of first-round games.
+    var feeder;
+    if (/champ/i.test(bk) || !bk) {
+      feeder = 'Semi Final';
+    } else if (bkNums && bkNums.length >= 2) {
+      feeder = bkNums[0] + '-' + bkNums[bkNums.length - 1] + ' Placement';
+    } else {
+      feeder = 'Semi Final';
+    }
+    // Winners advance to the better-placed decider; losers to the other one.
+    var role;
+    if (lbl === 'FINAL') {
+      role = 'Winner';
+    } else {
+      var lblNum = (lbl.match(/\d+/) || [])[0];
+      if (lblNum == null) return '';   // not a recognised decider — leave blank
+      var bkLow = (bkNums && bkNums.length) ? bkNums[0] : null;
+      role = (bkLow != null && lblNum === bkLow) ? 'Winner' : 'Loser';
+    }
+    return role + ' ' + feeder + ' ' + side;
   }
 
   function _xlsxTimeFraction(hhmm) {
@@ -7210,8 +7262,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             hit.meta.gender,
             pc.courtNum,
             pc.city,
-            g.t1 || '',
-            g.t2 || '',
+            _xlsxTeamLabel(g, 1),
+            _xlsxTeamLabel(g, 2),
             '', '', ''
           ]);
         } else {
