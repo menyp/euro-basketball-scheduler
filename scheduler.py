@@ -1098,9 +1098,56 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                     model.add(team_at[s1] + team_at[s2] - 1 <= pair)
                     rest_terms.append(penalty * pair)
 
-    # Combine venue-preference penalties with No-Blank-Day slack penalties
-    # and the new rest-fairness term.
-    all_penalty_terms = penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms + rest_terms
+    # Soft: early-slot preference. Push games to earlier slots so empties
+    # accumulate at the end of the day (lets admins shorten venue hours).
+    # Weight is small (1 * slot_idx per placement) — subtle pressure that
+    # breaks ties in favor of earlier slots but never overrides venue prefs
+    # (which are in the 1..64 range per game).
+    SLOT_TAIL_WEIGHT = 1
+    tail_terms = []
+    for g in range(num_rr):
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                if s == 0:
+                    continue  # slot 0 is free; only later slots cost
+                for c in range(num_courts):
+                    tail_terms.append(SLOT_TAIL_WEIGHT * s * x[g, d, s, c])
+
+    # Soft: avoid back-to-back U16/U18 games on the same court (older-division
+    # games tend to run longer; back-to-back same-court compounds delays).
+    # For each (court, day, consecutive-slot pair), create a bool that's 1 iff
+    # both slots host an older-div game on the same court, then penalize.
+    OLDER_DIVS = {'U16 BOYS', 'U16 GIRLS', 'U18 BOYS', 'U18 GIRLS'}
+    BTB_WEIGHT = 4  # ~= U14 division priority; calibrated to nudge, not force
+    btb_terms = []
+    older_g_list = [g for g, (div, _, _, _) in enumerate(rr_matchups) if div in OLDER_DIVS]
+    if older_g_list:
+        for d in range(n_days):
+            for c in range(num_courts):
+                # "older game placed at (d, s, c)" sum — 0 or 1 thanks to the
+                # one-game-per-cell capacity constraint.
+                older_at = {s: sum(x[g, d, s, c] for g in older_g_list)
+                             for s in range(len(day_slots[d]))}
+                for s in range(len(day_slots[d]) - 1):
+                    # Only penalise true 90-min back-to-back. When slot s and
+                    # s+1 are separated by the lunch break (slot interval > 90
+                    # min), the natural 60-min buffer between the earlier
+                    # game's end and the next slot's start absorbs typical
+                    # overruns — no cascade risk, so no penalty.
+                    if day_slots[d][s + 1] - day_slots[d][s] > 90:
+                        continue
+                    btb = model.new_bool_var(f'btb_d{d}_c{c}_s{s}')
+                    # btb = 1 iff BOTH (d, s, c) AND (d, s+1, c) host older-div games.
+                    # When neither cell has an older game, the LHS is -1 ≤ btb and the
+                    # solver can set btb = 0 (no penalty).
+                    model.add(older_at[s] + older_at[s + 1] - 1 <= btb)
+                    btb_terms.append(BTB_WEIGHT * btb)
+
+    # Combine venue-preference penalties with No-Blank-Day slack penalties,
+    # the rest-fairness term, the early-slot preference, and the back-to-back
+    # older-division penalty.
+    all_penalty_terms = (penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms
+                          + rest_terms + tail_terms + btb_terms)
     if all_penalty_terms:
         model.minimize(sum(all_penalty_terms))
 
@@ -1319,6 +1366,20 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                     for c in range(num_courts):
                         if c not in blanes_courts:
                             po_model.add(y[p, d, s, c] == 0)
+
+    # Premium courts: the last 2 Blanes courts are reserved for U18 BOYS Final
+    # and U18 GIRLS Final (the "showcase" games). Forces those Finals to land
+    # on premium courts. Only applies when at least 2 Blanes courts exist.
+    PREMIUM_DIVS = {'U18 BOYS', 'U18 GIRLS'}
+    if len(blanes_courts) >= 2:
+        premium_court_set = set(blanes_courts[-2:])
+        for p, pg in enumerate(po_games):
+            if pg.get('type') == 'Final' and pg.get('divName') in PREMIUM_DIVS:
+                for d in range(n_days):
+                    for s in range(len(day_slots[d])):
+                        for c in range(num_courts):
+                            if c not in premium_court_set:
+                                po_model.add(y[p, d, s, c] == 0)
 
     # SF before Final/3rd with venue-aware gap (Rule 4 + 7).
     # Only enforced WHEN BOTH ARE PLACED: if SF is placed late, only Final cells
@@ -1699,6 +1760,17 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                     continue
                 for po_c in range(num_courts):
                     obj_terms.append(penalty * y[p, d, po_s, po_c])
+
+    # Soft: early-slot preference for PO (mirrors Phase 1). Subtle pressure
+    # to fill earlier slots so the end of the day stays empty when possible.
+    SLOT_TAIL_WEIGHT_P2 = 1
+    for p in range(num_po):
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                if s == 0:
+                    continue
+                for c in range(num_courts):
+                    obj_terms.append(SLOT_TAIL_WEIGHT_P2 * s * y[p, d, s, c])
 
     if obj_terms:
         po_model.minimize(sum(obj_terms))

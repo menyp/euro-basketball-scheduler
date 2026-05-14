@@ -54,7 +54,7 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 /* groups editor styles */
 .group-box{background:var(--c);border:1px solid var(--b);border-radius:6px;padding:12px;min-width:150px;flex:1}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{background:rgba(255,255,255,.05);border:1px solid var(--b);border-radius:4px;padding:4px 6px;display:flex;align-items:center;gap:4px;font-size:12px}
+.chip{background:rgba(255,255,255,.05);border:1px solid var(--b);border-radius:4px;padding:4px 6px;display:flex;align-items:center;gap:4px;font-size:12px;flex-wrap:wrap;max-width:100%}
 .chip button{background:transparent;border:none;color:var(--g);cursor:pointer;padding:2px 4px;font-size:12px}
 .chip button:hover{color:var(--o)}
 .group-add{background:var(--o);color:#000;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:11px}
@@ -583,6 +583,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 </div>
 
 <input type="file" id="jsonImportInput" accept=".json" style="display:none">
+<input type="file" id="xlsxValidateInput" accept=".xlsx" style="display:none">
 
 <div id="scoreModal" class="modal-overlay">
   <div class="modal-card">
@@ -3889,9 +3890,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     try { xhr.send(); } catch(e) {}
   })();
 
-  function _runCPSatGenerate() {
-    // Collect config for the solver
-    var config = {
+  // Assembles the config object the backend expects. /api/generate and
+  // /api/validate share this exact shape — divisions, sites, setupFields, and
+  // the four rule arrays — read live from the current UI state.
+  function _buildSolverConfig() {
+    return {
       divisions: divisions.map(function(d) { return { name: d.name, color: d.color, teams: d.teams, manualGroups: d.manualGroups }; }),
       sites: sites.slice(),
       setupFields: {
@@ -3918,8 +3921,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
-      solverTimeLimit: 3000,
     };
+  }
+
+  function _runCPSatGenerate() {
+    // Collect config for the solver
+    var config = _buildSolverConfig();
+    config.solverTimeLimit = 3000;
 
     // Show loading state with live timer
     var genBtn = document.getElementById('genBtn');
@@ -6810,6 +6818,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<button id="printDivBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128203; By Division</button>'
       + '<button id="jsonExportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128190; Save JSON</button>'
       + '<button id="jsonImportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128194; Load JSON</button>'
+      + '<button id="validateXlsxBtn" class="btn" style="background:#0ea5e9;color:#fff;padding:9px 18px;font-weight:700">&#9989; Validate Edited Excel</button>'
       + '</div>';
 
     if (_viewMode === 'grid') {
@@ -6919,6 +6928,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var printDivBtn  = document.getElementById('printDivBtn');
     var jsonExpBtn   = document.getElementById('jsonExportBtn');
     var jsonImpBtn   = document.getElementById('jsonImportBtn');
+    var validateXlsxBtn = document.getElementById('validateXlsxBtn');
     var editBtn      = document.getElementById('editModeBtn');
     var auditBtn     = document.getElementById('auditBtn');
     var auditExpBtn  = document.getElementById('auditExportBtn');
@@ -6930,6 +6940,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (printDivBtn)  printDivBtn.onclick  = printByDivision;
     if (jsonExpBtn)   jsonExpBtn.onclick   = exportScheduleToJSON;
     if (jsonImpBtn)   jsonImpBtn.onclick   = function() { document.getElementById('jsonImportInput').click(); };
+    if (validateXlsxBtn) validateXlsxBtn.onclick = function() { document.getElementById('xlsxValidateInput').click(); };
     if (auditBtn)     auditBtn.onclick    = openAuditModal;
     if (auditExpBtn)  auditExpBtn.onclick = exportAuditMarkdown;
     if (viewListBtn)  viewListBtn.onclick = function() {
@@ -7031,12 +7042,64 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var u = lbl.toUpperCase();
     if (u === 'FINAL')                                return 'FINAL';
     if (u.indexOf('3RD') === 0 || u.indexOf('3RD PLACE') !== -1) return '3RD PLACE';
-    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1)        return 'SEMI FINAL';
+    if (u.indexOf('SF') === 0 || u.indexOf('SEMI') !== -1) {
+      // Only the Championship bracket holds real semifinals. Consolation
+      // brackets (Silver / Bronze / …) are placement playoffs — label them
+      // "<range> PLACEMENT" so "SEMI FINAL" in the sheet only ever means the
+      // actual cup semifinal, never a consolation game. The trailing number
+      // (SF 1 / SF 2) is kept so the deciders can reference "... 1" / "... 2".
+      var bk = (g && g.bracket) ? String(g.bracket) : '';
+      var sfNum = (u.match(/\d+/) || [''])[0];
+      var sfx = sfNum ? ' ' + sfNum : '';
+      if (!bk || /champ/i.test(bk)) return 'SEMI FINAL' + sfx;
+      var nums = bk.match(/\d+/g);
+      if (nums && nums.length >= 2) return nums[0] + '-' + nums[nums.length - 1] + ' PLACEMENT' + sfx;
+      return 'SEMI FINAL' + sfx;
+    }
     if (u.indexOf('5TH') === 0 || u.indexOf('5-6') !== -1)        return '5-6 POSITION';
     if (u.indexOf('7TH') === 0 || u.indexOf('7-8') !== -1)        return '7-8 POSITION';
     if (u.indexOf('9TH') === 0 || u.indexOf('9-10') !== -1)       return '9-10 POSITION';
     if (u.indexOf('11TH') === 0 || u.indexOf('11-12') !== -1)     return '11-12 POSITION';
     return lbl;
+  }
+
+  // Column I / J value for a game. Real team names pass straight through.
+  // An empty playoff slot — a decider (Final / 3rd Place / position game)
+  // whose teams aren't known yet — becomes a descriptive placeholder derived
+  // from the bracket structure, e.g. "Winner Semi Final 1", "Loser 5-8
+  // Placement 2". side is 1 for the local team (t1), 2 for the visitor (t2);
+  // the side number equals the feeder game's number (FINAL.t1 ← SF 1, etc.).
+  function _xlsxTeamLabel(g, side) {
+    var name = side === 1 ? (g && g.t1) : (g && g.t2);
+    if (name) return name;
+    var lbl = (g && g.lbl) ? String(g.lbl).trim().toUpperCase() : '';
+    if (!lbl) return '';
+    // Only deciders (Final / 3rd Place / position games) are derivable. A
+    // first-round game (SF / placement) is always seeded, so an empty one
+    // just stays blank — never invent a "Winner/Loser ..." label for it.
+    if (lbl.indexOf('SF') === 0 || lbl.indexOf('SEMI') !== -1) return '';
+    var bk = (g && g.bracket) ? String(g.bracket) : '';
+    var bkNums = bk.match(/\d+/g);
+    // Feeder label — title-cased to match the Stage labels of first-round games.
+    var feeder;
+    if (/champ/i.test(bk) || !bk) {
+      feeder = 'Semi Final';
+    } else if (bkNums && bkNums.length >= 2) {
+      feeder = bkNums[0] + '-' + bkNums[bkNums.length - 1] + ' Placement';
+    } else {
+      feeder = 'Semi Final';
+    }
+    // Winners advance to the better-placed decider; losers to the other one.
+    var role;
+    if (lbl === 'FINAL') {
+      role = 'Winner';
+    } else {
+      var lblNum = (lbl.match(/\d+/) || [])[0];
+      if (lblNum == null) return '';   // not a recognised decider — leave blank
+      var bkLow = (bkNums && bkNums.length) ? bkNums[0] : null;
+      role = (bkLow != null && lblNum === bkLow) ? 'Winner' : 'Loser';
+    }
+    return role + ' ' + feeder + ' ' + side;
   }
 
   function _xlsxTimeFraction(hhmm) {
@@ -7199,8 +7262,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             hit.meta.gender,
             pc.courtNum,
             pc.city,
-            g.t1 || '',
-            g.t2 || '',
+            _xlsxTeamLabel(g, 1),
+            _xlsxTeamLabel(g, 2),
             '', '', ''
           ]);
         } else {
@@ -7687,9 +7750,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // ── Export: JSON snapshot ─────────────────────────────
   function getFieldVal(id) { var el = document.getElementById(id); return el ? el.value : ''; }
   function getFieldChecked(id) { var el = document.getElementById(id); return el ? el.checked : false; }
-  function exportScheduleToJSON() {
-    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
-    var payload = JSON.stringify({
+  // Builds the full state snapshot object — schedule + divisions + every rule
+  // config + setup fields. Shared by JSON export and the hidden validation
+  // sheet embedded in the XLSX export, so both stay in lockstep.
+  function buildSnapshot() {
+    return {
       sched: sched,
       divisions: divisions,
       venueRules: venueRules,
@@ -7720,7 +7785,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         mainVenueSFMode:       (document.querySelector('input[name=mainVenueSFMode]:checked')    || {}).value || 'mandatory',
         dayHours:              getDayHours()
       }
-    }, null, 2);
+    };
+  }
+
+  function exportScheduleToJSON() {
+    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    var payload = JSON.stringify(buildSnapshot(), null, 2);
     var blob = new Blob([payload], { type: 'application/json;charset=utf-8;' });
     var url  = URL.createObjectURL(blob);
     var a    = document.createElement('a');
@@ -7917,12 +7987,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     showToast(title, html, 'warn', true /* sticky */);
   }
 
-  function importScheduleFromJSON(file) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var data = JSON.parse(e.target.result);
-        if (!data.sched || !data.sched.gameDays) { alert('Invalid schedule file.'); return; }
+  // Loads a full state snapshot — schedule + divisions + rule config + setup
+  // fields — into app state and renders it. Shared by JSON import and the
+  // "Validate Edited Excel" flow. (Body kept at its original indentation to
+  // keep the diff small; functionally it is a top-level function.)
+  function loadSnapshot(data) {
         sched            = data.sched;
         divisions        = data.divisions        || divisions;
         // Repopulate the Teams and Divisions textarea + division cards from
@@ -8011,6 +8080,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         switchTab('schedule');
         // Show any auto-fix summary AFTER render so the toast overlays the schedule
         reportSanitizeFixes(sanitizeFixes);
+  }
+
+  function importScheduleFromJSON(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        if (!data.sched || !data.sched.gameDays) { alert('Invalid schedule file.'); return; }
+        loadSnapshot(data);
       } catch(ex) { alert('Could not parse file: ' + ex.message); }
     };
     reader.readAsText(file);
@@ -8018,6 +8096,291 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   document.getElementById('jsonImportInput').onchange = function(e) {
     if (e.target.files[0]) importScheduleFromJSON(e.target.files[0]);
+    e.target.value = '';
+  };
+
+  // ── Validate a manually-edited Excel schedule ───────────
+  // Flow: the admin loads the original JSON (config + baseline schedule), edits
+  // the exported Excel freely (round-robin only), then clicks "Validate Edited
+  // Excel". We rebuild the RR games from the Excel sheets, keep the playoff
+  // games from the loaded JSON untouched, then POST {config, games} to the
+  // backend /api/validate, which checks every hard rule and returns a report.
+
+  // Expected day-sheet header (row index 2 of each day sheet in the XLSX export).
+  var _XLSX_DAY_HEADER = ['Time', 'match number', 'Stage', 'Category', 'GROUP',
+    'Male/Female/Mix', 'Court', 'City', 'Local Team', 'Visiting Team',
+    'Referees', 'Volunteers', 'Notes'];
+
+  // Rebuilds the schedule from an edited workbook: round-robin games come from
+  // the Excel day sheets; playoff games are carried over unchanged from the
+  // currently-loaded `sched`. Team names are taken from the Excel as-is — no
+  // attempt to match them back to the loaded roster. Returns
+  // { sched, rrCount, skipped } or throws on a structural problem.
+  function rebuildSchedFromExcel(wb) {
+    if (!sched || !sched.gameDays || !sched.gameDays.length) {
+      throw new Error('Load the original JSON first, then validate the edited Excel.');
+    }
+    // Day sheets, in order, excluding the groups sheet.
+    var daySheets = wb.SheetNames.filter(function(sn) { return sn !== 'GRUPOS FASE PREVIA'; });
+
+    // Reverse lookups built from the loaded config / schedule.
+    // (category|gender) -> division name
+    var divByMeta = {};
+    (divisions || []).forEach(function(d) {
+      var m = _xlsxParseDivision(d.name);
+      divByMeta[m.category + '|' + m.gender] = d.name;
+    });
+    // (divName|groupLetter) -> the real group-key string, from the loaded sched
+    var groupKeyByLetter = {};
+    (sched.gameDays || []).forEach(function(day) {
+      (day.divs || []).forEach(function(d) {
+        if (!d.groups) return;
+        Object.keys(d.groups).forEach(function(gk) {
+          if (/playoff/i.test(gk)) return;
+          var letter = _xlsxGroupLetter(gk, d.name);
+          if (letter) groupKeyByLetter[d.name + '|' + letter] = gk;
+        });
+      });
+    });
+    // (CITY|courtNum) -> { court, loc }
+    var courtByCity = {};
+    var courtList = (sched.courts && sched.courts.length) ? sched.courts : getCourts();
+    courtList.forEach(function(c) {
+      var pc = _xlsxParseCourt({ loc: c.loc, court: c.court });
+      courtByCity[pc.city + '|' + pc.courtNum] = { court: c.court, loc: c.loc };
+    });
+
+    // Deep-clone the loaded schedule; replace RR games, keep playoff games.
+    var newSched = JSON.parse(JSON.stringify(sched));
+    (newSched.gameDays || []).forEach(function(day) {
+      (day.divs || []).forEach(function(d) {
+        if (d.groups) Object.keys(d.groups).forEach(function(gk) {
+          if (!/playoff/i.test(gk)) d.groups[gk].games = [];
+        });
+      });
+    });
+
+    var rrCount = 0, skipped = 0;
+    daySheets.forEach(function(sn, dayIdx) {
+      var ws = wb.Sheets[sn];
+      if (!ws) return;
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      // Header sanity: row index 2 should be the 13-column header.
+      var hdr = rows[2] || [];
+      var hdrOk = _XLSX_DAY_HEADER.every(function(h, i) {
+        return String(hdr[i] == null ? '' : hdr[i]).trim().toLowerCase() === h.toLowerCase();
+      });
+      if (!hdrOk) {
+        throw new Error('Sheet "' + sn + '" does not have the expected column layout. '
+          + 'Edit the file produced by "Export Excel" without changing or reordering columns.');
+      }
+      var targetDay = newSched.gameDays[dayIdx];
+      if (!targetDay) return; // extra sheet beyond the schedule's days
+      rows.forEach(function(row) {
+        if (!row) return;
+        var a = row[0], timeMin = null;
+        if (typeof a === 'number') timeMin = Math.round(a * 1440);
+        else if (typeof a === 'string' && /^\d{1,2}:\d{2}$/.test(a.trim())) timeMin = toM(a.trim());
+        if (timeMin == null) return; // banner / title / header / lunch row
+        var stage = String(row[2] == null ? '' : row[2]).trim().toLowerCase();
+        if (stage !== 'group phase') return; // RR only — skip PO / training / empty
+        var t1 = String(row[8] == null ? '' : row[8]).trim();
+        var t2 = String(row[9] == null ? '' : row[9]).trim();
+        if (!t1 && !t2) return; // empty-slot row
+        var cat = String(row[3] == null ? '' : row[3]).trim().toUpperCase();
+        var gender = String(row[5] == null ? '' : row[5]).trim().toUpperCase();
+        var grpLetter = String(row[4] == null ? '' : row[4]).trim().toUpperCase();
+        var courtNum = parseInt(row[6], 10) || 0;
+        var city = String(row[7] == null ? '' : row[7]).trim().toUpperCase();
+
+        var divName = divByMeta[cat + '|' + gender];
+        var groupKey = divName ? groupKeyByLetter[divName + '|' + grpLetter] : null;
+        var courtInfo = courtByCity[city + '|' + courtNum];
+        if (!divName || !groupKey || !courtInfo) { skipped++; return; }
+
+        // Find / create the division + group container on this day.
+        var divEntry = targetDay.divs.find(function(d) { return d.name === divName && d.groups; });
+        if (!divEntry) {
+          var divColor = (divisions.find(function(d) { return d.name === divName; }) || {}).color || '#888';
+          divEntry = { name: divName, color: divColor, groups: {} };
+          targetDay.divs.push(divEntry);
+        }
+        if (!divEntry.groups) divEntry.groups = {};
+        if (!divEntry.groups[groupKey]) divEntry.groups[groupKey] = { group: groupKey, games: [] };
+        divEntry.groups[groupKey].games.push({
+          time: toT(timeMin), court: courtInfo.court, loc: courtInfo.loc,
+          t1: t1, t2: t2, score1: null, score2: null, locked: false, manualOverride: true
+        });
+        rrCount++;
+      });
+    });
+    return { sched: newSched, rrCount: rrCount, skipped: skipped };
+  }
+
+  // Flattens a sched into the plain game list /api/validate expects.
+  function _flattenGamesForValidate(s) {
+    var out = [];
+    (s.gameDays || []).forEach(function(day, di) {
+      (day.divs || []).forEach(function(d) {
+        function emit(g, gk) {
+          out.push({
+            day: di, time: g.time || '', court: g.court || '', loc: g.loc || '',
+            divName: d.name, group: gk || (g.group || ''),
+            t1: g.t1 || '', t2: g.t2 || '', lbl: g.lbl || ''
+          });
+        }
+        if (d.groups) Object.keys(d.groups).forEach(function(gk) {
+          (d.groups[gk].games || []).forEach(function(g) { emit(g, gk); });
+        });
+        if (d.games) d.games.forEach(function(g) { emit(g, ''); });
+      });
+    });
+    return out;
+  }
+
+  // Builds the "Health vs. original" section appended below the hard-rule
+  // checks. health shape: { pct, improved, note, metrics:[{rule, original,
+  // edited, direction, culprits:[str]}] }.
+  function _healthHTML(health) {
+    if (!health) return '';
+    var pct = health.pct;
+    var color = pct >= 100 ? '#10B981' : (pct >= 90 ? '#f59e0b' : '#EF4444');
+    var rgb = pct >= 100 ? '16,185,129' : (pct >= 90 ? '245,158,11' : '239,68,68');
+    var headline = pct >= 100
+      ? 'Matches the original — no soft quality lost'
+      : 'Below the original — see which rules slipped';
+    var html = '<div style="margin-top:18px;border-top:1px solid var(--b);padding-top:14px">'
+      + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
+      + 'text-transform:uppercase;letter-spacing:1.5px;color:var(--g);margin-bottom:8px">Health vs. Original</div>'
+      + '<div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">'
+      + '<div style="background:rgba(' + rgb + ',.15);border:1px solid ' + color
+      + ';border-radius:8px;padding:8px 14px;font-family:Montserrat,sans-serif;'
+      + 'font-weight:900;font-size:18px;color:' + color + '">' + pct + '%</div>'
+      + '<div style="color:#cbd5e0;font-size:12px">' + escHtml(headline) + '</div>'
+      + '</div>';
+    if (health.note) {
+      html += '<div style="color:#ffd494;font-size:11px;margin-bottom:10px">⚠ '
+        + escHtml(health.note) + '</div>';
+    }
+    html += '<div style="border:1px solid var(--b);border-radius:8px;overflow:hidden">';
+    (health.metrics || []).forEach(function(m, i) {
+      var isLast = (i === health.metrics.length - 1);
+      var arrow, ac;
+      if (m.direction === 'worse')       { arrow = '↓'; ac = '#ff6060'; }
+      else if (m.direction === 'better') { arrow = '↑'; ac = '#10B981'; }
+      else                               { arrow = '=';      ac = '#8892a4'; }
+      html += '<div style="padding:9px 13px;font-size:12px'
+        + (isLast ? '' : ';border-bottom:1px solid var(--b)') + '">'
+        + '<div style="display:flex;justify-content:space-between;gap:10px">'
+        + '<span style="color:#e2e8f0;font-weight:600">' + escHtml(m.rule) + '</span>'
+        + '<span style="color:' + ac + ';font-weight:700;white-space:nowrap">'
+        + escHtml(String(m.original)) + ' → ' + escHtml(String(m.edited)) + ' ' + arrow
+        + '</span></div>';
+      if (m.culprits && m.culprits.length) {
+        html += '<ul style="margin:6px 0 0;padding:0 0 0 16px;color:#ffb8b8;font-size:11px;line-height:1.6">';
+        m.culprits.slice(0, 6).forEach(function(c) { html += '<li>' + escHtml(c) + '</li>'; });
+        if (m.culprits.length > 6) {
+          html += '<li style="opacity:.7">… and ' + (m.culprits.length - 6) + ' more</li>';
+        }
+        html += '</ul>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  // Renders the backend validator response into the existing audit modal.
+  // Backend shape: { valid, checks:[{rule,passed,violations:[str]}],
+  // notes:[str], health:{...} }
+  function renderValidationReport(data) {
+    var checks = (data.checks || []).map(function(c) {
+      return { label: c.rule, pass: !!c.passed,
+        count: (c.violations || []).length, violations: c.violations || [] };
+    });
+    (data.notes || []).forEach(function(n) {
+      checks.push({ label: 'ℹ ' + n, pass: true, count: 0, violations: [] });
+    });
+    var games = allSchedGames(sched);
+    var courtUsage = {};
+    games.forEach(function(x) { if (x.g.court) courtUsage[x.g.court] = (courtUsage[x.g.court] || 0) + 1; });
+    renderAuditReport({
+      checks: checks,
+      passed: checks.filter(function(c) { return c.pass; }).length,
+      failed: checks.filter(function(c) { return !c.pass; }).length,
+      stats: { gamesScheduled: games.length, gamesFailed: 0,
+        gamesTotal: games.length, courtUsage: courtUsage }
+    });
+    // Append the health-comparison section below the hard-rule checks.
+    if (data.health) {
+      var ac = document.getElementById('auditContent');
+      if (ac) ac.innerHTML += _healthHTML(data.health);
+    }
+    var modal = document.getElementById('auditModal');
+    if (modal) modal.classList.add('active');
+  }
+
+  function validateEditedExcel(file) {
+    if (typeof XLSX === 'undefined') {
+      showToast('Excel Library Missing', 'The Excel library failed to load. Check your connection and reload.', 'error', true);
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var rebuilt;
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        rebuilt = rebuildSchedFromExcel(wb);
+      } catch (ex) {
+        showToast('Could Not Read Excel', escHtml(ex.message), 'error', true);
+        return;
+      }
+      // rebuildSchedFromExcel reads but does not modify `sched`, so it is
+      // still the original (loaded from JSON) here — capture it for the
+      // health comparison before we swap in the rebuilt schedule.
+      var originalGames = _flattenGamesForValidate(sched);
+      // Show the rebuilt schedule so the admin sees exactly what is validated.
+      sched = rebuilt.sched;
+      renderSched();
+      switchTab('schedule');
+      if (rebuilt.skipped) {
+        showToast('Some Rows Skipped', rebuilt.skipped + ' game row(s) could not be matched '
+          + 'to a division / group / court and were ignored.', 'warn', true);
+      }
+      // Send {config, games, originalGames} to the backend validator.
+      var payload = JSON.stringify({
+        config: _buildSolverConfig(),
+        games: _flattenGamesForValidate(sched),
+        originalGames: originalGames
+      });
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/validate', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 60000;
+      xhr.onload = function() {
+        var data;
+        try { data = JSON.parse(xhr.responseText); } catch (pe) { data = null; }
+        if (!data || data.error) {
+          showToast('Validation Failed', (data && data.error)
+            ? escHtml(data.error) : 'The validator returned an unexpected response.', 'error', true);
+          return;
+        }
+        renderValidationReport(data);
+      };
+      xhr.onerror = xhr.ontimeout = function() {
+        showToast('Server Unreachable', 'Validation runs on the local server. '
+          + 'Start it (run <strong>app.py</strong>) and try again.', 'error', true);
+      };
+      try { xhr.send(payload); } catch (se) {
+        showToast('Server Unreachable', 'Could not reach the validation server.', 'error', true);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  var _xlsxValidateInputEl = document.getElementById('xlsxValidateInput');
+  if (_xlsxValidateInputEl) _xlsxValidateInputEl.onchange = function(e) {
+    if (e.target.files[0]) validateEditedExcel(e.target.files[0]);
     e.target.value = '';
   };
 

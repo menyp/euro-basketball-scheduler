@@ -12,6 +12,7 @@ Usage:
 
 from flask import Flask, send_from_directory, request, jsonify
 from scheduler import solve_schedule
+from validator import validate_schedule
 import scheduler as _scheduler_module
 import os
 
@@ -40,6 +41,32 @@ def generate():
         if 'error' in result:
             return jsonify(result), 422
 
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/validate', methods=['POST'])
+def validate():
+    """
+    Check a manually-edited schedule against the original setup.
+
+    Body: {config, games, originalGames} — `config` is the same shape
+    /api/generate receives (the rulebook, loaded from the original JSON);
+    `games` is the flat schedule rebuilt from the edited Excel; `originalGames`
+    (optional) is the original solver schedule, used for the health comparison.
+    Does not re-solve; see validator.py.
+    """
+    try:
+        body = request.get_json()
+        if not body or 'config' not in body or 'games' not in body:
+            return jsonify({'error': 'Expected JSON body with {config, games}'}), 400
+
+        result = validate_schedule(body['config'], body['games'],
+                                   original_games=body.get('originalGames'))
         return jsonify(result)
 
     except Exception as e:
