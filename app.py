@@ -12,7 +12,7 @@ Usage:
 
 from flask import Flask, send_from_directory, request, jsonify
 from scheduler import solve_schedule
-from validator import validate_schedule
+from validator import validate_schedule, report_health
 import scheduler as _scheduler_module
 import os
 
@@ -67,6 +67,30 @@ def validate():
 
         result = validate_schedule(body['config'], body['games'],
                                    original_games=body.get('originalGames'))
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/health-report', methods=['POST'])
+def health_report():
+    """
+    Per-division soft-rule health breakdown for a finished schedule.
+
+    Body: {config, games}. Reuses validator.report_health which calls
+    scheduler._build_context, so the rule definitions can't drift from what
+    the solver enforces. Powers the Health section appended to the Audit
+    Schedule modal after generation.
+    """
+    try:
+        body = request.get_json()
+        if not body or 'config' not in body or 'games' not in body:
+            return jsonify({'error': 'Expected JSON body with {config, games}'}), 400
+
+        result = report_health(body['config'], body['games'])
         return jsonify(result)
 
     except Exception as e:

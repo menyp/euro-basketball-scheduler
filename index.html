@@ -1848,7 +1848,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     document.getElementById('auditContent').innerHTML = html;
   }
 
-  // Opens the audit modal. Guards on "no schedule yet".
+  // Opens the audit modal. Guards on "no schedule yet". Hard-rule checks run
+  // immediately client-side; the per-division Health section is fetched from
+  // /api/health-report and appended when it arrives (or gracefully omitted
+  // with an inline note if the backend is unreachable).
   function openAuditModal() {
     if (!sched || !sched.gameDays || !sched.gameDays.length) {
       showToast('No Schedule Yet', 'Generate a schedule first before running an audit.', 'error');
@@ -1857,6 +1860,173 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var report = runScheduleAudit();
     renderAuditReport(report);
     document.getElementById('auditModal').classList.add('active');
+    _fetchAndAppendHealthReport();
+  }
+
+  // Backend call for the Health section — POSTs the current schedule and
+  // appends the per-division breakdown to the audit modal body.
+  function _fetchAndAppendHealthReport() {
+    var ac = document.getElementById('auditContent');
+    if (!ac) return;
+    // Loading hint so the user knows more is on its way.
+    var loaderId = 'healthLoader_' + Date.now();
+    ac.insertAdjacentHTML('beforeend',
+      '<div id="' + loaderId + '" style="margin-top:14px;padding-top:14px;'
+      + 'border-top:1px solid var(--b);color:#8892a4;font-size:11px">'
+      + 'Loading per-division health…</div>');
+    var payload;
+    try {
+      payload = JSON.stringify({
+        config: _buildSolverConfig(),
+        games: _flattenGamesForValidate(sched)
+      });
+    } catch (e) {
+      var elE = document.getElementById(loaderId);
+      if (elE) elE.outerHTML = '<div style="margin-top:14px;color:#ffd494;font-size:11px">'
+        + '⚠ Could not assemble the schedule for health analysis.</div>';
+      return;
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/health-report', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 30000;
+    xhr.onload = function() {
+      var data;
+      try { data = JSON.parse(xhr.responseText); } catch (pe) { data = null; }
+      var el = document.getElementById(loaderId);
+      if (!el) return;
+      if (!data || data.error) {
+        el.outerHTML = '<div style="margin-top:14px;color:#ffd494;font-size:11px">'
+          + '⚠ Soft-rule health unavailable: '
+          + escHtml((data && data.error) || 'invalid response') + '</div>';
+        return;
+      }
+      el.outerHTML = _healthReportHTML(data);
+    };
+    xhr.onerror = xhr.ontimeout = function() {
+      var el = document.getElementById(loaderId);
+      if (el) el.outerHTML = '<div style="margin-top:14px;color:#ffd494;font-size:11px">'
+        + '⚠ Soft-rule health unavailable — server not reachable.</div>';
+    };
+    try { xhr.send(payload); } catch (se) {
+      var el2 = document.getElementById(loaderId);
+      if (el2) el2.outerHTML = '<div style="margin-top:14px;color:#ffd494;font-size:11px">'
+        + '⚠ Could not reach the health-report server.</div>';
+    }
+  }
+
+  // Renders the per-division Health section returned by /api/health-report.
+  // data shape: { metrics: [{ rule, summary, divisions?, teams?, pairs? }] }
+  function _healthReportHTML(data) {
+    if (!data || !data.metrics || !data.metrics.length) return '';
+    var html = '<div style="margin-top:18px;border-top:1px solid var(--b);padding-top:14px">'
+      + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
+      + 'text-transform:uppercase;letter-spacing:1.5px;color:var(--g);margin-bottom:10px">'
+      + 'Schedule Health — per-division breakdown</div>';
+    data.metrics.forEach(function(m) {
+      html += '<div style="margin-bottom:12px;border:1px solid var(--b);border-radius:8px;overflow:hidden">'
+        + '<div style="padding:9px 13px;background:rgba(255,255,255,.04)">'
+        + '<div style="color:#e2e8f0;font-weight:700;font-size:12px">' + escHtml(m.rule) + '</div>'
+        + '<div style="color:#cbd5e0;font-size:11px;margin-top:3px">' + escHtml(m.summary) + '</div>'
+        + '</div>';
+      if (m.divisions && m.divisions.length) html += _healthDivisionsTable(m);
+      if (m.teams && m.teams.length)         html += _healthDrilldown('Tight gaps by team', m.teams, _healthFmtTeam);
+      if (m.pairs && m.pairs.length)         html += _healthDrilldown('Back-to-back pairs',  m.pairs, _healthFmtPair);
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function _healthDivisionsTable(metric) {
+    // Column set per rule (each row in `metric.divisions` carries the keys).
+    var cols;
+    switch (metric.rule) {
+      case 'Blanes saturation':
+      case 'Blanes priority by age/gender':
+        cols = [
+          { k: 'priority_rank', l: 'Prio' },
+          { k: 'div',           l: 'Division' },
+          { k: 'total',         l: 'Games' },
+          { k: 'at_main',       l: 'At Blanes' },
+          { k: 'pct',           l: '%', fmt: function(v) { return v + '%'; } }
+        ];
+        break;
+      case 'Rest fairness':
+        cols = [
+          { k: 'div',         l: 'Division' },
+          { k: 'tight_pairs', l: 'Tight pairs' },
+          { k: 'worst_gap',   l: 'Tightest gap', fmt: function(v) { return v == null ? '—' : v + ' min'; } }
+        ];
+        break;
+      case 'Early-slot preference':
+        cols = [
+          { k: 'div',              l: 'Division' },
+          { k: 'avg_slot_idx',     l: 'Avg slot' },
+          { k: 'latest_slot_used', l: 'Latest slot' }
+        ];
+        break;
+      case 'Finals-day atmosphere':
+        cols = [
+          { k: 'div',          l: 'Division' },
+          { k: 'final_time',   l: 'Final' },
+          { k: 'target',       l: 'Target' },
+          { k: 'third_time',   l: '3rd Place' },
+          { k: 'on_target',    l: 'On target?', fmt: function(v) { return v ? '✓' : '–'; } }
+        ];
+        break;
+      default:
+        return '';
+    }
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:11px">'
+      + '<thead><tr style="background:rgba(255,255,255,.03)">';
+    cols.forEach(function(c) {
+      html += '<th style="text-align:left;padding:6px 13px;color:#8892a4;font-weight:600;'
+        + 'border-bottom:1px solid var(--b)">' + escHtml(c.l) + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    metric.divisions.forEach(function(row, i) {
+      var isLast = (i === metric.divisions.length - 1);
+      html += '<tr>';
+      cols.forEach(function(c) {
+        var v = row[c.k];
+        if (c.fmt) v = c.fmt(v);
+        html += '<td style="padding:5px 13px;color:#e2e8f0'
+          + (isLast ? '' : ';border-bottom:1px solid rgba(255,255,255,.05)') + '">'
+          + escHtml(v == null ? '—' : String(v)) + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function _healthDrilldown(title, items, fmt) {
+    var CAP = 15;
+    var html = '<div style="padding:8px 13px;font-size:11px;color:#cbd5e0;'
+      + 'background:rgba(255,255,255,.02);border-top:1px solid var(--b)">'
+      + '<div style="font-weight:600;color:#8892a4;margin-bottom:4px">'
+      + escHtml(title) + ':</div>'
+      + '<ul style="margin:0;padding:0 0 0 14px;line-height:1.55">';
+    items.slice(0, CAP).forEach(function(it) {
+      html += '<li>' + fmt(it) + '</li>';
+    });
+    if (items.length > CAP) {
+      html += '<li style="opacity:.7">… and ' + (items.length - CAP) + ' more</li>';
+    }
+    html += '</ul></div>';
+    return html;
+  }
+
+  function _healthFmtTeam(t) {
+    return escHtml(t.team) + ' [' + escHtml(t.div) + '] Day ' + t.day
+      + ' — <strong>' + t.gap_min + ' min</strong> (' + escHtml(t.between) + ')';
+  }
+
+  function _healthFmtPair(p) {
+    return escHtml(p.court) + ', Day ' + p.day + ': '
+      + escHtml(p.slot1_div) + ' @ ' + escHtml(p.slot1) + ' → '
+      + escHtml(p.slot2_div) + ' @ ' + escHtml(p.slot2);
   }
 
   function closeAuditModal() {

@@ -588,3 +588,257 @@ def compare_health(ctx, orig_recs, edit_recs):
         'metrics': metrics,
         'note': note,
     }
+
+
+# ── Standalone per-division health report ───────────────────────────────────
+# After generation the admin wants a deeper view than the hard-rule pass/fail
+# — per-division Blanes saturation, per-team rest gaps, the actual back-to-back
+# pairs, finals slot vs target, etc. report_health(config, games) produces
+# that absolute per-division breakdown (no original-vs-edited comparison). It
+# powers the Health section appended to the Audit Schedule modal.
+
+
+def _hr_blanes_saturation(ctx, recs):
+    blanes = set(ctx['blanes_courts'])
+    div_prio = ctx['div_priority']
+    # Priority rank: 1 = highest-priority division (largest div_priority weight).
+    sorted_divs = sorted(div_prio.items(), key=lambda kv: -kv[1])
+    rank_of = {d: i + 1 for i, (d, _) in enumerate(sorted_divs)}
+    by_div = defaultdict(lambda: {'total': 0, 'at_main': 0})
+    for r in recs:
+        if not r['div']:
+            continue
+        by_div[r['div']]['total'] += 1
+        if r['court_idx'] is not None and r['court_idx'] in blanes:
+            by_div[r['div']]['at_main'] += 1
+    divisions = []
+    for d, v in by_div.items():
+        pct = round(v['at_main'] / v['total'] * 100) if v['total'] else 0
+        divisions.append({
+            'div': d, 'total': v['total'], 'at_main': v['at_main'],
+            'pct': pct, 'priority_rank': rank_of.get(d, 0),
+        })
+    divisions.sort(key=lambda x: x['priority_rank'] or 999)
+    total_all = sum(v['total'] for v in by_div.values())
+    main_all = sum(v['at_main'] for v in by_div.values())
+    overall_pct = round(main_all / total_all * 100) if total_all else 0
+    return {
+        'rule': 'Blanes saturation',
+        'summary': '%d%% of all games at %s (%d / %d)'
+                   % (overall_pct, ctx['main_venue'], main_all, total_all),
+        'divisions': divisions,
+    }
+
+
+def _hr_blanes_priority(sat_metric):
+    """Reads the saturation metric and reports whether the priority order is
+    respected — higher-priority divisions should not have a lower Blanes %
+    than lower-priority ones."""
+    divs = sat_metric['divisions']  # already sorted by priority_rank ascending
+    inversions = 0
+    for i in range(len(divs) - 1):
+        if divs[i]['pct'] < divs[i + 1]['pct']:
+            inversions += 1
+    if inversions == 0:
+        summary = 'Priority order respected — older / boys divisions correctly favoured'
+    else:
+        summary = ('%d priority inversion%s — a lower-priority division got more Blanes time'
+                   % (inversions, '' if inversions == 1 else 's'))
+    return {
+        'rule': 'Blanes priority by age/gender',
+        'summary': summary,
+        'divisions': divs,
+    }
+
+
+def _hr_rest_fairness(rr_recs):
+    target = _REST_TARGET_GAP
+    # (div, team_lower, day) -> {slots, name, div, day}
+    by = defaultdict(lambda: {'slots': [], 'name': None, 'div': None, 'day': None})
+    for r in rr_recs:
+        if r['min'] is None:
+            continue
+        for tm in (r['t1'], r['t2']):
+            if not tm:
+                continue
+            key = (r['div'], tm.lower(), r['day'])
+            entry = by[key]
+            entry['slots'].append(r['min'])
+            if entry['name'] is None:
+                entry['name'] = tm
+                entry['div'] = r['div']
+                entry['day'] = r['day']
+    for k in by:
+        by[k]['slots'].sort()
+    div_agg = defaultdict(lambda: {'tight_pairs': 0, 'worst_gap': None})
+    teams = []
+    total_tight = 0
+    overall_worst = None
+    for entry in by.values():
+        slots = entry['slots']
+        for i in range(len(slots)):
+            for j in range(i + 1, len(slots)):
+                gap = slots[j] - slots[i]
+                if overall_worst is None or gap < overall_worst:
+                    overall_worst = gap
+                d_agg = div_agg[entry['div']]
+                if d_agg['worst_gap'] is None or gap < d_agg['worst_gap']:
+                    d_agg['worst_gap'] = gap
+                if gap < target:
+                    total_tight += 1
+                    d_agg['tight_pairs'] += 1
+                    teams.append({
+                        'div': entry['div'], 'team': entry['name'],
+                        'day': entry['day'] + 1, 'gap_min': gap,
+                        'between': '%s -> %s' % (_min_to_time(slots[i]), _min_to_time(slots[j])),
+                    })
+    divisions = [
+        {'div': d, 'tight_pairs': v['tight_pairs'], 'worst_gap': v['worst_gap']}
+        for d, v in div_agg.items()
+    ]
+    divisions.sort(key=lambda x: (-x['tight_pairs'], x['div']))
+    teams.sort(key=lambda t: t['gap_min'])
+    if total_tight:
+        summary = ('%d tight gap%s tournament-wide; tightest %d min'
+                   % (total_tight, '' if total_tight == 1 else 's', overall_worst))
+    else:
+        summary = 'No tight gaps — every team has comfortable rest (target %d min)' % target
+    return {
+        'rule': 'Rest fairness',
+        'summary': summary,
+        'divisions': divisions,
+        'teams': teams,
+    }
+
+
+def _hr_early_slot(ctx, rr_recs):
+    by_div = defaultdict(lambda: {'sum': 0, 'count': 0, 'max': 0})
+    day_tail = {}  # day -> max slot idx used
+    for r in rr_recs:
+        si = _slot_index(ctx, r['day'], r['min'])
+        if si is None:
+            continue
+        agg = by_div[r['div']]
+        agg['sum'] += si
+        agg['count'] += 1
+        if si > agg['max']:
+            agg['max'] = si
+        if si > day_tail.get(r['day'], -1):
+            day_tail[r['day']] = si
+    divisions = []
+    for d, v in by_div.items():
+        avg = round(v['sum'] / v['count'], 1) if v['count'] else 0
+        divisions.append({'div': d, 'avg_slot_idx': avg, 'latest_slot_used': v['max']})
+    divisions.sort(key=lambda x: -x['avg_slot_idx'])
+    parts = []
+    for d in sorted(day_tail.keys()):
+        idx = day_tail[d]
+        slots = ctx['day_slots'][d] if d < len(ctx['day_slots']) else []
+        slot_min = slots[idx] if 0 <= idx < len(slots) else None
+        parts.append('Day %d -> %s' % (d + 1, _min_to_time(slot_min) if slot_min is not None else '?'))
+    summary = 'Latest slot used: ' + ', '.join(parts) if parts else 'No round-robin games found'
+    return {
+        'rule': 'Early-slot preference',
+        'summary': summary,
+        'divisions': divisions,
+    }
+
+
+def _hr_back_to_back(ctx, rr_recs):
+    # (court_idx, day) -> {slot_min: division}
+    by_cd = defaultdict(dict)
+    for r in rr_recs:
+        if r['div'] in _OLDER_DIVS and r['court_idx'] is not None and r['min'] is not None:
+            by_cd[(r['court_idx'], r['day'])][r['min']] = r['div']
+    pairs = []
+    for (ci, day), slots_map in by_cd.items():
+        if not isinstance(day, int) or day < 0 or day >= len(ctx['day_slots']):
+            continue
+        day_slots = ctx['day_slots'][day]
+        for s in range(len(day_slots) - 1):
+            if day_slots[s + 1] - day_slots[s] > 90:
+                continue   # lunch-separated — solver doesn't penalise
+            a, b = day_slots[s], day_slots[s + 1]
+            if a in slots_map and b in slots_map:
+                pairs.append({
+                    'court': ctx['courts'][ci]['name'] if ci < len(ctx['courts']) else '?',
+                    'day': day + 1,
+                    'slot1': _min_to_time(a), 'slot1_div': slots_map[a],
+                    'slot2': _min_to_time(b), 'slot2_div': slots_map[b],
+                })
+    pairs.sort(key=lambda p: (p['day'], p['court'], p['slot1']))
+    summary = ('%d back-to-back same-court pair%s among U16 / U18 games'
+               % (len(pairs), '' if len(pairs) == 1 else 's')) if pairs \
+              else 'No back-to-back U16 / U18 same-court pairs'
+    return {
+        'rule': 'Back-to-back older divisions',
+        'summary': summary,
+        'pairs': pairs,
+    }
+
+
+def _hr_finals_atmosphere(ctx, recs):
+    target_final = ctx['final_target']
+    target_third = ctx['third_target']
+    target_final_s = _min_to_time(target_final)
+    target_third_s = _min_to_time(target_third)
+    by_div = {}
+    for r in recs:
+        if r['min'] is None:
+            continue
+        lbl = r['lbl'].upper()
+        if lbl == 'FINAL':
+            by_div.setdefault(r['div'], {})['final_min'] = r['min']
+            by_div[r['div']]['final_time'] = _min_to_time(r['min'])
+        elif lbl.startswith('3RD') or '3RD PLACE' in lbl:
+            by_div.setdefault(r['div'], {})['third_min'] = r['min']
+            by_div[r['div']]['third_time'] = _min_to_time(r['min'])
+    divisions = []
+    on_target_count = finals_count = 0
+    for d, v in by_div.items():
+        if 'final_min' in v:
+            finals_count += 1
+            on_t = v['final_min'] == target_final
+            if on_t:
+                on_target_count += 1
+        else:
+            on_t = False
+        divisions.append({
+            'div': d,
+            'final_time': v.get('final_time', '-'),
+            'target': target_final_s,
+            'third_time': v.get('third_time', '-'),
+            'third_target': target_third_s,
+            'on_target': on_t,
+        })
+    divisions.sort(key=lambda x: x['div'])
+    if finals_count:
+        summary = ('%d of %d finals at the target slot (%s)'
+                   % (on_target_count, finals_count, target_final_s))
+    else:
+        summary = 'No final games found'
+    return {
+        'rule': 'Finals-day atmosphere',
+        'summary': summary,
+        'divisions': divisions,
+    }
+
+
+def report_health(config, games):
+    """Per-division soft-rule breakdown for a finished schedule. Absolute view
+    (no original-vs-edited comparison) — powers the Health section in the
+    Audit Schedule modal."""
+    ctx = _build_context(config)
+    recs = _build_recs(games, ctx)
+    rr = [r for r in recs if r['is_rr']]
+    sat = _hr_blanes_saturation(ctx, recs)
+    return {
+        'metrics': [
+            sat,
+            _hr_blanes_priority(sat),
+            _hr_rest_fairness(rr),
+            _hr_early_slot(ctx, rr),
+            _hr_back_to_back(ctx, rr),
+            _hr_finals_atmosphere(ctx, recs),
+        ]
+    }
