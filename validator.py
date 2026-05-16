@@ -832,10 +832,17 @@ def report_health(config, games):
     recs = _build_recs(games, ctx)
     rr = [r for r in recs if r['is_rr']]
     sat = _hr_blanes_saturation(ctx, recs)
+    # The "Blanes priority by age/gender" rule reads the same per-division
+    # data as saturation — render it as a sub-status on the saturation card
+    # instead of a duplicate second card with the same table.
+    prio = _hr_blanes_priority(sat)
+    sat['priority_status'] = {
+        'text': prio['summary'],
+        'ok': 'inversion' not in prio['summary'].lower(),
+    }
     return {
         'metrics': [
             sat,
-            _hr_blanes_priority(sat),
             _hr_rest_fairness(rr),
             _hr_early_slot(ctx, rr),
             _hr_back_to_back(ctx, rr),

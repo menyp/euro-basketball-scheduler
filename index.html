@@ -1927,8 +1927,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       html += '<div style="margin-bottom:12px;border:1px solid var(--b);border-radius:8px;overflow:hidden">'
         + '<div style="padding:9px 13px;background:rgba(255,255,255,.04)">'
         + '<div style="color:#e2e8f0;font-weight:700;font-size:12px">' + escHtml(m.rule) + '</div>'
-        + '<div style="color:#cbd5e0;font-size:11px;margin-top:3px">' + escHtml(m.summary) + '</div>'
-        + '</div>';
+        + '<div style="color:#cbd5e0;font-size:11px;margin-top:3px">' + escHtml(m.summary) + '</div>';
+      if (m.priority_status) {
+        var psOk = !!m.priority_status.ok;
+        html += '<div style="color:' + (psOk ? '#86efac' : '#ffd494')
+          + ';font-size:11px;margin-top:3px">' + (psOk ? '✓' : '⚠') + ' '
+          + escHtml(m.priority_status.text) + '</div>';
+      }
+      html += '</div>';
       if (m.divisions && m.divisions.length) html += _healthDivisionsTable(m);
       if (m.teams && m.teams.length)         html += _healthDrilldown('Tight gaps by team', m.teams, _healthFmtTeam);
       if (m.pairs && m.pairs.length)         html += _healthDrilldown('Back-to-back pairs',  m.pairs, _healthFmtPair);
