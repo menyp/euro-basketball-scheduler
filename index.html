@@ -8282,6 +8282,23 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   function loadSnapshot(data) {
         sched            = data.sched;
         divisions        = data.divisions        || divisions;
+        // Restore teamZones BEFORE the first renderDivisions() call below —
+        // renderDivisions reads teamZones to decide which W/B chip toggle is
+        // selected on each team, so it must be in place by render time.
+        // One-time migration: an earlier per-division version stored the
+        // zone on the division itself. If a snapshot still carries that
+        // (and has no teamZones yet), expand it to per-team so the admin
+        // doesn't lose their work.
+        teamZones        = Array.isArray(data.teamZones) ? data.teamZones : [];
+        if (!teamZones.length && Array.isArray(data.divisions)) {
+          data.divisions.forEach(function(d) {
+            if (d && d.zone && Array.isArray(d.teams)) {
+              d.teams.forEach(function(t) {
+                teamZones.push({ div: d.name, team: t, zone: d.zone });
+              });
+            }
+          });
+        }
         // Repopulate the Teams and Divisions textarea + division cards from
         // the loaded divisions[]. Without this, the textarea keeps stale
         // sample/default data even though divisions[] is correct.
@@ -8298,20 +8315,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         migrateAllVenueRules();
         teamVenueRules   = Array.isArray(data.teamVenueRules) ? data.teamVenueRules : [];
         teamAvailability = Array.isArray(data.teamAvailability) ? data.teamAvailability : [];
-        teamZones        = Array.isArray(data.teamZones) ? data.teamZones : [];
-        // One-time migration: an earlier per-division version stored the
-        // zone on the division itself. If a snapshot still carries that
-        // (and has no teamZones yet), expand it to per-team so the admin
-        // doesn't lose their work.
-        if (!teamZones.length && Array.isArray(data.divisions)) {
-          data.divisions.forEach(function(d) {
-            if (d && d.zone && Array.isArray(d.teams)) {
-              d.teams.forEach(function(t) {
-                teamZones.push({ div: d.name, team: t, zone: d.zone });
-              });
-            }
-          });
-        }
         venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
