@@ -4154,9 +4154,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var config = _buildSolverConfig();
     config.solverTimeLimit = 3000;
 
-    // Shuttle-zone soft rule: warn (non-blocking) if any team has no zone
-    // set — those teams are excluded from the shuttle balance check, so
-    // the rule only operates on the zones the admin set.
+    // Shuttle-zone soft rule: if any team has no zone set, confirm with the
+    // admin BEFORE starting the (potentially long) solve — better to bail
+    // and fix the zones than waste minutes on a run that excludes teams.
     var _zoneSet = {};
     (teamZones || []).forEach(function(e) {
       if (e && e.div && e.team && (e.zone === 'white' || e.zone === 'black')) {
@@ -4172,16 +4172,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
     });
     if (_unsetTeams.length) {
-      var _preview = _unsetTeams.slice(0, 8).map(function(e) {
-        return '<code>' + e.team + '</code>';
-      }).join(', ');
-      var _more = _unsetTeams.length > 8 ? ' (+' + (_unsetTeams.length - 8) + ' more)' : '';
-      showToast('Shuttle zones not set',
-        '<strong>' + _unsetTeams.length + ' team(s)</strong> have no shuttle zone — '
-        + _preview + _more + '. The schedule will be generated, but these teams '
-        + 'are excluded from the shuttle balance rule. Set their zones in '
-        + 'Setup → Divisions (W / B on each team) for full effect.',
-        'warn', true);
+      var _preview = _unsetTeams.slice(0, 8).map(function(e) { return '  • ' + e.team; }).join('\n');
+      var _more = _unsetTeams.length > 8 ? '\n  … +' + (_unsetTeams.length - 8) + ' more' : '';
+      var _msg = _unsetTeams.length + ' team(s) have no shuttle zone:\n\n'
+               + _preview + _more + '\n\n'
+               + 'These teams will be EXCLUDED from the shuttle balance rule.\n\n'
+               + 'OK = generate anyway. Cancel = go back and set their zones first.';
+      if (!confirm(_msg)) {
+        return;   // admin chose to fix zones first — bail before any solve
+      }
     }
 
     // Show loading state with live timer
@@ -4230,11 +4229,38 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px"></div></div>';
     genBtn.disabled = true;
 
+    // Cancel button: inserted as a sibling so the admin can abort the
+    // in-flight solve without losing the rest of the setup. We just abort
+    // the xhr on the client; the server-side solve will exit on its own
+    // timeout. The DOM state (divisions, rules, zones) is untouched.
+    var _cancelled = false;
+    var cancelBtn = document.createElement('button');
+    cancelBtn.id = '_cancelGenBtn';
+    cancelBtn.style.cssText = 'margin-top:8px;background:rgba(239,68,68,.12);'
+      + 'color:#fca5a5;padding:8px 16px;border:1px solid rgba(239,68,68,.4);'
+      + 'border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;'
+      + 'width:100%;font-family:Montserrat,sans-serif;letter-spacing:.5px';
+    cancelBtn.innerHTML = '✕ CANCEL GENERATION';
+    cancelBtn.onclick = function() {
+      if (!confirm('Cancel the current schedule generation?\n\n'
+                 + 'Your setup (divisions, rules, zones) will be kept intact — '
+                 + 'you can generate again any time.')) return;
+      _cancelled = true;
+      try { xhr.abort(); } catch (e) {}
+      _stopSolveTimer();
+      showToast('Generation cancelled',
+        'The schedule generation was stopped. Your setup is preserved.',
+        'warn', false);
+    };
+    genBtn.parentNode.insertBefore(cancelBtn, genBtn.nextSibling);
+
     function _stopSolveTimer() {
       clearInterval(_solveTimer);
       clearInterval(_progressPollTimer);
       genBtn.innerHTML = origText;
       genBtn.disabled = false;
+      var cb = document.getElementById('_cancelGenBtn');
+      if (cb && cb.parentNode) cb.parentNode.removeChild(cb);
     }
 
     var xhr = new XMLHttpRequest();
@@ -4242,6 +4268,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.timeout = 3300000; // 55 min — matches solverTimeLimit (3000s) + 5 min slack for network/serialization
     xhr.onload = function() {
+      if (_cancelled) return;
       _stopSolveTimer();
       try {
         var data = JSON.parse(xhr.responseText);
@@ -4258,15 +4285,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       }
     };
     xhr.onerror = function() {
+      if (_cancelled) return;
       _stopSolveTimer();
       alert('CP-SAT server connection failed.\nFalling back to greedy algorithm.');
       _runGreedyGenerate();
     };
     xhr.ontimeout = function() {
+      if (_cancelled) return;
       _stopSolveTimer();
       alert('CP-SAT solver timed out.\nFalling back to greedy algorithm.');
       _runGreedyGenerate();
     };
+    xhr.onabort = function() { /* user-initiated cancel — cleanup already done */ };
     xhr.send(JSON.stringify(config));
   }
 
