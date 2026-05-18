@@ -4172,7 +4172,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
     });
     if (_unsetTeams.length) {
-      var _preview = _unsetTeams.slice(0, 8).map(function(e) { return '  • ' + e.team; }).join('\n');
+      var _preview = _unsetTeams.slice(0, 8).map(function(e) {
+        return '  • ' + e.team + '  [' + e.div + ']';
+      }).join('\n');
       var _more = _unsetTeams.length > 8 ? '\n  … +' + (_unsetTeams.length - 8) + ' more' : '';
       var _msg = _unsetTeams.length + ' team(s) have no shuttle zone:\n\n'
                + _preview + _more + '\n\n'
