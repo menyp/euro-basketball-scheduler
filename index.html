@@ -4156,6 +4156,22 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // ── Generate ───────────────────────────────────────────
   // Check if CP-SAT server is available
   var _cpSatAvailable = false;
+  // Last successful solve duration in seconds — used as a reference in
+  // the progress overlay so the admin sees a realistic baseline instead
+  // of a hard-coded guess. Persisted in localStorage (per origin), so
+  // cloud and local each keep their own value.
+  var _LAST_SOLVE_KEY = 'ebs.lastSolveDurationSec';
+  var _lastSolveDurationSec = 0;
+  try {
+    var _stored = parseInt(window.localStorage.getItem(_LAST_SOLVE_KEY), 10);
+    if (_stored > 0 && _stored < 24 * 3600) _lastSolveDurationSec = _stored;
+  } catch (e) { /* localStorage unavailable (private mode etc.) — silently ignore */ }
+  function _fmtMMSS(secs) {
+    secs = Math.max(0, Math.floor(secs));
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    return m > 0 ? (m + 'm ' + (s < 10 ? '0' : '') + s + 's') : (s + 's');
+  }
   (function checkServer() {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/api/health', true);
@@ -4248,14 +4264,20 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         var prevLine = _solveProgressPrev
           ? '<div style="font-size:11px;opacity:.6;margin-top:1px">prev: ' + _escForHtml(_solveProgressPrev) + '</div>'
           : '';
+        var lastLine = _lastSolveDurationSec > 0
+          ? ' &middot; last run: ' + _fmtMMSS(_lastSolveDurationSec)
+          : '';
+        // Progress-bar denominator: last-run duration if we have one, else
+        // a soft 300s assumption purely so the bar moves. Caps at 95%.
+        var _denom = _lastSolveDurationSec > 0 ? _lastSolveDurationSec : 300;
         genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
           + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
           + '<div style="font-size:12px;opacity:.8;margin-top:2px">'
-          + elapsed + 's elapsed — typically takes 60–300s</div>'
+          + _fmtMMSS(elapsed) + ' elapsed' + lastLine + '</div>'
           + progLine
           + prevLine
           + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px;overflow:hidden">'
-          + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 300 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
+          + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / _denom * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
           + '</div></div>';
       }, 1000);
       // Poll the server every 2s for live iteration/phase info.
@@ -4335,6 +4357,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             _runGreedyGenerate();
             return;
           }
+          // Record duration of this successful solve so the next run can
+          // show it as a reference in the progress overlay. Persist to
+          // localStorage so it survives reload.
+          _lastSolveDurationSec = Math.floor((Date.now() - _solveStart) / 1000);
+          try { window.localStorage.setItem(_LAST_SOLVE_KEY, String(_lastSolveDurationSec)); } catch (e) {}
           // Import the solver's result
           _importSolverResult(data);
         } catch(e) {
