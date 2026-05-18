@@ -46,6 +46,11 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .div-name{font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;flex:1}
 .div-count{font-size:11px;color:var(--g);font-family:'Montserrat',sans-serif;font-weight:600}
 .div-rm{background:rgba(255,60,60,.12);border:1px solid rgba(255,60,60,.25);color:#ff8080;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:13px;flex-shrink:0}
+.div-zone{display:flex;gap:3px;align-items:center}
+.zone-btn{background:rgba(255,255,255,.08);color:#94a3b8;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;line-height:1.4}
+.zone-btn:hover{background:rgba(255,255,255,.14);color:#e2e8f0}
+.zone-btn.sel{background:var(--o);color:#fff;border-color:var(--o)}
+.zone-unset{color:#f59e0b;font-size:14px;line-height:1;margin-left:2px}
 .div-teams{padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px}
 .team-tag{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:4px 10px;font-size:12px;font-family:'Montserrat',sans-serif;font-weight:600;display:flex;align-items:center;gap:6px}
 .team-tag .trm{color:var(--g);cursor:pointer;font-size:13px;opacity:.6}
@@ -974,9 +979,17 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<span style="color:var(--o)">' + divisions.length + '</span> divisions &middot; '
       + '<span style="color:var(--o)">' + tot + '</span> teams parsed</div>';
     list.innerHTML = divisions.map(function (d, di) {
+      var z = d.zone || '';
+      var zoneHtml = '<div class="div-zone" title="Shuttle zone — White or Black">'
+        + '<button class="zone-btn' + (z === 'white' ? ' sel' : '') + '" data-zdi="' + di + '" data-zone="white">W</button>'
+        + '<button class="zone-btn' + (z === 'black' ? ' sel' : '') + '" data-zdi="' + di + '" data-zone="black">B</button>'
+        + (z ? '' : '<span class="zone-unset" title="Zone not set">●</span>')
+        + '</div>';
       return '<div class="div-card">'
         + '<div class="div-header"><div class="div-dot" style="background:' + d.color + '"></div>'
-        + '<div class="div-name">' + d.name + '</div><div class="div-count">' + d.teams.length + ' teams</div>'
+        + '<div class="div-name">' + d.name + '</div>'
+        + zoneHtml
+        + '<div class="div-count">' + d.teams.length + ' teams</div>'
         + '<button class="div-rm" data-di="' + di + '">x</button></div>'
         + '<div class="div-teams">'
         + d.teams.map(function (t, ti) {
@@ -997,6 +1010,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var di = parseInt(el.dataset.rdi), ti = parseInt(el.dataset.rti);
       divisions[di].teams.splice(ti, 1);
       if (!divisions[di].teams.length) divisions.splice(di, 1);
+      renderDivisions();
+      return;
+    }
+    // Shuttle-zone selector: click W or B; clicking the currently-selected
+    // one un-sets it. The zone tags along on the division object, so it
+    // round-trips through buildSnapshot / loadSnapshot for free.
+    if (el.classList.contains('zone-btn') && el.dataset.zdi !== undefined) {
+      var zdi = parseInt(el.dataset.zdi);
+      var target = el.dataset.zone;
+      divisions[zdi].zone = (divisions[zdi].zone === target) ? null : target;
       renderDivisions();
     }
   });
@@ -4071,7 +4094,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // the four rule arrays — read live from the current UI state.
   function _buildSolverConfig() {
     return {
-      divisions: divisions.map(function(d) { return { name: d.name, color: d.color, teams: d.teams, manualGroups: d.manualGroups }; }),
+      divisions: divisions.map(function(d) { return { name: d.name, color: d.color, teams: d.teams, manualGroups: d.manualGroups, zone: d.zone || null }; }),
       sites: sites.slice(),
       setupFields: {
         nDays: document.getElementById('nDays').value,
@@ -4104,6 +4127,22 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // Collect config for the solver
     var config = _buildSolverConfig();
     config.solverTimeLimit = 3000;
+
+    // Shuttle-zone soft rule: warn (non-blocking) if any division has no
+    // zone set — those divisions are excluded from the shuttle balance
+    // check, so the rule only operates on the zones the admin set.
+    var _unsetZoneDivs = divisions
+      .filter(function(d) { return !d.zone; })
+      .map(function(d) { return d.name; });
+    if (_unsetZoneDivs.length) {
+      showToast('Shuttle zones not set',
+        '<strong>' + _unsetZoneDivs.length + ' division(s)</strong> have no shuttle zone: '
+        + _unsetZoneDivs.map(function(n) { return '<code>' + n + '</code>'; }).join(', ')
+        + '. The schedule will be generated, but these divisions are excluded '
+        + 'from the shuttle balance rule. Set their zones in Setup → Divisions '
+        + '(W / B) for full effect.',
+        'warn', true);
+    }
 
     // Show loading state with live timer
     var genBtn = document.getElementById('genBtn');

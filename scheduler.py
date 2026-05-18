@@ -706,6 +706,44 @@ def _build_context(config):
     n_div = max(1, len(ranked))
     div_priority = {d['name']: 2 ** (n_div - 1 - idx) for idx, d in enumerate(ranked)}
 
+    # ── Shuttle-zone soft rule (Phase 1 + Phase 2) ──────────────────────────
+    # Each division can be tagged 'white' or 'black' — every team in the
+    # division inherits that zone. The rule penalises concentration of one
+    # zone in the same (venue, day, slot), proxying for "the zone's shuttle
+    # can carry at most half the teams at that slot." Unset divisions are
+    # excluded from the count (their teams contribute 0 to either side).
+    # See _solve_phase1 / _solve_phase2 for the squared-diff penalty term.
+    div_zone = {}          # div_name -> 'white' | 'black' | None
+    for d in divisions:
+        z = (d.get('zone') or '').strip().lower()
+        div_zone[d['name']] = z if z in ('white', 'black') else None
+
+    # Per-venue exemption: if every division that can legally place games
+    # at venue v is from the same zone (or all unset), the rule is vacuous
+    # for v and we skip the penalty entirely. Pineda — where the existing
+    # team-venue-blocks make it reachable to a single-zone pool — is
+    # auto-exempted this way.
+    venue_names = []
+    for c in courts:
+        if c['venue'] not in venue_names:
+            venue_names.append(c['venue'])
+    venue_zones = {v: set() for v in venue_names}
+    for div_name, zone in div_zone.items():
+        if not zone:
+            continue
+        # Which courts can this division legally use?
+        allowed_courts = div_allowed_courts.get(div_name)
+        if allowed_courts is None:
+            allowed_set = set(range(num_courts))
+        else:
+            allowed_set = set(allowed_courts)
+        # Could be further trimmed by per-team blocks, but at the division
+        # level this is enough: if at least one of the division's teams
+        # could reach a court in v, the division is "reachable" to v.
+        for ci in allowed_set:
+            venue_zones[courts[ci]['venue']].add(zone)
+    shuttle_exempt_venues = {v for v, zs in venue_zones.items() if len(zs) < 2}
+
     return {
         'config': config, 'divisions': divisions, 'sites_cfg': sites_cfg,
         'courts': courts, 'num_courts': num_courts,
@@ -735,6 +773,7 @@ def _build_context(config):
         'rr_slot_mask': rr_slot_mask, 'finals_day': finals_day,
         'po_start_day': po_start_day, 'reserve': reserve,
         'div_priority': div_priority,
+        'div_zone': div_zone, 'shuttle_exempt_venues': shuttle_exempt_venues,
         'final_target': final_target, 'third_target': third_target,
         'venue_court_groups': venue_court_groups,
         'status_names': {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE',
@@ -1143,11 +1182,60 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                     model.add(older_at[s] + older_at[s + 1] - 1 <= btb)
                     btb_terms.append(BTB_WEIGHT * btb)
 
+    # Soft: shuttle-zone balance. For each non-exempt (venue, day, slot), penalise
+    # imbalance between White and Black teams playing there: penalty = (W - B)².
+    # Pineda-style venues whose reachable pool is single-zone are auto-exempted
+    # at ctx-build time, so we just skip them here.
+    SHUTTLE_WEIGHT = 8  # Above BTB (4), well below rest-fairness's squared deficit.
+    shuttle_terms = []
+    div_zone_p1 = ctx['div_zone']
+    shuttle_exempt = ctx['shuttle_exempt_venues']
+    # Group courts by venue so we can sum across all courts of that venue.
+    courts_by_venue = defaultdict(list)
+    for ci, c in enumerate(courts):
+        courts_by_venue[c['venue']].append(ci)
+    # Per-game zone constants (each game is 2 teams of the same division).
+    w_of_g = [None] * num_rr
+    b_of_g = [None] * num_rr
+    for g, (div, _, _, _) in enumerate(rr_matchups):
+        z = div_zone_p1.get(div)
+        w_of_g[g] = 2 if z == 'white' else 0
+        b_of_g[g] = 2 if z == 'black' else 0
+    for venue, venue_courts in courts_by_venue.items():
+        if venue in shuttle_exempt:
+            continue
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                # count_white / count_black across this (venue, d, s).
+                count_white_terms = []
+                count_black_terms = []
+                for g in range(num_rr):
+                    if w_of_g[g] == 0 and b_of_g[g] == 0:
+                        continue  # unset zone — doesn't contribute either way
+                    placed_here = sum(x[g, d, s, c] for c in venue_courts)
+                    if w_of_g[g]:
+                        count_white_terms.append(w_of_g[g] * placed_here)
+                    if b_of_g[g]:
+                        count_black_terms.append(b_of_g[g] * placed_here)
+                if not count_white_terms and not count_black_terms:
+                    continue
+                # diff = white - black, |diff|² added to objective.
+                max_teams = 2 * len(venue_courts)
+                diff_var = model.new_int_var(-max_teams, max_teams,
+                                              f'shuttle_diff_{venue}_{d}_{s}')
+                model.add(diff_var == (sum(count_white_terms) - sum(count_black_terms)))
+                abs_diff = model.new_int_var(0, max_teams, f'shuttle_abs_{venue}_{d}_{s}')
+                model.add_abs_equality(abs_diff, diff_var)
+                sq = model.new_int_var(0, max_teams * max_teams,
+                                        f'shuttle_sq_{venue}_{d}_{s}')
+                model.add_multiplication_equality(sq, [abs_diff, abs_diff])
+                shuttle_terms.append(SHUTTLE_WEIGHT * sq)
+
     # Combine venue-preference penalties with No-Blank-Day slack penalties,
-    # the rest-fairness term, the early-slot preference, and the back-to-back
-    # older-division penalty.
+    # the rest-fairness term, the early-slot preference, the back-to-back
+    # older-division penalty, and the shuttle-zone balance penalty.
     all_penalty_terms = (penalty_terms + nbd_penalty_terms + nbd_phase1_slack_terms
-                          + rest_terms + tail_terms + btb_terms)
+                          + rest_terms + tail_terms + btb_terms + shuttle_terms)
     if all_penalty_terms:
         model.minimize(sum(all_penalty_terms))
 
@@ -1771,6 +1859,65 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
                     continue
                 for c in range(num_courts):
                     obj_terms.append(SLOT_TAIL_WEIGHT_P2 * s * y[p, d, s, c])
+
+    # Soft: shuttle-zone balance for PO (mirrors Phase 1, joint with already-
+    # placed RR contributions at the same venue/slot — RR is fixed at this
+    # point, so its share is a constant we fold into the diff expression).
+    SHUTTLE_WEIGHT_P2 = 8
+    div_zone_p2 = ctx['div_zone']
+    shuttle_exempt_p2 = ctx['shuttle_exempt_venues']
+    courts_by_venue_p2 = defaultdict(list)
+    for ci, c in enumerate(courts):
+        courts_by_venue_p2[c['venue']].append(ci)
+    # Fixed RR counts at each (venue, d, s) — from rr_result.
+    rr_counts_at = defaultdict(lambda: [0, 0])  # (venue, d, s) -> [white, black]
+    for rg in rr_result:
+        z = div_zone_p2.get(rg['divName'])
+        if z == 'white':
+            rr_counts_at[(rg['loc'], rg['day'], rg['slotIdx'])][0] += 2
+        elif z == 'black':
+            rr_counts_at[(rg['loc'], rg['day'], rg['slotIdx'])][1] += 2
+    # Per-PO-game zone constants.
+    w_of_p = [0] * num_po
+    b_of_p = [0] * num_po
+    for p, pg in enumerate(po_games):
+        z = div_zone_p2.get(pg['divName'])
+        if z == 'white':
+            w_of_p[p] = 2
+        elif z == 'black':
+            b_of_p[p] = 2
+    for venue, venue_courts in courts_by_venue_p2.items():
+        if venue in shuttle_exempt_p2:
+            continue
+        for d in range(n_days):
+            for s in range(len(day_slots[d])):
+                rr_w, rr_b = rr_counts_at.get((venue, d, s), [0, 0])
+                po_white_terms, po_black_terms = [], []
+                for p in range(num_po):
+                    if w_of_p[p] == 0 and b_of_p[p] == 0:
+                        continue
+                    placed_here = sum(y[p, d, s, c] for c in venue_courts)
+                    if w_of_p[p]:
+                        po_white_terms.append(w_of_p[p] * placed_here)
+                    if b_of_p[p]:
+                        po_black_terms.append(b_of_p[p] * placed_here)
+                # Skip if nothing here contributes (no PO can land here AND
+                # no RR is here): trivially balanced, no work needed.
+                if not po_white_terms and not po_black_terms and rr_w == rr_b:
+                    continue
+                max_teams = 2 * len(venue_courts)
+                rng = max_teams + rr_w + rr_b
+                diff_var = po_model.new_int_var(-rng, rng,
+                                                 f'shuttle_diff_p2_{venue}_{d}_{s}')
+                po_model.add(diff_var == (
+                    rr_w - rr_b + sum(po_white_terms) - sum(po_black_terms)))
+                abs_diff = po_model.new_int_var(0, rng,
+                                                 f'shuttle_abs_p2_{venue}_{d}_{s}')
+                po_model.add_abs_equality(abs_diff, diff_var)
+                sq = po_model.new_int_var(0, rng * rng,
+                                            f'shuttle_sq_p2_{venue}_{d}_{s}')
+                po_model.add_multiplication_equality(sq, [abs_diff, abs_diff])
+                obj_terms.append(SHUTTLE_WEIGHT_P2 * sq)
 
     if obj_terms:
         po_model.minimize(sum(obj_terms))

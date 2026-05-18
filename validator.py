@@ -824,6 +824,65 @@ def _hr_finals_atmosphere(ctx, recs):
     }
 
 
+def _hr_shuttle_balance(ctx, recs):
+    """Per (venue, day, slot) shuttle balance — White vs Black team counts.
+    Mirrors the solver's soft term: each game contributes 2 teams of its
+    division's zone. Exempt venues (where the reachable pool is single-zone,
+    e.g. Pineda) are skipped. Slots with no zoned teams at all (all divisions
+    unset) are excluded from the totals."""
+    div_zone = ctx.get('div_zone', {}) or {}
+    exempt = ctx.get('shuttle_exempt_venues', set()) or set()
+    # (venue, day, slot_min) -> {'white': teams, 'black': teams}
+    by_slot = defaultdict(lambda: {'white': 0, 'black': 0})
+    for r in recs:
+        if not r['venue'] or r['min'] is None or r['venue'] in exempt:
+            continue
+        z = div_zone.get(r['div'])
+        if z == 'white':
+            by_slot[(r['venue'], r['day'], r['min'])]['white'] += 2
+        elif z == 'black':
+            by_slot[(r['venue'], r['day'], r['min'])]['black'] += 2
+    perfect = skewed = critical = 0
+    drilldown = []
+    for (venue, day, slot_min), cnt in by_slot.items():
+        total = cnt['white'] + cnt['black']
+        if total == 0:
+            continue   # all teams in this slot have unset zones — skip
+        diff = abs(cnt['white'] - cnt['black'])
+        if diff == 0:
+            perfect += 1
+        elif diff == total:   # one zone has zero teams
+            critical += 1
+        else:
+            skewed += 1
+        if diff > 0:
+            drilldown.append({
+                'court': venue, 'day': day + 1,
+                'slot1': _min_to_time(slot_min),
+                'slot1_div': '%d W' % cnt['white'],
+                'slot2': '', 'slot2_div': '%d B' % cnt['black'],
+            })
+    drilldown.sort(key=lambda x: (-(int(x['slot1_div'].split()[0]) - int(x['slot2_div'].split()[0])) ** 2,
+                                   x['day'], x['court']))
+    total_slots = perfect + skewed + critical
+    if total_slots == 0:
+        summary = 'No placements to balance (no divisions have a zone set)'
+    else:
+        parts = ['%d of %d slots perfectly balanced' % (perfect, total_slots)]
+        if skewed:
+            parts.append('%d skewed' % skewed)
+        if critical:
+            parts.append('%d critical (one zone only)' % critical)
+        summary = '; '.join(parts)
+        if exempt:
+            summary += '  ·  exempt venues: ' + ', '.join(sorted(exempt))
+    return {
+        'rule': 'Shuttle balance',
+        'summary': summary,
+        'pairs': drilldown,
+    }
+
+
 def report_health(config, games):
     """Per-division soft-rule breakdown for a finished schedule. Absolute view
     (no original-vs-edited comparison) — powers the Health section in the
@@ -847,5 +906,6 @@ def report_health(config, games):
             _hr_early_slot(ctx, rr),
             _hr_back_to_back(ctx, rr),
             _hr_finals_atmosphere(ctx, recs),
+            _hr_shuttle_balance(ctx, recs),
         ]
     }
