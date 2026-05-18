@@ -978,22 +978,26 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     summary.innerHTML = '<div style="margin:12px 0 4px;font-family:Montserrat,sans-serif;font-size:12px;color:var(--g);font-weight:700;text-transform:uppercase;letter-spacing:1px">'
       + '<span style="color:var(--o)">' + divisions.length + '</span> divisions &middot; '
       + '<span style="color:var(--o)">' + tot + '</span> teams parsed</div>';
+    // Per-team shuttle zone lookup: keyed by "divName\x00teamName".
+    var _zoneMap = {};
+    (teamZones || []).forEach(function(e) {
+      if (e && e.div && e.team && (e.zone === 'white' || e.zone === 'black')) {
+        _zoneMap[e.div + '\x00' + e.team] = e.zone;
+      }
+    });
     list.innerHTML = divisions.map(function (d, di) {
-      var z = d.zone || '';
-      var zoneHtml = '<div class="div-zone" title="Shuttle zone — White or Black">'
-        + '<button class="zone-btn' + (z === 'white' ? ' sel' : '') + '" data-zdi="' + di + '" data-zone="white">W</button>'
-        + '<button class="zone-btn' + (z === 'black' ? ' sel' : '') + '" data-zdi="' + di + '" data-zone="black">B</button>'
-        + (z ? '' : '<span class="zone-unset" title="Zone not set">●</span>')
-        + '</div>';
       return '<div class="div-card">'
         + '<div class="div-header"><div class="div-dot" style="background:' + d.color + '"></div>'
         + '<div class="div-name">' + d.name + '</div>'
-        + zoneHtml
         + '<div class="div-count">' + d.teams.length + ' teams</div>'
         + '<button class="div-rm" data-di="' + di + '">x</button></div>'
         + '<div class="div-teams">'
         + d.teams.map(function (t, ti) {
+            var z = _zoneMap[d.name + '\x00' + t] || '';
             return '<div class="team-tag">' + t
+              + '<button class="zone-btn' + (z === 'white' ? ' sel' : '') + '" data-zdi="' + di + '" data-zti="' + ti + '" data-zone="white" title="Set shuttle zone: White">W</button>'
+              + '<button class="zone-btn' + (z === 'black' ? ' sel' : '') + '" data-zdi="' + di + '" data-zti="' + ti + '" data-zone="black" title="Set shuttle zone: Black">B</button>'
+              + (z ? '' : '<span class="zone-unset" title="Shuttle zone not set">●</span>')
               + '<span class="trm" data-rdi="' + di + '" data-rti="' + ti + '">x</span></div>';
           }).join('')
         + '</div></div>';
@@ -1013,13 +1017,28 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       renderDivisions();
       return;
     }
-    // Shuttle-zone selector: click W or B; clicking the currently-selected
-    // one un-sets it. The zone tags along on the division object, so it
-    // round-trips through buildSnapshot / loadSnapshot for free.
+    // Per-team shuttle-zone selector: click W or B; clicking the currently-
+    // selected one un-sets it. Stored in the flat teamZones list keyed by
+    // (div, team) — same shape as the other per-team rule arrays.
     if (el.classList.contains('zone-btn') && el.dataset.zdi !== undefined) {
       var zdi = parseInt(el.dataset.zdi);
+      var zti = parseInt(el.dataset.zti);
       var target = el.dataset.zone;
-      divisions[zdi].zone = (divisions[zdi].zone === target) ? null : target;
+      var dn = divisions[zdi] && divisions[zdi].name;
+      var tn = divisions[zdi] && divisions[zdi].teams[zti];
+      if (!dn || !tn) return;
+      // find existing entry
+      var idx = teamZones.findIndex(function(e) { return e.div === dn && e.team === tn; });
+      if (idx >= 0) {
+        if (teamZones[idx].zone === target) {
+          // click selected → unset
+          teamZones.splice(idx, 1);
+        } else {
+          teamZones[idx].zone = target;
+        }
+      } else {
+        teamZones.push({ div: dn, team: tn, zone: target });
+      }
       renderDivisions();
     }
   });
@@ -1208,6 +1227,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // both RR and PO games on the specified day.
   // Each entry: { teams: [{div, team}], day: number (0-indexed), notBefore: 'HH:MM' }
   var teamAvailability = [];
+
+  // teamZones: per-team shuttle zone — 'white' or 'black'. Each team gets
+  // exactly one zone (the hotel meeting point its shuttle leaves from). Used
+  // by the solver's shuttle-balance soft rule.
+  // Each entry: { div, team, zone: 'white' | 'black' }
+  var teamZones = [];
 
   // ── Per-day operating hours ────────────────────────────
   // Returns [{start:'09:00', end:'19:00'}, ...] for each tournament day.
@@ -4094,7 +4119,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // the four rule arrays — read live from the current UI state.
   function _buildSolverConfig() {
     return {
-      divisions: divisions.map(function(d) { return { name: d.name, color: d.color, teams: d.teams, manualGroups: d.manualGroups, zone: d.zone || null }; }),
+      divisions: divisions.map(function(d) { return { name: d.name, color: d.color, teams: d.teams, manualGroups: d.manualGroups }; }),
       sites: sites.slice(),
       setupFields: {
         nDays: document.getElementById('nDays').value,
@@ -4120,6 +4145,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
+      teamZones: teamZones,
     };
   }
 
@@ -4128,19 +4154,33 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var config = _buildSolverConfig();
     config.solverTimeLimit = 3000;
 
-    // Shuttle-zone soft rule: warn (non-blocking) if any division has no
-    // zone set — those divisions are excluded from the shuttle balance
-    // check, so the rule only operates on the zones the admin set.
-    var _unsetZoneDivs = divisions
-      .filter(function(d) { return !d.zone; })
-      .map(function(d) { return d.name; });
-    if (_unsetZoneDivs.length) {
+    // Shuttle-zone soft rule: warn (non-blocking) if any team has no zone
+    // set — those teams are excluded from the shuttle balance check, so
+    // the rule only operates on the zones the admin set.
+    var _zoneSet = {};
+    (teamZones || []).forEach(function(e) {
+      if (e && e.div && e.team && (e.zone === 'white' || e.zone === 'black')) {
+        _zoneSet[e.div + '\x00' + e.team] = true;
+      }
+    });
+    var _unsetTeams = [];
+    divisions.forEach(function(d) {
+      (d.teams || []).forEach(function(t) {
+        if (!_zoneSet[d.name + '\x00' + t]) {
+          _unsetTeams.push({ div: d.name, team: t });
+        }
+      });
+    });
+    if (_unsetTeams.length) {
+      var _preview = _unsetTeams.slice(0, 8).map(function(e) {
+        return '<code>' + e.team + '</code>';
+      }).join(', ');
+      var _more = _unsetTeams.length > 8 ? ' (+' + (_unsetTeams.length - 8) + ' more)' : '';
       showToast('Shuttle zones not set',
-        '<strong>' + _unsetZoneDivs.length + ' division(s)</strong> have no shuttle zone: '
-        + _unsetZoneDivs.map(function(n) { return '<code>' + n + '</code>'; }).join(', ')
-        + '. The schedule will be generated, but these divisions are excluded '
-        + 'from the shuttle balance rule. Set their zones in Setup → Divisions '
-        + '(W / B) for full effect.',
+        '<strong>' + _unsetTeams.length + ' team(s)</strong> have no shuttle zone — '
+        + _preview + _more + '. The schedule will be generated, but these teams '
+        + 'are excluded from the shuttle balance rule. Set their zones in '
+        + 'Setup → Divisions (W / B on each team) for full effect.',
         'warn', true);
     }
 
@@ -7976,6 +8016,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       teamVenueRules: teamVenueRules,
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
+      teamZones: teamZones,
       unscheduledGames: unscheduledGames,
       sites: sites,
       setupFields: {
@@ -8225,6 +8266,20 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         migrateAllVenueRules();
         teamVenueRules   = Array.isArray(data.teamVenueRules) ? data.teamVenueRules : [];
         teamAvailability = Array.isArray(data.teamAvailability) ? data.teamAvailability : [];
+        teamZones        = Array.isArray(data.teamZones) ? data.teamZones : [];
+        // One-time migration: an earlier per-division version stored the
+        // zone on the division itself. If a snapshot still carries that
+        // (and has no teamZones yet), expand it to per-team so the admin
+        // doesn't lose their work.
+        if (!teamZones.length && Array.isArray(data.divisions)) {
+          data.divisions.forEach(function(d) {
+            if (d && d.zone && Array.isArray(d.teams)) {
+              d.teams.forEach(function(t) {
+                teamZones.push({ div: d.name, team: t, zone: d.zone });
+              });
+            }
+          });
+        }
         venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
         if (data.sites && data.sites.length) {
@@ -8651,6 +8706,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     renderTeamVenueRules();
     teamAvailability = [];
     renderTeamAvailability();
+    teamZones = [];
     var dl = document.getElementById('divList');
     if (dl) dl.innerHTML = '';
     var so = document.getElementById('schedOut');

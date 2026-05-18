@@ -707,40 +707,39 @@ def _build_context(config):
     div_priority = {d['name']: 2 ** (n_div - 1 - idx) for idx, d in enumerate(ranked)}
 
     # ── Shuttle-zone soft rule (Phase 1 + Phase 2) ──────────────────────────
-    # Each division can be tagged 'white' or 'black' — every team in the
-    # division inherits that zone. The rule penalises concentration of one
-    # zone in the same (venue, day, slot), proxying for "the zone's shuttle
-    # can carry at most half the teams at that slot." Unset divisions are
-    # excluded from the count (their teams contribute 0 to either side).
-    # See _solve_phase1 / _solve_phase2 for the squared-diff penalty term.
-    div_zone = {}          # div_name -> 'white' | 'black' | None
-    for d in divisions:
-        z = (d.get('zone') or '').strip().lower()
-        div_zone[d['name']] = z if z in ('white', 'black') else None
+    # Each team can be tagged 'white' or 'black' (the hotel meeting point its
+    # shuttle leaves from). The rule penalises concentration of one zone in
+    # the same (venue, day, slot), proxying for "the zone's shuttle can carry
+    # at most half the teams at that slot." Unset teams are excluded from the
+    # count (they contribute 0 to either side). See _solve_phase1 /
+    # _solve_phase2 for the squared-diff penalty term.
+    team_zones_cfg = config.get('teamZones', []) or []
+    team_zone = {}          # (div, team) -> 'white' | 'black'
+    for entry in team_zones_cfg:
+        dn = (entry.get('div') or '').strip()
+        tn = (entry.get('team') or '').strip()
+        zn = (entry.get('zone') or '').strip().lower()
+        if dn and tn and zn in ('white', 'black'):
+            team_zone[(dn, tn)] = zn
 
-    # Per-venue exemption: if every division that can legally place games
-    # at venue v is from the same zone (or all unset), the rule is vacuous
+    # Per-venue exemption: if every team that can legally play at venue v
+    # has the same zone (or all teams there are unset), the rule is vacuous
     # for v and we skip the penalty entirely. Pineda — where the existing
-    # team-venue-blocks make it reachable to a single-zone pool — is
-    # auto-exempted this way.
+    # team-venue-blocks shrink the reachable pool to a single-zone group —
+    # is auto-exempted this way.
     venue_names = []
     for c in courts:
         if c['venue'] not in venue_names:
             venue_names.append(c['venue'])
     venue_zones = {v: set() for v in venue_names}
-    for div_name, zone in div_zone.items():
-        if not zone:
-            continue
-        # Which courts can this division legally use?
-        allowed_courts = div_allowed_courts.get(div_name)
-        if allowed_courts is None:
-            allowed_set = set(range(num_courts))
+    for (dn, tn), zone in team_zone.items():
+        div_allowed = div_allowed_courts.get(dn)
+        if div_allowed is None:
+            allowed = set(range(num_courts))
         else:
-            allowed_set = set(allowed_courts)
-        # Could be further trimmed by per-team blocks, but at the division
-        # level this is enough: if at least one of the division's teams
-        # could reach a court in v, the division is "reachable" to v.
-        for ci in allowed_set:
+            allowed = set(div_allowed)
+        allowed -= team_blocked_courts.get((dn, tn), set())
+        for ci in allowed:
             venue_zones[courts[ci]['venue']].add(zone)
     shuttle_exempt_venues = {v for v, zs in venue_zones.items() if len(zs) < 2}
 
@@ -773,7 +772,7 @@ def _build_context(config):
         'rr_slot_mask': rr_slot_mask, 'finals_day': finals_day,
         'po_start_day': po_start_day, 'reserve': reserve,
         'div_priority': div_priority,
-        'div_zone': div_zone, 'shuttle_exempt_venues': shuttle_exempt_venues,
+        'team_zone': team_zone, 'shuttle_exempt_venues': shuttle_exempt_venues,
         'final_target': final_target, 'third_target': third_target,
         'venue_court_groups': venue_court_groups,
         'status_names': {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE',
@@ -1188,19 +1187,22 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # at ctx-build time, so we just skip them here.
     SHUTTLE_WEIGHT = 8  # Above BTB (4), well below rest-fairness's squared deficit.
     shuttle_terms = []
-    div_zone_p1 = ctx['div_zone']
+    team_zone_p1 = ctx['team_zone']
     shuttle_exempt = ctx['shuttle_exempt_venues']
     # Group courts by venue so we can sum across all courts of that venue.
     courts_by_venue = defaultdict(list)
     for ci, c in enumerate(courts):
         courts_by_venue[c['venue']].append(ci)
-    # Per-game zone constants (each game is 2 teams of the same division).
-    w_of_g = [None] * num_rr
-    b_of_g = [None] * num_rr
-    for g, (div, _, _, _) in enumerate(rr_matchups):
-        z = div_zone_p1.get(div)
-        w_of_g[g] = 2 if z == 'white' else 0
-        b_of_g[g] = 2 if z == 'black' else 0
+    # Per-game zone constants: each game has two individually-zoned teams,
+    # so w_g / b_g range 0..2 (each team independently contributes 1 to its
+    # zone or 0 if unset).
+    w_of_g = [0] * num_rr
+    b_of_g = [0] * num_rr
+    for g, (div, _, a, b) in enumerate(rr_matchups):
+        za = team_zone_p1.get((div, a))
+        zb = team_zone_p1.get((div, b))
+        w_of_g[g] = (1 if za == 'white' else 0) + (1 if zb == 'white' else 0)
+        b_of_g[g] = (1 if za == 'black' else 0) + (1 if zb == 'black' else 0)
     for venue, venue_courts in courts_by_venue.items():
         if venue in shuttle_exempt:
             continue
@@ -1864,28 +1866,35 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # placed RR contributions at the same venue/slot — RR is fixed at this
     # point, so its share is a constant we fold into the diff expression).
     SHUTTLE_WEIGHT_P2 = 8
-    div_zone_p2 = ctx['div_zone']
+    team_zone_p2 = ctx['team_zone']
     shuttle_exempt_p2 = ctx['shuttle_exempt_venues']
     courts_by_venue_p2 = defaultdict(list)
     for ci, c in enumerate(courts):
         courts_by_venue_p2[c['venue']].append(ci)
-    # Fixed RR counts at each (venue, d, s) — from rr_result.
+    # Fixed RR contributions at each (venue, d, s) — from rr_result. Each
+    # RR game's actual teams are known; look each up individually.
     rr_counts_at = defaultdict(lambda: [0, 0])  # (venue, d, s) -> [white, black]
     for rg in rr_result:
-        z = div_zone_p2.get(rg['divName'])
-        if z == 'white':
-            rr_counts_at[(rg['loc'], rg['day'], rg['slotIdx'])][0] += 2
-        elif z == 'black':
-            rr_counts_at[(rg['loc'], rg['day'], rg['slotIdx'])][1] += 2
-    # Per-PO-game zone constants.
+        za = team_zone_p2.get((rg['divName'], rg['t1']))
+        zb = team_zone_p2.get((rg['divName'], rg['t2']))
+        key = (rg['loc'], rg['day'], rg['slotIdx'])
+        if za == 'white': rr_counts_at[key][0] += 1
+        elif za == 'black': rr_counts_at[key][1] += 1
+        if zb == 'white': rr_counts_at[key][0] += 1
+        elif zb == 'black': rr_counts_at[key][1] += 1
+    # Per-PO-game zone constants. At Phase 2 solve time the PO games' real
+    # teams are unknown (t1/t2 are placeholder seeds like "1st Group A"),
+    # so per-team lookup misses → both counts stay 0 and PO games don't
+    # contribute to the balance. That's acceptable: PO is mostly the last
+    # day at Blanes, low shuttle pressure, and the actual teams aren't
+    # known until standings are in.
     w_of_p = [0] * num_po
     b_of_p = [0] * num_po
     for p, pg in enumerate(po_games):
-        z = div_zone_p2.get(pg['divName'])
-        if z == 'white':
-            w_of_p[p] = 2
-        elif z == 'black':
-            b_of_p[p] = 2
+        za = team_zone_p2.get((pg.get('divName'), pg.get('t1')))
+        zb = team_zone_p2.get((pg.get('divName'), pg.get('t2')))
+        w_of_p[p] = (1 if za == 'white' else 0) + (1 if zb == 'white' else 0)
+        b_of_p[p] = (1 if za == 'black' else 0) + (1 if zb == 'black' else 0)
     for venue, venue_courts in courts_by_venue_p2.items():
         if venue in shuttle_exempt_p2:
             continue

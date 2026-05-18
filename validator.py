@@ -826,22 +826,26 @@ def _hr_finals_atmosphere(ctx, recs):
 
 def _hr_shuttle_balance(ctx, recs):
     """Per (venue, day, slot) shuttle balance — White vs Black team counts.
-    Mirrors the solver's soft term: each game contributes 2 teams of its
-    division's zone. Exempt venues (where the reachable pool is single-zone,
-    e.g. Pineda) are skipped. Slots with no zoned teams at all (all divisions
-    unset) are excluded from the totals."""
-    div_zone = ctx.get('div_zone', {}) or {}
+    Mirrors the solver's soft term: each team contributes 1 to its zone (or
+    0 if unset). Exempt venues (where the reachable pool is single-zone,
+    e.g. Pineda) are skipped. Slots with no zoned teams at all are excluded
+    from the totals."""
+    team_zone = ctx.get('team_zone', {}) or {}
     exempt = ctx.get('shuttle_exempt_venues', set()) or set()
     # (venue, day, slot_min) -> {'white': teams, 'black': teams}
     by_slot = defaultdict(lambda: {'white': 0, 'black': 0})
     for r in recs:
         if not r['venue'] or r['min'] is None or r['venue'] in exempt:
             continue
-        z = div_zone.get(r['div'])
-        if z == 'white':
-            by_slot[(r['venue'], r['day'], r['min'])]['white'] += 2
-        elif z == 'black':
-            by_slot[(r['venue'], r['day'], r['min'])]['black'] += 2
+        key = (r['venue'], r['day'], r['min'])
+        for tm in (r['t1'], r['t2']):
+            if not tm:
+                continue
+            z = team_zone.get((r['div'], tm))
+            if z == 'white':
+                by_slot[key]['white'] += 1
+            elif z == 'black':
+                by_slot[key]['black'] += 1
     perfect = skewed = critical = 0
     drilldown = []
     for (venue, day, slot_min), cnt in by_slot.items():
@@ -866,7 +870,7 @@ def _hr_shuttle_balance(ctx, recs):
                                    x['day'], x['court']))
     total_slots = perfect + skewed + critical
     if total_slots == 0:
-        summary = 'No placements to balance (no divisions have a zone set)'
+        summary = 'No placements to balance (no teams have a zone set)'
     else:
         parts = ['%d of %d slots perfectly balanced' % (perfect, total_slots)]
         if skewed:
