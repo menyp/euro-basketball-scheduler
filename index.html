@@ -1507,14 +1507,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   // Returns divisions where one group has 4 teams and the other groups have 3
-  // (e.g. a 13-team division produced by an odd team split). The 4th team in
-  // the oversized group ("A4") has no slot in the tiered PO structure and is
-  // given a training game on the last day with a TBD opponent — see the
-  // requiredTrainingGames flow in _buildSolverConfig and _place_training_games
-  // on the backend.
+  // (e.g. a 13-team division produced by an odd team split). The 4th-PLACE
+  // team in the oversized group (determined by RR standings, NOT chip
+  // position) has no slot in the tiered PO structure and is given a training
+  // game on the last day with a TBD opponent. The training game's t1 carries
+  // the placeholder string "4th Group X" through generation; once RR scores
+  // are entered, seedBracketFromStandings resolves it to the actual
+  // last-place team name (same mechanism as the SF placeholders).
   //
-  // Returns: [{ divName, oversizedGroupIdx, extraTeam }]. Empty array means
-  // every division's groups are symmetric.
+  // Returns: [{ divName, oversizedGroupIdx, groupLetter }]. Empty array
+  // means every division's groups are symmetric.
   function findAsymmetricDivisions() {
     var out = [];
     divisions.forEach(function(d) {
@@ -1524,11 +1526,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var size3 = sizes.filter(function(s) { return s === 3; }).length;
       if (size4 !== 1 || size3 !== 3) return;
       var oversizedIdx = sizes.indexOf(4);
-      var grp = d.manualGroups[oversizedIdx];
       out.push({
         divName: d.name,
         oversizedGroupIdx: oversizedIdx,
-        extraTeam: grp[grp.length - 1] // positionally A4
+        groupLetter: String.fromCharCode(65 + oversizedIdx),
       });
     });
     return out;
@@ -3161,10 +3162,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         ? '<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
           + '<span style="font-size:16px">&#x26A0;&#xFE0F;</span>'
           + '<span><strong style="color:#fcd34d">Group sizes differ.</strong>'
-          + ' <span style="color:#cbd5e0">Group ' + String.fromCharCode(65 + _asym.oversizedGroupIdx)
-          + ' has 4 teams; the others have 3. <strong>' + _asym.extraTeam
-          + '</strong> will get a training game on the last day with a TBD opponent —'
-          + ' you\'ll set the opponent manually after generating.'
+          + ' <span style="color:#cbd5e0">Group ' + _asym.groupLetter
+          + ' has 4 teams; the others have 3. The <strong>4th-place team in Group '
+          + _asym.groupLetter + '</strong> (determined after the round-robin is played)'
+          + ' will get a training game on the last day with a TBD opponent —'
+          + ' you\'ll set the opponent manually after the schedule is generated.'
           + ' To avoid this, move a team between groups to balance.</span></span>'
           + '</div>'
         : '';
@@ -4280,12 +4282,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       teamAvailability: teamAvailability,
       teamZones: teamZones,
       // For each asymmetric [4,3,3,3] division, request a training game on
-      // the last day for the "A4" team with a TBD opponent. Backend places
-      // it preferring Blanes; empty/missing field = behave as today.
+      // the last day for the 4th-place team in the oversized group with a
+      // TBD opponent. t1 carries a placeholder string ('4th Group X') that
+      // seedBracketFromStandings resolves once RR scores are entered — same
+      // mechanism the bracket uses for '1st Group A' etc. Backend places the
+      // slot preferring Blanes; empty/missing field = behave as today.
       requiredTrainingGames: findAsymmetricDivisions().map(function(a) {
         return {
           divName: a.divName,
-          t1: a.extraTeam,
+          t1: '4th Group ' + a.groupLetter,
           t2: 'TBD',
           preferredVenue: 'Blanes',
           day: 'last'
@@ -4490,10 +4495,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (_asyms.length) {
       var _asymItems = _asyms.map(function(a) {
         return '<li><strong>' + _escForHtml(a.divName) + '</strong> — Group '
-             + String.fromCharCode(65 + a.oversizedGroupIdx) + ' has 4 teams;'
-             + ' <strong>' + _escForHtml(a.extraTeam) + '</strong> will get a'
-             + ' training game with a TBD opponent on the last day. You\'ll'
-             + ' set the opponent manually after the schedule is generated.</li>';
+             + a.groupLetter + ' has 4 teams; the <strong>4th-place team'
+             + ' in Group ' + a.groupLetter + '</strong> (determined after'
+             + ' the round-robin is played) will get a training game on the'
+             + ' last day with a TBD opponent. You\'ll set the opponent'
+             + ' manually after the schedule is generated.</li>';
       }).join('');
       var _asymHtml = '<div>Asymmetric groups detected:</div>'
                     + '<ul style="margin:8px 0 10px 18px;padding:0;color:#fff;font-size:12px;line-height:1.7">'
@@ -6936,6 +6942,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function renderSched() {
+    // Resolve any unresolved "Nth Group X" placeholders (asymmetric-group
+    // training games) so the schedule view shows the actual last-place team
+    // as soon as the RR scores are entered. Idempotent — once a placeholder
+    // resolves to a real team name, the regex won't match it again.
+    seedBracketFromStandings();
     var lS = document.getElementById('lS').value || '13:30';
     var lE = document.getElementById('lE').value || '14:30';
     var totTeams = divisions.reduce(function(s, d) { return s + d.teams.length; }, 0);
@@ -9219,30 +9230,37 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   function seedBracketFromStandings() {
     // Resolve placeholder strings like "1st Group A", "2nd Group B" etc.
-    // using per-group standings from computeGroupStandings().
+    // using per-group standings from computeGroupStandings(). Walks the
+    // bracket games AND the trainingGames array (the asymmetric-group
+    // path stores "4th Group X" as a placeholder on the A4 training game).
     var grpSt = computeGroupStandings();
     var ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
     var re = /^(\d+(?:st|nd|rd|th)) Group ([A-Z])$/;
-    if (!sched.bracketDays) return;
-    sched.bracketDays.forEach(function(day) {
-      day.divs.forEach(function(d) {
-        var divGrpSt = grpSt[d.name];
-        if (!divGrpSt) return;
-        d.games.forEach(function(game) {
-          ['t1', 't2'].forEach(function(field) {
-            var val = game[field];
-            if (!val) return;
-            var m = val.match(re);
-            if (!m) return;
-            var posIdx = ordinals.indexOf(m[1]);
-            if (posIdx === -1) return;
-            var grpLbl = d.name + ' Group ' + m[2];
-            var grp = divGrpSt[grpLbl];
-            if (grp && grp.complete && grp.order[posIdx]) game[field] = grp.order[posIdx];
-          });
+    function resolveOn(game, divName) {
+      var divGrpSt = grpSt[divName];
+      if (!divGrpSt) return;
+      ['t1', 't2'].forEach(function(field) {
+        var val = game[field];
+        if (!val) return;
+        var m = val.match(re);
+        if (!m) return;
+        var posIdx = ordinals.indexOf(m[1]);
+        if (posIdx === -1) return;
+        var grpLbl = divName + ' Group ' + m[2];
+        var grp = divGrpSt[grpLbl];
+        if (grp && grp.complete && grp.order[posIdx]) game[field] = grp.order[posIdx];
+      });
+    }
+    if (sched.bracketDays) {
+      sched.bracketDays.forEach(function(day) {
+        day.divs.forEach(function(d) {
+          d.games.forEach(function(game) { resolveOn(game, d.name); });
         });
       });
-    });
+    }
+    if (sched.trainingGames) {
+      sched.trainingGames.forEach(function(tg) { resolveOn(tg, tg.divName); });
+    }
   }
 
   // ── Score input/edit listeners ─────────────────────────
