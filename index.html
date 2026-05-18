@@ -161,6 +161,8 @@ footer span{color:var(--o)}
 .toast{pointer-events:all;display:flex;align-items:flex-start;gap:12px;background:#1a1a2e;border:1px solid;border-radius:10px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:'Montserrat',sans-serif;font-size:13px;line-height:1.5;animation:toastIn .25s cubic-bezier(.21,1.02,.73,1) both;min-width:320px;max-width:600px}
 .toast.toast-error{border-color:#ef4444;box-shadow:0 8px 32px rgba(239,68,68,.25)}
 .toast.toast-warn{border-color:#f59e0b;box-shadow:0 8px 32px rgba(245,158,11,.2)}
+.toast.toast-info{border-color:#3b82f6;box-shadow:0 8px 32px rgba(59,130,246,.2)}
+.toast.toast-success{border-color:#10b981;box-shadow:0 8px 32px rgba(16,185,129,.2)}
 .toast-icon{font-size:20px;line-height:1;flex-shrink:0;margin-top:1px}
 .toast-body{flex:1}
 .toast-title{font-weight:800;color:#fff;margin-bottom:3px;letter-spacing:.3px}
@@ -965,7 +967,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // ── Parse teams ────────────────────────────────────────
   function parseTeams() {
     var raw = document.getElementById('pasteBox').value.trim();
-    if (!raw) { alert('Please paste your team list first!'); return false; }
+    if (!raw) { showToast('Team list missing', 'Paste your team list first.', 'warn'); return false; }
     var parsed = [];
     raw.split('\n').forEach(function (line, li) {
       line = line.trim();
@@ -976,7 +978,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var teams = line.substring(ci + 1).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
       if (divName && teams.length) parsed.push({ name: divName, color: DIV_COLORS[li % DIV_COLORS.length], teams: teams });
     });
-    if (!parsed.length) { alert('Could not parse divisions. Format: "Boys U12: Team1, Team2"'); return false; }
+    if (!parsed.length) { showToast('Could not parse divisions', 'Use the format <code>Boys U12: Team1, Team2</code> — one division per line.', 'error'); return false; }
     divisions = parsed;
     renderDivisions();
     return true;
@@ -1407,11 +1409,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function showToast(title, msg, type, sticky) {
-    // type: 'error' | 'warn'
+    // type: 'error' (default) | 'warn' | 'info' | 'success'
     var stack = document.getElementById('toast-stack');
     if (!stack) return;
     var id = 'toast-' + (++_toastSeq);
-    var icon = type === 'warn' ? '\u26A0\uFE0F' : '\u274C';
+    var icon = type === 'warn'    ? '\u26A0\uFE0F'    // \u26A0\uFE0F
+             : type === 'info'    ? '\u2139\uFE0F'    // \u2139\uFE0F
+             : type === 'success' ? '\u2705'          // \u2705
+             :                       '\u274C';        // \u274C (error default)
     var el = document.createElement('div');
     el.id = id;
     el.className = 'toast toast-' + (type || 'error');
@@ -3218,7 +3223,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       if (!name) return;
       name = name.trim(); if (!name) return;
       // prevent duplicates
-      if (divisions[di].teams.indexOf(name) !== -1) { alert('Team already exists'); return; }
+      if (divisions[di].teams.indexOf(name) !== -1) { showToast('Team already exists', name + ' is already in this division.', 'warn'); return; }
       divisions[di].manualGroups[gi].push(name);
       divisions[di].teams.push(name); // keep teams[] in sync with manualGroups
       renderGroups();
@@ -4412,9 +4417,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   document.getElementById('genBtn').addEventListener('click', function () {
-    if (!divisions.length) { alert('Please parse your team list first!'); return; }
+    if (!divisions.length) { showToast('Team list missing', 'Parse your team list first.', 'warn'); return; }
     var crts = getCourts();
-    if (!crts.length) { alert('Please add at least 1 venue!'); return; }
+    if (!crts.length) { showToast('No venues set', 'Add at least 1 venue before generating.', 'warn'); return; }
     // Guard: block generation if any division has duplicate team names
     if (!validateNoDuplicates()) return;
     // Ensure groups are mixed before generation (runs applyNationalMixing if groups haven't
@@ -7341,7 +7346,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   // ── Export: CSV ───────────────────────────────────────
   function exportScheduleToCSV() {
-    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    if (!sched.gameDays) { showToast('No schedule yet', 'Generate a schedule first.', 'warn'); return; }
     var rows = [['Day', 'Time', 'Division', 'Group / Bracket', 'Home', 'Away', 'Court', 'Type']];
     sched.gameDays.forEach(function(day) {
       day.divs.forEach(function(d) {
@@ -7773,9 +7778,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function exportScheduleToXLSX() {
-    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    if (!sched.gameDays) { showToast('No schedule yet', 'Generate a schedule first.', 'warn'); return; }
     if (typeof XLSX === 'undefined') {
-      alert('Excel export library failed to load.\nCheck your internet connection or use Export CSV instead.');
+      showToast('Excel library failed to load', 'Check your internet connection or use <strong>Export CSV</strong> instead.', 'error', true);
       return;
     }
 
@@ -7844,7 +7849,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   // ── Print: Court Grid (landscape, day per page) ───────
   function printCourtGrid() {
-    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    if (!sched.gameDays) { showToast('No schedule yet', 'Generate a schedule first.', 'warn'); return; }
     var courts = sched.courts || getCourts();
     var lunchStart = (document.getElementById('lS') || {}).value || '';
     var lunchEnd   = (document.getElementById('lE') || {}).value || '';
@@ -7970,7 +7975,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + body + '</body></html>';
 
     var w = window.open('', '_blank');
-    if (!w) { alert('Pop-up blocked. Allow pop-ups for this page and try again.'); return; }
+    if (!w) { showToast('Pop-up blocked', 'Allow pop-ups for this page and try again.', 'error', true); return; }
     w.document.write(html);
     w.document.close();
     w.focus();
@@ -7978,7 +7983,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   // ── Print: By Division (portrait, one page per division) ─
   function printByDivision() {
-    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    if (!sched.gameDays) { showToast('No schedule yet', 'Generate a schedule first.', 'warn'); return; }
 
     function escH(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -8082,7 +8087,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         + '</div>';
     });
 
-    if (!body) { alert('No game data to print.'); return; }
+    if (!body) { showToast('Nothing to print', 'No game data is available for printing.', 'warn'); return; }
 
     var css = '@page{size:A4 portrait;margin:15mm}'
       + 'body{font-family:Arial,sans-serif;font-size:11px;color:#111}'
@@ -8108,7 +8113,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + body + '</body></html>';
 
     var w = window.open('', '_blank');
-    if (!w) { alert('Pop-up blocked. Allow pop-ups for this page and try again.'); return; }
+    if (!w) { showToast('Pop-up blocked', 'Allow pop-ups for this page and try again.', 'error', true); return; }
     w.document.write(html);
     w.document.close();
     w.focus();
@@ -8157,7 +8162,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function exportScheduleToJSON() {
-    if (!sched.gameDays) { alert('No schedule generated yet.'); return; }
+    if (!sched.gameDays) { showToast('No schedule yet', 'Generate a schedule first.', 'warn'); return; }
     var payload = JSON.stringify(buildSnapshot(), null, 2);
     var blob = new Blob([payload], { type: 'application/json;charset=utf-8;' });
     var url  = URL.createObjectURL(blob);
@@ -8472,9 +8477,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     reader.onload = function(e) {
       try {
         var data = JSON.parse(e.target.result);
-        if (!data.sched || !data.sched.gameDays) { alert('Invalid schedule file.'); return; }
+        if (!data.sched || !data.sched.gameDays) { showToast('Invalid schedule file', 'This file does not contain a valid schedule.', 'error', true); return; }
         loadSnapshot(data);
-      } catch(ex) { alert('Could not parse file: ' + ex.message); }
+      } catch(ex) { showToast('Could not parse file', escHtml(ex.message), 'error', true); }
     };
     reader.readAsText(file);
   }
@@ -8838,11 +8843,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     name = name.trim();
     if (!name) return;
     var div = divisions.find(function(d){ return d.name === divName; });
-    if (!div) { alert('Division not found: ' + divName); return; }
-    if (div.teams.indexOf(name) !== -1) { alert('Team already exists in division'); return; }
+    if (!div) { showToast('Division not found', escHtml(divName), 'error'); return; }
+    if (div.teams.indexOf(name) !== -1) { showToast('Team already exists', escHtml(name) + ' is already in ' + escHtml(divName) + '.', 'warn'); return; }
     div.teams.push(name);
     // regenerate schedule to apply change
-    alert('Team added. Regenerating schedule to include the new team.');
+    showToast('Team added', 'Regenerating the schedule to include the new team.', 'success');
     document.getElementById('genBtn').click();
   }
 
@@ -9265,15 +9270,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var divName = e.target.dataset.div;
     var gk = e.target.dataset.gk;
     var divDef = divisions.find(function(d){ return d.name === divName; });
-    if (!divDef) { alert('Division not found'); return; }
+    if (!divDef) { showToast('Division not found', 'Could not locate the target division.', 'error'); return; }
     var promptLabel = 'Add team to ' + divName + (gk ? ' - ' + gk : '');
     var team = prompt(promptLabel + '\n\nEnter full team name (e.g. "New Team (ESP)"):');
     if (!team) return;
     team = team.trim();
     if (!team) return;
-    if (divDef.teams.indexOf(team) !== -1) { alert('Team already exists in this division.'); return; }
+    if (divDef.teams.indexOf(team) !== -1) { showToast('Team already exists', escHtml(team) + ' is already in this division.', 'warn'); return; }
     divDef.teams.push(team);
-    alert('Team added. Regenerating schedule...');
+    showToast('Team added', 'Regenerating the schedule…', 'success');
     // trigger generation to rebuild groups and schedule
     var genBtn = document.getElementById('genBtn');
     if (genBtn) genBtn.click();
