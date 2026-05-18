@@ -242,6 +242,90 @@ def _place_training_games(assembled, blank_pairs, ctx):
     return training_games, remaining
 
 
+def _place_required_training_games(assembled, ctx):
+    """Place explicit training-game requests from the frontend (asymmetric
+    [4,3,3,3] divisions where the 4th team in the oversized group has no
+    PO slot and needs a training game with a TBD opponent).
+
+    Each request is placed on its requested day (default: last day) preferring
+    its requested venue. If the preferred venue has no free slot on the day,
+    falls back to the venue with the most empty slots on that day.
+
+    Returns list of training-game dicts (same shape as _place_training_games).
+    """
+    required = ctx.get('required_training_games') or []
+    if not required:
+        return []
+
+    sched = assembled.get('sched', {})
+    courts = ctx['courts']
+    day_slots = ctx['day_slots']
+    n_days = ctx['n_days']
+
+    # Build occupied set (mirrors _place_training_games).
+    occupied = set()
+    for d_blk in sched.get('gameDays', []):
+        d = d_blk.get('dayIndex')
+        if d is None: continue
+        for divb in d_blk.get('divs', []):
+            game_lists = []
+            if divb.get('groups'):
+                for gv in divb['groups'].values():
+                    game_lists.append(gv.get('games', []))
+            elif divb.get('games'):
+                game_lists.append(divb['games'])
+            for games in game_lists:
+                for g in games:
+                    occupied.add((d, g.get('time', ''), g.get('court', '')))
+
+    placed = []
+    for req in required:
+        day = n_days - 1 if req.get('day', 'last') == 'last' else int(req['day'])
+        pref_venue = (req.get('preferredVenue') or '').lower()
+
+        # Score each court: 0 if its venue matches the preferred venue, 1 else.
+        # Within each tier, prefer courts with more free slots so we can land
+        # the game without crowding a busy venue.
+        free_per_court = []
+        for c_idx, c in enumerate(courts):
+            free = 0
+            for s_min in day_slots[day]:
+                t_str = _min_to_time(s_min)
+                if (day, t_str, c['name']) in occupied: continue
+                if _is_blacked_out(ctx, c_idx, day, s_min): continue
+                free += 1
+            if free > 0:
+                tier = 0 if c['venue'].lower() == pref_venue else 1
+                free_per_court.append((tier, -free, c_idx, c))
+
+        free_per_court.sort()
+        slot_placed = False
+        for _, _, c_idx, c in free_per_court:
+            for s_min in day_slots[day]:
+                t_str = _min_to_time(s_min)
+                if (day, t_str, c['name']) in occupied: continue
+                if _is_blacked_out(ctx, c_idx, day, s_min): continue
+                occupied.add((day, t_str, c['name']))
+                placed.append({
+                    'day':      day,
+                    'divName':  req['divName'],
+                    't1':       req['t1'],
+                    't2':       req['t2'],
+                    'time':     t_str,
+                    'court':    c['name'],
+                    'loc':      c['venue'],
+                    'isTraining': True,
+                })
+                slot_placed = True
+                break
+            if slot_placed: break
+        # If absolutely no slot is free on the requested day (unlikely), the
+        # request is silently dropped — the admin will see no training game
+        # for that team and can resolve manually.
+
+    return placed
+
+
 def _apply_no_blank_day_check(assembled, ctx):
     """Run post-hoc no-blank-day detection on the assembled schedule.
 
@@ -249,14 +333,20 @@ def _apply_no_blank_day_check(assembled, ctx):
     surviving blanks are auto-filled by training games where pairable
     (same-division, same-day). Leftover unpairable blanks (odd-team-out
     or no free slot) are attached as warnings for manual admin handling.
-    Rule disabled: pass-through.
+
+    Also places explicit training-game requests from the frontend (asymmetric
+    group cases) — those run unconditionally, regardless of rule_no_blank_day.
     """
+    required_games = _place_required_training_games(assembled, ctx)
     if not ctx.get('rule_no_blank_day', False):
+        if required_games:
+            sched = assembled.setdefault('sched', {})
+            sched['trainingGames'] = required_games
         return assembled
     blank_pairs = _detect_blank_days(assembled, ctx['divisions'], ctx['n_days'])
     training_games, remaining = _place_training_games(assembled, blank_pairs, ctx)
     sched = assembled.setdefault('sched', {})
-    sched['trainingGames'] = training_games
+    sched['trainingGames'] = required_games + training_games
     sched['noBlankDayWarnings'] = remaining
     return assembled
 
@@ -743,6 +833,25 @@ def _build_context(config):
             venue_zones[courts[ci]['venue']].add(zone)
     shuttle_exempt_venues = {v for v, zs in venue_zones.items() if len(zs) < 2}
 
+    # Per-division training-game requests sent by the frontend for asymmetric
+    # group cases (a 4-team group beside three 3-team groups produces a 4th
+    # team with no slot in the tiered playoff bracket — it gets a training
+    # game on the last day with a TBD opponent). Validated lightly here;
+    # placement happens in _apply_no_blank_day_check.
+    _req_in = config.get('requiredTrainingGames') or []
+    required_training_games = []
+    for r in _req_in:
+        if not isinstance(r, dict): continue
+        t1 = (r.get('t1') or '').strip()
+        if not t1: continue
+        required_training_games.append({
+            'divName':         (r.get('divName') or '').strip(),
+            't1':              t1,
+            't2':              (r.get('t2') or 'TBD').strip() or 'TBD',
+            'preferredVenue':  (r.get('preferredVenue') or '').strip(),
+            'day':             r.get('day', 'last'),
+        })
+
     return {
         'config': config, 'divisions': divisions, 'sites_cfg': sites_cfg,
         'courts': courts, 'num_courts': num_courts,
@@ -751,6 +860,7 @@ def _build_context(config):
         'max_gpd': max_gpd,
         'rule_rest': rule_rest, 'rule_venue_rest': rule_venue_rest,
         'rule_no_blank_day': rule_no_blank_day,
+        'required_training_games': required_training_games,
         'main_venue_final': main_venue_final, 'main_venue_3rd': main_venue_3rd,
         'main_venue_sf': main_venue_sf,
         'main_venue_final_mode': main_venue_final_mode,

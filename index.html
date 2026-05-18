@@ -1506,6 +1506,34 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return offenders;
   }
 
+  // Returns divisions where one group has 4 teams and the other groups have 3
+  // (e.g. a 13-team division produced by an odd team split). The 4th team in
+  // the oversized group ("A4") has no slot in the tiered PO structure and is
+  // given a training game on the last day with a TBD opponent — see the
+  // requiredTrainingGames flow in _buildSolverConfig and _place_training_games
+  // on the backend.
+  //
+  // Returns: [{ divName, oversizedGroupIdx, extraTeam }]. Empty array means
+  // every division's groups are symmetric.
+  function findAsymmetricDivisions() {
+    var out = [];
+    divisions.forEach(function(d) {
+      if (!d.manualGroups || d.manualGroups.length !== 4) return;
+      var sizes = d.manualGroups.map(function(g) { return (g || []).length; });
+      var size4 = sizes.filter(function(s) { return s === 4; }).length;
+      var size3 = sizes.filter(function(s) { return s === 3; }).length;
+      if (size4 !== 1 || size3 !== 3) return;
+      var oversizedIdx = sizes.indexOf(4);
+      var grp = d.manualGroups[oversizedIdx];
+      out.push({
+        divName: d.name,
+        oversizedGroupIdx: oversizedIdx,
+        extraTeam: grp[grp.length - 1] // positionally A4
+      });
+    });
+    return out;
+  }
+
   // Validates manual group sizes. Returns true if all clean, false + toast
   // listing offenders otherwise. Used by genBtn and the Apply button.
   function validateGroupSizes() {
@@ -3123,6 +3151,23 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           + ' teams. Apply and Generate are blocked until rebalanced.</span></span>'
           + '</div>'
         : '';
+      // Asymmetric grouping banner (informational — does NOT block Apply or
+      // Generate). Fires when this division has one 4-team group and three
+      // 3-team groups. The 4th team in the oversized group gets a training
+      // game with a TBD opponent on the last day.
+      var _asyms = findAsymmetricDivisions();
+      var _asym = _asyms.filter(function(a){ return a.divName === d.name; })[0];
+      var asymmetryBanner = _asym
+        ? '<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
+          + '<span style="font-size:16px">&#x26A0;&#xFE0F;</span>'
+          + '<span><strong style="color:#fcd34d">Group sizes differ.</strong>'
+          + ' <span style="color:#cbd5e0">Group ' + String.fromCharCode(65 + _asym.oversizedGroupIdx)
+          + ' has 4 teams; the others have 3. <strong>' + _asym.extraTeam
+          + '</strong> will get a training game on the last day with a TBD opponent —'
+          + ' you\'ll set the opponent manually after generating.'
+          + ' To avoid this, move a team between groups to balance.</span></span>'
+          + '</div>'
+        : '';
       var applyTitle = hasDivDups ? 'Remove duplicate teams first'
                       : hasOversized ? 'Rebalance oversized groups first'
                       : '';
@@ -3134,7 +3179,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           + (blockApply ? ';opacity:.45;cursor:not-allowed' : '') + '"'
           + (applyTitle ? ' title="' + applyTitle + '"' : '') + '>Apply</button>'
         + '</div></div>'
-        + dupDivBanner + oversizedBanner;
+        + dupDivBanner + oversizedBanner + asymmetryBanner;
       html += '<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">';
       d.manualGroups.forEach(function(g, gi){
         // Check for same-country violations in this group
@@ -3275,6 +3320,25 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Returns an array of {t1, t2, lbl, bracket} for the finals day.
   // t1/t2 are placeholder strings like "1st Group A" for SF slots, or '' for
   // games that depend on SF results (3rd Place, Final).
+  // Shared by the 4-groups-of-3 (12-team) and asymmetric [4,3,3,3] (13-team)
+  // bracket paths in getBracketGames. Pushes three tiers (Championship / Silver
+  // / Bronze), each with SF 1 + SF 2 + two medal games. Only the Championship
+  // tier uses 'FINAL'/'3rd Place' (which the solver pins to Blanes + late
+  // slot); lower tiers use placement labels so they're treated as consolation.
+  function _pushTieredFourGroupOf3(matchups) {
+    var tiers = [
+      { name: 'Championship (1st–4th)', pos: '1st', medals: ['3rd Place', 'FINAL']    },
+      { name: 'Silver (5th–8th)',        pos: '2nd', medals: ['5th/6th',   '7th/8th']  },
+      { name: 'Bronze (9th–12th)',       pos: '3rd', medals: ['9th/10th',  '11th/12th'] }
+    ];
+    tiers.forEach(function(t) {
+      matchups.push({ t1: t.pos + ' Group A', t2: t.pos + ' Group B', lbl: 'SF 1',      bracket: t.name });
+      matchups.push({ t1: t.pos + ' Group C', t2: t.pos + ' Group D', lbl: 'SF 2',      bracket: t.name });
+      matchups.push({ t1: '',                  t2: '',                  lbl: t.medals[0], bracket: t.name });
+      matchups.push({ t1: '',                  t2: '',                  lbl: t.medals[1], bracket: t.name });
+    });
+  }
+
   function getBracketGames(div) {
     var groups = div.manualGroups && div.manualGroups.length
       ? div.manualGroups
@@ -3312,20 +3376,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         matchups.push({ t1: '4th Group A', t2: '4th Group B', lbl: '7th Place', bracket: '7th Place' });
       }
     } else if (G === 4 && maxGrpSize <= 3) {
-      // 12-team (4 groups of 3): Championship / 5th-8th / 9th-12th
-      // Only the Championship tier uses 'FINAL'/'3rd Place' (Blanes + isLate).
-      // Lower tiers use placement labels so they are treated as consolation games.
-      var tiers = [
-        { name: 'Championship (1st\u20134th)', pos: '1st', medals: ['3rd Place', 'FINAL']    },
-        { name: 'Silver (5th\u20138th)',        pos: '2nd', medals: ['5th/6th',   '7th/8th']  },
-        { name: 'Bronze (9th\u201312th)',       pos: '3rd', medals: ['9th/10th',  '11th/12th'] }
-      ];
-      tiers.forEach(function(t) {
-        matchups.push({ t1: t.pos + ' Group A', t2: t.pos + ' Group B', lbl: 'SF 1',       bracket: t.name });
-        matchups.push({ t1: t.pos + ' Group C', t2: t.pos + ' Group D', lbl: 'SF 2',       bracket: t.name });
-        matchups.push({ t1: '',                  t2: '',                  lbl: t.medals[0],  bracket: t.name });
-        matchups.push({ t1: '',                  t2: '',                  lbl: t.medals[1],  bracket: t.name });
-      });
+      // 12-team (4 groups of 3): tiered Championship / Silver / Bronze brackets.
+      _pushTieredFourGroupOf3(matchups);
+    } else if (G === 4 && maxGrpSize === 4
+               && groups.filter(function(g){ return g.length === 4; }).length === 1) {
+      // Asymmetric (13-team): one group of 4, three of 3 \u2014 happens when a team
+      // splits mid-tournament. A1/A2/A3 slot into the same tiered structure as
+      // a symmetric 12-team division; A4 has no bracket entry and is given a
+      // training game on the last day with a TBD opponent (see
+      // requiredTrainingGames in _buildSolverConfig).
+      _pushTieredFourGroupOf3(matchups);
     } else if (G === 4 && maxGrpSize >= 4) {
       // 16-team (4 groups of 4): Championship + consolation pairs per rank
       matchups.push({ t1: '1st Group A', t2: '1st Group B', lbl: 'SF 1',      bracket: 'Championship (1st\u20134th)' });
@@ -4219,6 +4279,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
       teamZones: teamZones,
+      // For each asymmetric [4,3,3,3] division, request a training game on
+      // the last day for the "A4" team with a TBD opponent. Backend places
+      // it preferring Blanes; empty/missing field = behave as today.
+      requiredTrainingGames: findAsymmetricDivisions().map(function(a) {
+        return {
+          divName: a.divName,
+          t1: a.extraTeam,
+          t2: 'TBD',
+          preferredVenue: 'Blanes',
+          day: 'last'
+        };
+      }),
     };
   }
 
@@ -4392,7 +4464,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       xhr.send(JSON.stringify(config));
     }
 
-    if (_unsetTeams.length) {
+    // Chained pre-solve confirms: asymmetric groups first, then unset zones,
+    // then proceed. Each Cancel preserves all setup state (no DOM mutation).
+    function _runZonesCheck() {
+      if (!_unsetTeams.length) { _proceed(); return; }
       var _items = _unsetTeams.slice(0, 8).map(function(e) {
         return '<li>' + _escForHtml(e.team) + '  <span style="color:#8892a4">[' + _escForHtml(e.div) + ']</span></li>';
       }).join('');
@@ -4409,8 +4484,29 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         okLabel:     'Generate anyway',
         cancelLabel: 'Go back and set zones'
       }, function(ok) { if (ok) _proceed(); });
+    }
+
+    var _asyms = findAsymmetricDivisions();
+    if (_asyms.length) {
+      var _asymItems = _asyms.map(function(a) {
+        return '<li><strong>' + _escForHtml(a.divName) + '</strong> — Group '
+             + String.fromCharCode(65 + a.oversizedGroupIdx) + ' has 4 teams;'
+             + ' <strong>' + _escForHtml(a.extraTeam) + '</strong> will get a'
+             + ' training game with a TBD opponent on the last day. You\'ll'
+             + ' set the opponent manually after the schedule is generated.</li>';
+      }).join('');
+      var _asymHtml = '<div>Asymmetric groups detected:</div>'
+                    + '<ul style="margin:8px 0 10px 18px;padding:0;color:#fff;font-size:12px;line-height:1.7">'
+                    + _asymItems + '</ul>'
+                    + '<div style="color:#ffd494">Cancel to rebalance the groups in the Groups tab, or continue with this layout.</div>';
+      appConfirm({
+        title:       'Group sizes differ',
+        message:     _asymHtml,
+        okLabel:     'Continue',
+        cancelLabel: 'Cancel and rebalance'
+      }, function(ok) { if (ok) _runZonesCheck(); });
     } else {
-      _proceed();
+      _runZonesCheck();
     }
   }
 
