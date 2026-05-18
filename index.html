@@ -680,6 +680,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   </div>
 </div>
 
+<!-- Reusable in-app confirm dialog (replaces native browser confirm()).
+     Driven by the appConfirm({title,message,okLabel,cancelLabel,danger}, cb) helper. -->
+<div id="appConfirmModal" class="modal-overlay">
+  <div class="modal-card" style="max-width:540px">
+    <h3 id="appConfirmTitle" style="margin:0 0 12px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;color:#fff;text-transform:uppercase;letter-spacing:1px">Confirm</h3>
+    <div id="appConfirmBody" style="font-size:13px;color:#cbd5e0;line-height:1.6;margin:0 0 20px;max-height:55vh;overflow-y:auto"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="appConfirmCancel" type="button">Cancel</button>
+      <button class="modal-btn confirm" id="appConfirmOk" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
 <div id="auditModal" class="modal-overlay">
   <div class="modal-card modal-wide" style="max-width:760px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -1354,6 +1367,45 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   var _toastSeq = 0;
   // Pass `sticky=true` for toasts that must stay on screen until the admin
   // clicks × (e.g. the JSON import fix summary — easy to miss in 6 seconds).
+  // In-app confirm dialog — drop-in replacement for native confirm() that
+  // matches the rest of the app's modal styling. Callback-based since native
+  // confirm() is synchronous and we can't do that without freezing the UI.
+  //   appConfirm({title, message, okLabel, cancelLabel, danger}, function(ok){...})
+  // `message` is rendered as HTML (use \n + white-space:pre-wrap if you want
+  // plain-text line breaks). `danger:true` paints the OK button red.
+  function appConfirm(opts, callback) {
+    opts = opts || {};
+    var modal = document.getElementById('appConfirmModal');
+    if (!modal) {
+      // Defensive fallback: shouldn't happen since the modal is in the static
+      // HTML, but if anything strips it we fall back to native confirm rather
+      // than blocking the user entirely.
+      if (typeof callback === 'function') {
+        callback(window.confirm((opts.title ? opts.title + '\n\n' : '')
+          + (opts.message || '').replace(/<[^>]+>/g, '')));
+      }
+      return;
+    }
+    document.getElementById('appConfirmTitle').textContent = opts.title || 'Confirm';
+    document.getElementById('appConfirmBody').innerHTML = opts.message || '';
+    var okBtn     = document.getElementById('appConfirmOk');
+    var cancelBtn = document.getElementById('appConfirmCancel');
+    okBtn.textContent     = opts.okLabel     || 'OK';
+    cancelBtn.textContent = opts.cancelLabel || 'Cancel';
+    okBtn.style.background = opts.danger ? '#c53030' : '';   // '' falls back to .modal-btn.confirm orange
+    function cleanup() {
+      modal.classList.remove('active');
+      okBtn.onclick = null;
+      cancelBtn.onclick = null;
+      okBtn.style.background = '';
+    }
+    okBtn.onclick     = function() { cleanup(); if (callback) callback(true);  };
+    cancelBtn.onclick = function() { cleanup(); if (callback) callback(false); };
+    modal.classList.add('active');
+    // Focus OK by default so Enter confirms; admin can still Tab to Cancel.
+    setTimeout(function() { try { okBtn.focus(); } catch (e) {} }, 0);
+  }
+
   function showToast(title, msg, type, sticky) {
     // type: 'error' | 'warn'
     var stack = document.getElementById('toast-stack');
@@ -4171,135 +4223,163 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         }
       });
     });
-    if (_unsetTeams.length) {
-      var _preview = _unsetTeams.slice(0, 8).map(function(e) {
-        return '  • ' + e.team + '  [' + e.div + ']';
-      }).join('\n');
-      var _more = _unsetTeams.length > 8 ? '\n  … +' + (_unsetTeams.length - 8) + ' more' : '';
-      var _msg = _unsetTeams.length + ' team(s) have no shuttle zone:\n\n'
-               + _preview + _more + '\n\n'
-               + 'These teams will be EXCLUDED from the shuttle balance rule.\n\n'
-               + 'OK = generate anyway. Cancel = go back and set their zones first.';
-      if (!confirm(_msg)) {
-        return;   // admin chose to fix zones first — bail before any solve
-      }
-    }
+    function _escForHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    // Show loading state with live timer
-    var genBtn = document.getElementById('genBtn');
-    var origText = genBtn.innerHTML;
-    var _solveStart = Date.now();
-    // Live progress text populated by /api/progress poll (see below).
-    var _solveProgressText = '';
-    var _solveProgressPrev = '';
-    function _escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    var _solveTimer = setInterval(function() {
-      var elapsed = Math.floor((Date.now() - _solveStart) / 1000);
-      var progLine = _solveProgressText
-        ? '<div style="font-size:11px;opacity:.85;margin-top:4px;font-weight:600">' + _escHtml(_solveProgressText) + '</div>'
-        : '';
-      var prevLine = _solveProgressPrev
-        ? '<div style="font-size:11px;opacity:.6;margin-top:1px">prev: ' + _escHtml(_solveProgressPrev) + '</div>'
-        : '';
+    // Everything that actually kicks off the solve lives here so the
+    // unset-zones confirm (async via appConfirm) can call it on OK.
+    function _proceed() {
+      // Show loading state with live timer
+      var genBtn = document.getElementById('genBtn');
+      var origText = genBtn.innerHTML;
+      var _solveStart = Date.now();
+      // Live progress text populated by /api/progress poll (see below).
+      var _solveProgressText = '';
+      var _solveProgressPrev = '';
+      var _solveTimer = setInterval(function() {
+        var elapsed = Math.floor((Date.now() - _solveStart) / 1000);
+        var progLine = _solveProgressText
+          ? '<div style="font-size:11px;opacity:.85;margin-top:4px;font-weight:600">' + _escForHtml(_solveProgressText) + '</div>'
+          : '';
+        var prevLine = _solveProgressPrev
+          ? '<div style="font-size:11px;opacity:.6;margin-top:1px">prev: ' + _escForHtml(_solveProgressPrev) + '</div>'
+          : '';
+        genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
+          + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
+          + '<div style="font-size:12px;opacity:.8;margin-top:2px">'
+          + elapsed + 's elapsed — typically takes 60–300s</div>'
+          + progLine
+          + prevLine
+          + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px;overflow:hidden">'
+          + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 300 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
+          + '</div></div>';
+      }, 1000);
+      // Poll the server every 2s for live iteration/phase info.
+      var _progressPollTimer = setInterval(function() {
+        fetch('/api/progress', { cache: 'no-store' })
+          .then(function(r) { return r.json(); })
+          .then(function(p) {
+            if (!p || !p.active) { _solveProgressText = ''; return; }
+            var parts = [];
+            if (p.iteration) parts.push('Iteration ' + p.iteration + '/' + (p.max_iterations || 4));
+            if (p.phase) parts.push(p.phase);
+            _solveProgressText = parts.join(' • ');
+            _solveProgressPrev = p.last_result || '';
+          })
+          .catch(function() { /* ignore transient poll errors */ });
+      }, 2000);
       genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
         + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
-        + '<div style="font-size:12px;opacity:.8;margin-top:2px">'
-        + elapsed + 's elapsed — typically takes 60–300s</div>'
-        + progLine
-        + prevLine
-        + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px;overflow:hidden">'
-        + '<div style="background:#FF6B00;height:100%;width:' + Math.min(elapsed / 300 * 100, 95) + '%;border-radius:4px;transition:width .5s"></div>'
-        + '</div></div>';
-    }, 1000);
-    // Poll the server every 2s for live iteration/phase info.
-    var _progressPollTimer = setInterval(function() {
-      fetch('/api/progress', { cache: 'no-store' })
-        .then(function(r) { return r.json(); })
-        .then(function(p) {
-          if (!p || !p.active) { _solveProgressText = ''; return; }
-          var parts = [];
-          if (p.iteration) parts.push('Iteration ' + p.iteration + '/' + (p.max_iterations || 4));
-          if (p.phase) parts.push(p.phase);
-          _solveProgressText = parts.join(' • ');
-          _solveProgressPrev = p.last_result || '';
-        })
-        .catch(function() { /* ignore transient poll errors */ });
-    }, 2000);
-    genBtn.innerHTML = '<div style="text-align:center;line-height:1.3">'
-      + '<div style="font-size:15px;font-weight:700">OPTIMIZING SCHEDULE</div>'
-      + '<div style="font-size:12px;opacity:.8;margin-top:2px">Starting CP-SAT solver...</div>'
-      + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px"></div></div>';
-    genBtn.disabled = true;
+        + '<div style="font-size:12px;opacity:.8;margin-top:2px">Starting CP-SAT solver...</div>'
+        + '<div style="background:rgba(255,255,255,.15);border-radius:4px;height:6px;margin-top:6px"></div></div>';
+      genBtn.disabled = true;
 
-    // Cancel button: inserted as a sibling so the admin can abort the
-    // in-flight solve without losing the rest of the setup. We just abort
-    // the xhr on the client; the server-side solve will exit on its own
-    // timeout. The DOM state (divisions, rules, zones) is untouched.
-    var _cancelled = false;
-    var cancelBtn = document.createElement('button');
-    cancelBtn.id = '_cancelGenBtn';
-    cancelBtn.style.cssText = 'margin-top:8px;background:rgba(239,68,68,.12);'
-      + 'color:#fca5a5;padding:8px 16px;border:1px solid rgba(239,68,68,.4);'
-      + 'border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;'
-      + 'width:100%;font-family:Montserrat,sans-serif;letter-spacing:.5px';
-    cancelBtn.innerHTML = '✕ CANCEL GENERATION';
-    cancelBtn.onclick = function() {
-      if (!confirm('Cancel the current schedule generation?\n\n'
-                 + 'Your setup (divisions, rules, zones) will be kept intact — '
-                 + 'you can generate again any time.')) return;
-      _cancelled = true;
-      try { xhr.abort(); } catch (e) {}
-      _stopSolveTimer();
-      showToast('Generation cancelled',
-        'The schedule generation was stopped. Your setup is preserved.',
-        'warn', false);
-    };
-    genBtn.parentNode.insertBefore(cancelBtn, genBtn.nextSibling);
+      // Cancel button: inserted as a sibling so the admin can abort the
+      // in-flight solve without losing the rest of the setup. We just abort
+      // the xhr on the client; the server-side solve will exit on its own
+      // timeout. The DOM state (divisions, rules, zones) is untouched.
+      var _cancelled = false;
+      var cancelBtn = document.createElement('button');
+      cancelBtn.id = '_cancelGenBtn';
+      cancelBtn.style.cssText = 'margin-top:8px;background:rgba(239,68,68,.12);'
+        + 'color:#fca5a5;padding:8px 16px;border:1px solid rgba(239,68,68,.4);'
+        + 'border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;'
+        + 'width:100%;font-family:Montserrat,sans-serif;letter-spacing:.5px';
+      cancelBtn.innerHTML = '✕ CANCEL GENERATION';
+      cancelBtn.onclick = function() {
+        appConfirm({
+          title:       'Cancel generation?',
+          message:     'Your setup — divisions, rules, zones — will be kept intact. '
+                     + 'You can generate again any time.',
+          okLabel:     'Cancel generation',
+          cancelLabel: 'Keep running',
+          danger:      true
+        }, function(ok) {
+          if (!ok) return;
+          _cancelled = true;
+          try { xhr.abort(); } catch (e) {}
+          _stopSolveTimer();
+          showToast('Generation cancelled',
+            'The schedule generation was stopped. Your setup is preserved.',
+            'warn', false);
+        });
+      };
+      genBtn.parentNode.insertBefore(cancelBtn, genBtn.nextSibling);
 
-    function _stopSolveTimer() {
-      clearInterval(_solveTimer);
-      clearInterval(_progressPollTimer);
-      genBtn.innerHTML = origText;
-      genBtn.disabled = false;
-      var cb = document.getElementById('_cancelGenBtn');
-      if (cb && cb.parentNode) cb.parentNode.removeChild(cb);
+      function _stopSolveTimer() {
+        clearInterval(_solveTimer);
+        clearInterval(_progressPollTimer);
+        genBtn.innerHTML = origText;
+        genBtn.disabled = false;
+        var cb = document.getElementById('_cancelGenBtn');
+        if (cb && cb.parentNode) cb.parentNode.removeChild(cb);
+      }
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/generate', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 3300000; // 55 min — matches solverTimeLimit (3000s) + 5 min slack for network/serialization
+      xhr.onload = function() {
+        if (_cancelled) return;
+        _stopSolveTimer();
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.error) {
+            showToast('CP-SAT solver error',
+              _escForHtml(data.error) + '<br/>Falling back to greedy algorithm.',
+              'error', true);
+            _runGreedyGenerate();
+            return;
+          }
+          // Import the solver's result
+          _importSolverResult(data);
+        } catch(e) {
+          showToast('Solver response invalid',
+            'Failed to parse solver response: ' + _escForHtml(e.message)
+            + '<br/>Falling back to greedy algorithm.',
+            'error', true);
+          _runGreedyGenerate();
+        }
+      };
+      xhr.onerror = function() {
+        if (_cancelled) return;
+        _stopSolveTimer();
+        showToast('Server unreachable',
+          'CP-SAT server connection failed.<br/>Falling back to greedy algorithm.',
+          'error', true);
+        _runGreedyGenerate();
+      };
+      xhr.ontimeout = function() {
+        if (_cancelled) return;
+        _stopSolveTimer();
+        showToast('Solver timed out',
+          'CP-SAT solver hit its time limit.<br/>Falling back to greedy algorithm.',
+          'error', true);
+        _runGreedyGenerate();
+      };
+      xhr.onabort = function() { /* user-initiated cancel — cleanup already done */ };
+      xhr.send(JSON.stringify(config));
     }
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/generate', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.timeout = 3300000; // 55 min — matches solverTimeLimit (3000s) + 5 min slack for network/serialization
-    xhr.onload = function() {
-      if (_cancelled) return;
-      _stopSolveTimer();
-      try {
-        var data = JSON.parse(xhr.responseText);
-        if (data.error) {
-          alert('CP-SAT solver error: ' + data.error + '\nFalling back to greedy algorithm.');
-          _runGreedyGenerate();
-          return;
-        }
-        // Import the solver's result
-        _importSolverResult(data);
-      } catch(e) {
-        alert('Failed to parse solver response: ' + e.message + '\nFalling back to greedy algorithm.');
-        _runGreedyGenerate();
-      }
-    };
-    xhr.onerror = function() {
-      if (_cancelled) return;
-      _stopSolveTimer();
-      alert('CP-SAT server connection failed.\nFalling back to greedy algorithm.');
-      _runGreedyGenerate();
-    };
-    xhr.ontimeout = function() {
-      if (_cancelled) return;
-      _stopSolveTimer();
-      alert('CP-SAT solver timed out.\nFalling back to greedy algorithm.');
-      _runGreedyGenerate();
-    };
-    xhr.onabort = function() { /* user-initiated cancel — cleanup already done */ };
-    xhr.send(JSON.stringify(config));
+    if (_unsetTeams.length) {
+      var _items = _unsetTeams.slice(0, 8).map(function(e) {
+        return '<li>' + _escForHtml(e.team) + '  <span style="color:#8892a4">[' + _escForHtml(e.div) + ']</span></li>';
+      }).join('');
+      var _more = _unsetTeams.length > 8
+        ? '<li style="opacity:.7;list-style:none">… +' + (_unsetTeams.length - 8) + ' more</li>'
+        : '';
+      var _html = '<div><strong>' + _unsetTeams.length + ' team(s)</strong> have no shuttle zone:</div>'
+                + '<ul style="margin:8px 0 10px 18px;padding:0;color:#fff;font-size:12px;line-height:1.7">'
+                + _items + _more + '</ul>'
+                + '<div style="color:#ffd494">These teams will be <strong>excluded</strong> from the shuttle balance rule.</div>';
+      appConfirm({
+        title:       'Shuttle zones not set',
+        message:     _html,
+        okLabel:     'Generate anyway',
+        cancelLabel: 'Go back and set zones'
+      }, function(ok) { if (ok) _proceed(); });
+    } else {
+      _proceed();
+    }
   }
 
   function _importSolverResult(data) {
