@@ -7836,7 +7836,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
   // ── Export: Excel (.xlsx) ─────────────────────────────
   // Produces a multi-sheet workbook matching the Blanes 2025 reference format:
-  //   Sheet 1  : GRUPOS FASE PREVIA  — division → groups → teams listing
+  //   Sheet 1  : Group Stage  — division → groups → teams listing
+  //              (legacy export name: "GRUPOS FASE PREVIA")
   //   Sheet 2+ : one per game day    — banner + 13-column timetable
   // Uses SheetJS (xlsx.mini.min.js) loaded via CDN in <head>.
 
@@ -7977,10 +7978,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function _xlsxBuildGroupsSheetWithMap() {
-    // Sheet 1: division-groups-teams listing (matches reference layout)
+    // Sheet 1: division-groups-teams listing. Three columns per team row:
+    // Team | Zone | PAX. Zone is auto-filled from teamZones; PAX is left
+    // blank for manual entry (admins fill in headcount per team later).
     var rows = [];
     var sectionMap = [];
     var totalRR = 0;
+    // (div, team) → 'White' | 'Black' lookup so we can stamp the Zone cell.
+    var zoneMap = {};
+    (teamZones || []).forEach(function(e) {
+      if (e && e.div && e.team && (e.zone === 'white' || e.zone === 'black')) {
+        zoneMap[e.div + '\x00' + e.team] = e.zone === 'white' ? 'White' : 'Black';
+      }
+    });
     divisions.forEach(function(d) {
       var meta = _xlsxParseDivision(d.name);
       var genderLabel = meta.gender === 'FEMALE' ? '(girls)' : (meta.gender === 'MIX' ? '(mix)' : '(boys)');
@@ -7991,9 +8001,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       groups.forEach(function(grp, gi) {
         sectionMap.push({ row: rows.length, kind: 'group' });
         rows.push(['GROUP ' + String.fromCharCode(65 + gi)]);
+        sectionMap.push({ row: rows.length, kind: 'colHeader' });
+        rows.push(['Team', 'Zone', 'PAX']);
         grp.forEach(function(team) {
           sectionMap.push({ row: rows.length, kind: 'team' });
-          rows.push([team]);
+          rows.push([team, zoneMap[d.name + '\x00' + team] || '', '']);
         });
         // Group RR count = n*(n-1)/2
         totalRR += grp.length * (grp.length - 1) / 2;
@@ -8001,7 +8013,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       rows.push([]); // blank separator
     });
     sectionMap.push({ row: rows.length, kind: 'total' });
-    rows.push(['TOTAL FASE PREVIA:', totalRR]);
+    rows.push(['TOTAL GROUP STAGE:', totalRR]);
     return { rows: rows, sectionMap: sectionMap };
   }
 
@@ -8138,6 +8150,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                    alignment:{horizontal:'left',vertical:'center'} },
     grpHeader:   { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'D9E1F2'}},
                    alignment:{horizontal:'left',vertical:'center'} },
+    // Column header row under each GROUP X banner: Team | Zone | PAX.
+    // Slightly lighter than grpHeader so the group banner still reads first.
+    colHeaderCell: { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'F2F2F2'}},
+                     alignment:{horizontal:'left',vertical:'center'},
+                     border:{top:{style:'thin',color:{rgb:'BFBFBF'}}, bottom:{style:'thin',color:{rgb:'BFBFBF'}},
+                             left:{style:'thin',color:{rgb:'BFBFBF'}}, right:{style:'thin',color:{rgb:'BFBFBF'}}} },
     teamRow:     { alignment:{horizontal:'left',vertical:'center'} },
     totalRow:    { font:{name:'Calibri',sz:12,bold:true,color:{rgb:'1F3864'}}, fill:{fgColor:{rgb:'FFE699'}},
                    alignment:{horizontal:'left',vertical:'center'} },
@@ -8214,8 +8232,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function _xlsxStyleGroupsSheet(ws, sectionMap) {
-    // sectionMap: array of {row, kind:'div'|'group'|'team'|'total', mergeCols:bool}
+    // sectionMap: array of {row, kind:'div'|'group'|'colHeader'|'team'|'total'}
     sectionMap.forEach(function(s) {
+      if (s.kind === 'colHeader') {
+        // Three cells: Team | Zone | PAX
+        for (var c = 0; c < 3; c++) {
+          _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:s.row,c:c}),
+                          _XLSX_STYLE.colHeaderCell);
+        }
+        return;
+      }
       var ref = XLSX.utils.encode_cell({r:s.row,c:0});
       var style = _XLSX_STYLE[
         s.kind === 'div'   ? 'divHeader' :
@@ -8223,14 +8249,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         s.kind === 'total' ? 'totalRow'  : 'teamRow'
       ];
       _xlsxApplyStyle(ws, ref, style);
-      // For total row, also style col B (the count)
+      if (s.kind === 'team') {
+        // Style Zone and PAX cells too so they line up with the team name.
+        _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:s.row,c:1}), _XLSX_STYLE.teamRow);
+        _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:s.row,c:2}), _XLSX_STYLE.teamRow);
+      }
       if (s.kind === 'total') {
         _xlsxApplyStyle(ws, XLSX.utils.encode_cell({r:s.row,c:1}), _XLSX_STYLE.totalRow);
       }
     });
 
-    // Set column widths
-    ws['!cols'] = [{ wch: 36 }, { wch: 12 }];
+    // Set column widths: Team is wide; Zone + PAX narrower.
+    ws['!cols'] = [{ wch: 36 }, { wch: 10 }, { wch: 8 }];
   }
 
   function exportScheduleToXLSX() {
@@ -8247,11 +8277,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     var wb = XLSX.utils.book_new();
 
-    // ── Sheet 1: GRUPOS FASE PREVIA ────────────────────
+    // ── Sheet 1: Group Stage ───────────────────────────
     var groupsResult = _xlsxBuildGroupsSheetWithMap();
     var gWs = XLSX.utils.aoa_to_sheet(groupsResult.rows);
     _xlsxStyleGroupsSheet(gWs, groupsResult.sectionMap);
-    XLSX.utils.book_append_sheet(wb, gWs, 'GRUPOS FASE PREVIA');
+    XLSX.utils.book_append_sheet(wb, gWs, 'Group Stage');
 
     // ── Per-day sheets ─────────────────────────────────
     sched.gameDays.forEach(function(day) {
@@ -8969,8 +8999,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     if (!sched || !sched.gameDays || !sched.gameDays.length) {
       throw new Error('Load the original JSON first, then validate the edited Excel.');
     }
-    // Day sheets, in order, excluding the groups sheet.
-    var daySheets = wb.SheetNames.filter(function(sn) { return sn !== 'GRUPOS FASE PREVIA'; });
+    // Day sheets, in order, excluding the groups sheet. We accept both the
+    // current English name and the legacy Spanish "GRUPOS FASE PREVIA" so
+    // already-shared exports still validate after the rename.
+    var daySheets = wb.SheetNames.filter(function(sn) {
+      return sn !== 'Group Stage' && sn !== 'GRUPOS FASE PREVIA';
+    });
 
     // Reverse lookups built from the loaded config / schedule.
     // (category|gender) -> division name
