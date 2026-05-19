@@ -3952,7 +3952,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         return;
       }
       var cgCell = e.target.closest('.cg-game-cell');
-      if (cgCell) {
+      // Skip the move modal when the click was on an inner button (e.g. the
+      // TBD-opponent picker chip on a training game) so the button's own
+      // handler wins.
+      if (cgCell && !e.target.closest('button')) {
         openMoveGameModal(cgCell);
         return;
       }
@@ -6763,7 +6766,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
            +   'cursor:pointer;font-size:inherit;font-family:inherit;font-weight:700">'
            + 'TBD &#x270F;</button>';
     }
-    return t2;
+    // Escape since callers in both list and grid views previously ran their
+    // own escaper on t2 and we now own that step.
+    return escHtml(t2);
   }
 
   // Open the TBD-opponent picker for sched.trainingGames[tgIdx]. Computes
@@ -7173,8 +7178,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     });
     // Training games — placed by the backend on free slots to fill blank
     // days. Render them in the grid alongside real games, but tagged so
-    // the cell shows the TRAINING badge and styling.
-    (sched.trainingGames || []).filter(function(tg) { return tg.day === _gridActiveDay; }).forEach(function(tg) {
+    // the cell shows the TRAINING badge and styling. tgIdx is the index into
+    // sched.trainingGames so the TBD-opponent picker can find this entry.
+    (sched.trainingGames || []).forEach(function(tg, tgIdx) {
+      if (tg.day !== _gridActiveDay) return;
       if (!tg.time || !tg.court) return;
       if (!gameMap[tg.time]) gameMap[tg.time] = {};
       var divDef = (divisions || []).find(function(dd) { return dd.name === tg.divName; });
@@ -7188,7 +7195,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         loc: tg.loc || '',
         dIdx: _gridActiveDay,
         gi: -1, gk: '',
-        isTraining: true
+        isTraining: true,
+        tgIdx: tgIdx
       };
     });
 
@@ -7236,7 +7244,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             + (gm.isTraining ? ' title="Training game (placed to fill a blank day)"' : '') + '>'
             + '<div class="cg-cell-div" style="color:' + (gm.isTraining ? '#94a3b8' : gm.divColor) + '">' + escH(divShort)
             +   (gm.lbl ? ' <span class="cg-cell-label"' + (gm.isTraining ? ' style="color:#94a3b8;border-color:#94a3b8"' : '') + '>' + escH(gm.lbl) + '</span>' : '') + '</div>'
-            + '<div class="cg-cell-teams">' + escH(gm.t1) + '<span class="cg-vs">vs</span>' + escH(gm.t2) + '</div>'
+            + '<div class="cg-cell-teams">' + escH(gm.t1) + '<span class="cg-vs">vs</span>'
+            + (gm.isTraining ? _renderTrainingT2(gm.t2, gm.tgIdx) : escH(gm.t2)) + '</div>'
             + (score ? '<div class="cg-cell-score">' + escH(score) + '</div>' : '')
             + '</td>';
         } else {
