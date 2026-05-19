@@ -239,7 +239,176 @@ def _place_training_games(assembled, blank_pairs, ctx):
             # Odd team — no partner in this division on this day.
             remaining.append({'divName': div_name, 'team': teams_sorted[i], 'day': day})
 
-    return training_games, remaining
+    # Unpaired blanks: instead of leaving them as warnings, place a TBD
+    # training game on the optimal slot — the (time, court) on the blank day
+    # that maximizes the number of viable same-division opponents the admin
+    # can pick later. The picker UI lets them choose; we just put the slot in
+    # the spot that gives them the most (and best) options.
+    extra, still_unhandled = _place_tbd_for_unpaired(remaining, sched, occupied, ctx)
+    training_games.extend(extra)
+    return training_games, still_unhandled
+
+
+def _gather_team_day_games(sched, training_games=None):
+    """Build {(div, team, day): [game_dict_with_time_court_loc, ...]} from the
+    assembled schedule plus any already-placed training games. Used by the
+    opponent-viability scoring below."""
+    out = defaultdict(list)
+    for d_blk in (sched.get('gameDays') or []):
+        d = d_blk.get('dayIndex')
+        if d is None:
+            continue
+        for divb in d_blk.get('divs', []):
+            game_lists = []
+            if divb.get('groups'):
+                for gv in divb['groups'].values():
+                    game_lists.append(gv.get('games', []))
+            elif divb.get('games'):
+                game_lists.append(divb['games'])
+            for games in game_lists:
+                for g in games:
+                    for tm in (g.get('t1'), g.get('t2')):
+                        if not tm:
+                            continue
+                        out[(divb.get('name'), tm, d)].append({
+                            'time': g.get('time', ''),
+                            'court': g.get('court', ''),
+                            'loc':   g.get('loc', ''),
+                        })
+    for tg in (training_games or []):
+        for tm in (tg.get('t1'), tg.get('t2')):
+            if not tm or tm == 'TBD':
+                continue
+            out[(tg.get('divName'), tm, tg.get('day'))].append({
+                'time': tg.get('time', ''),
+                'court': tg.get('court', ''),
+                'loc':   tg.get('loc', ''),
+            })
+    return out
+
+
+def _count_viable_opponents(div, exclude_team, day, slot_min, court_idx, ctx,
+                            team_day_games, occupied, division_teams):
+    """For a candidate (day, slot, court), count same-division teams that
+    could be a viable opponent for `exclude_team`. Returns (count, total_gap)
+    so callers can tie-break on rest quality.
+
+    Viable = not at maxGPD, not already in this slot, and meets the configured
+    rest threshold vs each of their existing same-day games."""
+    courts = ctx['courts']
+    max_gpd = ctx['max_gpd']
+    rule_rest = ctx['rule_rest']
+    rule_venue_rest = ctx['rule_venue_rest']
+    slot_venue = courts[court_idx]['venue']
+    slot_court_name = courts[court_idx]['name']
+
+    count = 0
+    total_gap = 0
+    SENTINEL_FREE_DAY = 24 * 60  # rest gap treated as "max" when team has no games on the day
+
+    for team in division_teams:
+        if team == exclude_team:
+            continue
+        games = team_day_games.get((div, team, day), [])
+        # Skip if team is already in the exact slot (would be double-booked).
+        if any(g['time'] == _min_to_time(slot_min) and g['court'] == slot_court_name for g in games):
+            continue
+        # Skip if at or above maxGPD on this day (training games count).
+        if len(games) >= max_gpd:
+            continue
+        # Check rest vs each of team's games on this day.
+        min_gap = SENTINEL_FREE_DAY
+        rest_ok = True
+        for g in games:
+            other_min = _time_to_min(g['time']) if g['time'] else None
+            if other_min is None:
+                continue
+            gap = abs(other_min - slot_min)
+            same_v = (g['loc'] or '').lower() == slot_venue.lower()
+            if rule_rest and same_v and gap < 180:
+                rest_ok = False
+                break
+            if rule_venue_rest and not same_v and gap < 270:
+                rest_ok = False
+                break
+            if gap < min_gap:
+                min_gap = gap
+        if not rest_ok:
+            continue
+        count += 1
+        total_gap += min_gap
+    return count, total_gap
+
+
+def _place_tbd_for_unpaired(remaining, sched, occupied, ctx):
+    """For each unpaired blank-day team, place a single training game on their
+    blank day at the slot that maximizes viable same-division opponents.
+
+    `occupied` is mutated as each TBD game is placed so subsequent placements
+    see the slot as taken. Returns (placed_games, still_unhandled). If a team
+    has zero free slots on their day at all, they fall through to
+    still_unhandled (the legacy warning path).
+    """
+    if not remaining:
+        return [], []
+    courts = ctx['courts']
+    day_slots = ctx['day_slots']
+    placed = []
+    still = []
+
+    # Pre-compute team-day game lists ONCE; subsequent placements add to it.
+    team_day_games = _gather_team_day_games(sched, training_games=None)
+
+    # Sort by day, division, team for determinism.
+    for entry in sorted(remaining, key=lambda r: (r['day'], r['divName'], r['team'])):
+        team = entry['team']
+        day = entry['day']
+        div = entry['divName']
+        # Same-division roster (skip self).
+        division_teams = []
+        for d_obj in ctx.get('divisions', []):
+            if d_obj.get('name') == div:
+                division_teams = list(d_obj.get('teams') or [])
+                break
+
+        best = None  # (count, total_gap, slot_min, court_idx, t_str, court_name, court_venue)
+        for s_min in day_slots[day]:
+            t_str = _min_to_time(s_min)
+            for c_idx, c in enumerate(courts):
+                if (day, t_str, c['name']) in occupied:
+                    continue
+                if _is_blacked_out(ctx, c_idx, day, s_min):
+                    continue
+                cnt, gap_sum = _count_viable_opponents(
+                    div, team, day, s_min, c_idx, ctx,
+                    team_day_games, occupied, division_teams
+                )
+                key = (cnt, gap_sum, -s_min)  # higher viable, higher rest, earlier slot
+                if best is None or key > (best[0], best[1], -best[2]):
+                    best = (cnt, gap_sum, s_min, c_idx, t_str, c['name'], c['venue'])
+
+        if best is None:
+            # No free slot at all on this day — leave as a warning.
+            still.append(entry)
+            continue
+
+        cnt, gap_sum, s_min, c_idx, t_str, c_name, c_venue = best
+        occupied.add((day, t_str, c_name))
+        tg = {
+            'day':       day,
+            'divName':   div,
+            't1':        team,
+            't2':        'TBD',
+            'time':      t_str,
+            'court':     c_name,
+            'loc':       c_venue,
+            'isTraining': True,
+        }
+        placed.append(tg)
+        # Make the new training game visible to subsequent viability checks.
+        team_day_games[(div, team, day)].append({'time': t_str, 'court': c_name, 'loc': c_venue})
+
+    return placed, still
 
 
 def _place_required_training_games(assembled, ctx):

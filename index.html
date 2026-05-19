@@ -702,6 +702,17 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   </div>
 </div>
 
+<div id="tbdPickerModal" class="modal-overlay">
+  <div class="modal-card" style="max-width:560px">
+    <h3 id="tbdPickerTitle" style="margin:0 0 4px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;color:#fff;text-transform:uppercase;letter-spacing:1px">Pick training opponent</h3>
+    <div id="tbdPickerSub" style="font-size:11px;color:#94a3b8;margin-bottom:14px;line-height:1.5"></div>
+    <div id="tbdPickerList" style="max-height:55vh;overflow-y:auto;margin-bottom:14px"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="tbdPickerCancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="auditModal" class="modal-overlay">
   <div class="modal-card modal-wide" style="max-width:760px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -6738,6 +6749,201 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
 
+  // Render the t2 (opponent) side of a training game. When the opponent is
+  // still the TBD placeholder, render as a clickable chip the admin can use
+  // to pick a real opponent. The unresolved "Nth Group X" placeholders also
+  // get rendered as plain text (they auto-resolve via seedBracketFromStandings
+  // once RR is scored), so we only mark literal "TBD" as clickable.
+  function _renderTrainingT2(t2, tgIdx) {
+    if (t2 === 'TBD' && typeof tgIdx === 'number') {
+      return '<button class="tg-tbd-btn" data-tg-idx="' + tgIdx + '" type="button"'
+           + ' title="Click to set the opponent"'
+           + ' style="background:rgba(255,107,0,.15);border:1px dashed rgba(255,107,0,.6);'
+           +   'color:#FFB070;font-style:italic;padding:1px 8px;border-radius:6px;'
+           +   'cursor:pointer;font-size:inherit;font-family:inherit;font-weight:700">'
+           + 'TBD &#x270F;</button>';
+    }
+    return t2;
+  }
+
+  // Open the TBD-opponent picker for sched.trainingGames[tgIdx]. Computes
+  // viable same-division opponents from the current sched state, sorted by
+  // rest-gap descending (free-day teams first). Teams below the configured
+  // rest threshold are still shown, in red, at the bottom — so the admin
+  // can pick one if they accept the rest hit.
+  function openTbdPicker(tgIdx) {
+    var tg = (sched.trainingGames || [])[tgIdx];
+    if (!tg) return;
+    var div = divisions.find(function(d) { return d.name === tg.divName; });
+    if (!div) {
+      showToast('Division not found', 'Could not load the team list for this division.', 'error');
+      return;
+    }
+    var slotMin = toM(tg.time || '00:00');
+    var slotVenue = (tg.loc || '').toLowerCase();
+    var slotKey = (tg.time || '') + '|' + (tg.court || '');
+    var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
+    var ruleRest = !!document.getElementById('ruleRest').checked;
+    var ruleVenueRest = !!document.getElementById('ruleVenueRest').checked;
+    var REST_SAME = 180, REST_CROSS = 270;
+
+    // Collect every team's games on this day (RR + PO + other training games).
+    var dayGames = {};  // team -> [{ time, court, loc }]
+    function add(team, time, court, loc) {
+      if (!team || team === 'TBD') return;
+      if (!dayGames[team]) dayGames[team] = [];
+      dayGames[team].push({ time: time, court: court, loc: loc });
+    }
+    var dayBlock = (sched.gameDays || [])[tg.day];
+    if (dayBlock) {
+      (dayBlock.divs || []).forEach(function(divBlk) {
+        if (divBlk.name !== tg.divName) return;
+        if (divBlk.games) {
+          divBlk.games.forEach(function(gm) {
+            add(gm.t1, gm.time, gm.court, gm.loc);
+            add(gm.t2, gm.time, gm.court, gm.loc);
+          });
+        }
+        if (divBlk.groups) {
+          Object.keys(divBlk.groups).forEach(function(gk) {
+            (divBlk.groups[gk].games || []).forEach(function(gm) {
+              add(gm.t1, gm.time, gm.court, gm.loc);
+              add(gm.t2, gm.time, gm.court, gm.loc);
+            });
+          });
+        }
+      });
+    }
+    (sched.trainingGames || []).forEach(function(otg, i) {
+      if (i === tgIdx) return;  // skip the slot we're filling
+      if (otg.day !== tg.day || otg.divName !== tg.divName) return;
+      add(otg.t1, otg.time, otg.court, otg.loc);
+      add(otg.t2, otg.time, otg.court, otg.loc);
+    });
+
+    // Score each same-division team.
+    var candidates = [];  // { team, gap, isFree, restOK, atGPD, sameSlot }
+    (div.teams || []).forEach(function(team) {
+      if (team === tg.t1) return;
+      var games = dayGames[team] || [];
+      var atGPD = games.length >= maxGPD;
+      var sameSlot = games.some(function(g) {
+        return (g.time || '') === (tg.time || '') && (g.court || '') === (tg.court || '');
+      });
+      var minGap = games.length === 0 ? Infinity : Infinity;
+      var restOK = true;
+      games.forEach(function(g) {
+        if (!g.time) return;
+        var gap = Math.abs(toM(g.time) - slotMin);
+        var sameV = (g.loc || '').toLowerCase() === slotVenue;
+        if (ruleRest && sameV && gap < REST_SAME) restOK = false;
+        if (ruleVenueRest && !sameV && gap < REST_CROSS) restOK = false;
+        if (gap < minGap) minGap = gap;
+      });
+      candidates.push({
+        team: team,
+        gap: minGap,
+        isFree: games.length === 0,
+        restOK: restOK,
+        atGPD: atGPD,
+        sameSlot: sameSlot
+      });
+    });
+
+    // Sort: viable first (descending gap, free-day = ∞ at top), then non-viable
+    // by reason. Within each bucket, alphabetical.
+    candidates.sort(function(a, b) {
+      var aOK = a.restOK && !a.atGPD && !a.sameSlot;
+      var bOK = b.restOK && !b.atGPD && !b.sameSlot;
+      if (aOK !== bOK) return aOK ? -1 : 1;
+      if (aOK) {
+        // both OK — higher gap first
+        if (a.gap !== b.gap) return b.gap - a.gap;
+      }
+      return a.team.localeCompare(b.team);
+    });
+
+    function fmtGap(g) {
+      if (!isFinite(g)) return 'free on Day ' + (tg.day + 1);
+      var h = Math.floor(g / 60), m = g % 60;
+      return (h ? h + 'h ' : '') + (m ? m + 'm' : (h ? '' : '0m')) + ' rest gap';
+    }
+    function rowHtml(c) {
+      var reason = '';
+      var color = '#94a3b8';
+      var bg = 'rgba(148,163,184,.08)';
+      var disabled = '';
+      if (c.sameSlot) {
+        reason = 'already in this slot';
+        color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
+      } else if (c.atGPD) {
+        reason = 'at daily game limit (' + maxGPD + ')';
+        color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
+      } else if (!c.restOK) {
+        reason = fmtGap(c.gap) + ' — below rest threshold';
+        color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
+      } else if (c.isFree) {
+        reason = 'free on Day ' + (tg.day + 1);
+        color = '#86efac'; bg = 'rgba(16,185,129,.12)';
+      } else {
+        reason = fmtGap(c.gap);
+        color = '#cbd5e0'; bg = 'rgba(255,255,255,.04)';
+      }
+      return '<button class="tbd-pick-row" data-team="' + escHtml(c.team) + '"' + disabled
+           + ' style="display:flex;justify-content:space-between;align-items:center;width:100%;'
+           +   'padding:8px 12px;margin:3px 0;border:1px solid rgba(255,255,255,.08);'
+           +   'border-radius:6px;background:' + bg + ';color:#fff;text-align:left;font-size:13px;'
+           +   'cursor:' + (disabled ? 'not-allowed;opacity:.5' : 'pointer') + ';font-family:inherit">'
+           + '<span style="font-weight:600">' + escHtml(c.team) + '</span>'
+           + '<span style="font-size:11px;color:' + color + ';font-weight:600">' + reason + '</span>'
+           + '</button>';
+    }
+
+    var listHtml = candidates.length
+      ? candidates.map(rowHtml).join('')
+      : '<div style="padding:14px;opacity:.65;font-style:italic;text-align:center">No same-division teams available.</div>';
+
+    var modal = document.getElementById('tbdPickerModal');
+    document.getElementById('tbdPickerTitle').textContent =
+      'Set training opponent for ' + tg.t1;
+    document.getElementById('tbdPickerSub').innerHTML =
+      'Day ' + (tg.day + 1) + ' &middot; ' + escHtml(tg.time) + ' &middot; '
+      + escHtml(tg.court) + ' (' + escHtml(tg.loc) + ') &middot; ' + escHtml(tg.divName)
+      + '<br><span style="opacity:.7">Free-day teams first; teams below the rest threshold are shown but flagged.</span>';
+    document.getElementById('tbdPickerList').innerHTML = listHtml;
+    modal.classList.add('active');
+
+    // Wire selection.
+    var list = document.getElementById('tbdPickerList');
+    list.querySelectorAll('.tbd-pick-row').forEach(function(btn) {
+      btn.onclick = function() {
+        if (btn.disabled) return;
+        var team = btn.dataset.team;
+        sched.trainingGames[tgIdx].t2 = team;
+        modal.classList.remove('active');
+        renderSched();
+        showToast('Opponent set',
+          escHtml(tg.t1) + ' will play <strong>' + escHtml(team) + '</strong> as a training game on Day ' + (tg.day + 1) + '.',
+          'success');
+      };
+    });
+  }
+
+  // Delegate clicks on the TBD chip + modal cancel.
+  document.addEventListener('click', function(e) {
+    if (!e.target) return;
+    var btn = e.target.closest && e.target.closest('.tg-tbd-btn');
+    if (btn) {
+      e.preventDefault();
+      openTbdPicker(parseInt(btn.dataset.tgIdx, 10));
+      return;
+    }
+    if (e.target.id === 'tbdPickerCancel' || e.target.id === 'tbdPickerOverlay') {
+      var m = document.getElementById('tbdPickerModal');
+      if (m) m.classList.remove('active');
+    }
+  });
+
   function renderDayBlock(divs, lS, lE, dayIdx) {
     var all = [];
     divs.forEach(function (d) {
@@ -6755,13 +6961,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // Training games are placed by the backend to fill blank days. They live
     // in `sched.trainingGames[]` (parallel to gameDays) so they don't pollute
     // standings/brackets, but get rendered inline by time on the matching day.
-    var trainingForDay = (sched.trainingGames || []).filter(function(tg) { return tg.day === dayIdx; });
-    trainingForDay.forEach(function(tg) {
+    var allTraining = (sched.trainingGames || []);
+    allTraining.forEach(function(tg, tgIdx) {
+      if (tg.day !== dayIdx) return;
       var divDef = divisions.find(function(dd) { return dd.name === tg.divName; });
       var col = (divDef && divDef.color) || '#94a3b8';
       all.push({
         g: { time: tg.time, t1: tg.t1, t2: tg.t2, court: tg.court, loc: tg.loc, isTraining: true },
-        name: tg.divName, color: col, isTraining: true
+        name: tg.divName, color: col, isTraining: true,
+        tgIdx: tgIdx
       });
     });
     all.sort(function (a, b) { return toM(a.g.time) - toM(b.g.time); });
@@ -6846,7 +7054,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           + ' title="Training game (placed to fill a blank day) - Venue: ' + (g.loc || 'unknown') + '">'
           + '<div class="gt" style="opacity:.7">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
           + '<span class="rb" style="border-color:#94a3b8;color:#94a3b8;background:rgba(148,163,184,.12);white-space:nowrap;flex-shrink:0">TRAINING</span>'
-          + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + g.t2 + '</div>'
+          + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + _renderTrainingT2(g.t2, item.tgIdx) + '</div>'
           + '<div class="gm"><span>' + g.court + '</span></div></div>'
           + '<div style="margin-left:8px;font-size:11px;color:#94a3b8;font-family:Montserrat,sans-serif;font-weight:600">No score</div>'
           + '</div>';
