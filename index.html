@@ -1565,6 +1565,27 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return out;
   }
 
+  // Sister to findAsymmetricDivisions for the 14-team [4,4,3,3] case: two
+  // groups of 4 + two groups of 3. The 4th-place teams of the two oversized
+  // groups play a single "13th Place" compensation game against each other.
+  // Returns: [{ divName, groupLetters: ['A','B'] }] for each affected division.
+  function findCompensationPairDivisions() {
+    var out = [];
+    divisions.forEach(function(d) {
+      if (!d.manualGroups || d.manualGroups.length !== 4) return;
+      var sizes = d.manualGroups.map(function(g) { return (g || []).length; });
+      var size4 = sizes.filter(function(s) { return s === 4; }).length;
+      var size3 = sizes.filter(function(s) { return s === 3; }).length;
+      if (size4 !== 2 || size3 !== 2) return;
+      var letters = [];
+      sizes.forEach(function(s, i) {
+        if (s === 4) letters.push(String.fromCharCode(65 + i));
+      });
+      out.push({ divName: d.name, groupLetters: letters });
+    });
+    return out;
+  }
+
   // Validates manual group sizes. Returns true if all clean, false + toast
   // listing offenders otherwise. Used by genBtn and the Apply button.
   function validateGroupSizes() {
@@ -3268,13 +3289,20 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           + '</div>'
         : '';
       // Asymmetric grouping banner (informational — does NOT block Apply or
-      // Generate). Fires when this division has one 4-team group and three
-      // 3-team groups. The 4th team in the oversized group gets a training
-      // game with a TBD opponent on the last day.
+      // Generate). Two variants:
+      //   [4,3,3,3] — one 4-team group + three 3-team groups (13 teams).
+      //     The 4th team gets a training game with a TBD opponent.
+      //   [4,4,3,3] — two 4-team groups + two 3-team groups (14 teams).
+      //     The two 4th-place teams play a "13th Place" compensation game
+      //     against each other; both opponents resolve automatically.
       var _asyms = findAsymmetricDivisions();
       var _asym = _asyms.filter(function(a){ return a.divName === d.name; })[0];
-      var asymmetryBanner = _asym
-        ? '<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
+      var _compPairs = findCompensationPairDivisions();
+      var _compPair = _compPairs.filter(function(a){ return a.divName === d.name; })[0];
+      var asymmetryBanner = '';
+      if (_asym) {
+        asymmetryBanner =
+          '<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
           + '<span style="font-size:16px">&#x26A0;&#xFE0F;</span>'
           + '<span><strong style="color:#fcd34d">Group sizes differ.</strong>'
           + ' <span style="color:#cbd5e0">Group ' + _asym.groupLetter
@@ -3283,8 +3311,21 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           + ' will get a training game on the last day with a TBD opponent —'
           + ' you\'ll set the opponent manually after the schedule is generated.'
           + ' To avoid this, move a team between groups to balance.</span></span>'
-          + '</div>'
-        : '';
+          + '</div>';
+      } else if (_compPair) {
+        var _lA = _compPair.groupLetters[0], _lB = _compPair.groupLetters[1];
+        asymmetryBanner =
+          '<div style="display:flex;align-items:center;gap:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:6px;padding:8px 12px;margin-top:8px;font-size:12px;font-family:Montserrat,sans-serif">'
+          + '<span style="font-size:16px">&#x26A0;&#xFE0F;</span>'
+          + '<span><strong style="color:#fcd34d">Group sizes differ.</strong>'
+          + ' <span style="color:#cbd5e0">Groups ' + _lA + ' and ' + _lB
+          + ' each have 4 teams; the others have 3. The <strong>4th-place teams</strong>'
+          + ' in Groups ' + _lA + ' and ' + _lB
+          + ' will play each other in a <strong>13th Place</strong> compensation game'
+          + ' on the last day. Both opponents resolve once round-robin scores'
+          + ' are entered — nothing to fill in manually.</span></span>'
+          + '</div>';
+      }
       var applyTitle = hasDivDups ? 'Remove duplicate teams first'
                       : hasOversized ? 'Rebalance oversized groups first'
                       : '';
@@ -3503,6 +3544,27 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       // training game on the last day with a TBD opponent (see
       // requiredTrainingGames in _buildSolverConfig).
       _pushTieredFourGroupOf3(matchups);
+    } else if (G === 4 && maxGrpSize === 4
+               && groups.filter(function(g){ return g.length === 4; }).length === 2
+               && groups.filter(function(g){ return g.length === 3; }).length === 2) {
+      // Asymmetric (14-team): two groups of 4 + two groups of 3. Top 3 of
+      // each group follow the same tiered Championship/Silver/Bronze layout
+      // as a symmetric 12-team division. The two 4th-place teams (from the
+      // two oversized groups) play a single "13th Place" compensation game
+      // against each other so both still meet the 4-game minimum.
+      _pushTieredFourGroupOf3(matchups);
+      var size4Letters = [];
+      groups.forEach(function(g, i) {
+        if (g.length === 4) size4Letters.push(String.fromCharCode(65 + i));
+      });
+      if (size4Letters.length === 2) {
+        matchups.push({
+          t1: '4th Group ' + size4Letters[0],
+          t2: '4th Group ' + size4Letters[1],
+          lbl: '13th Place',
+          bracket: '13th Place'
+        });
+      }
     } else if (G === 4 && maxGrpSize >= 4) {
       // 16-team (4 groups of 4): Championship + consolation pairs per rank
       matchups.push({ t1: '1st Group A', t2: '1st Group B', lbl: 'SF 1',      bracket: 'Championship (1st\u20134th)' });
@@ -4611,7 +4673,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     }
 
     var _asyms = findAsymmetricDivisions();
-    if (_asyms.length) {
+    var _compPairs = findCompensationPairDivisions();
+    if (_asyms.length || _compPairs.length) {
       var _asymItems = _asyms.map(function(a) {
         return '<li><strong>' + _escForHtml(a.divName) + '</strong> — Group '
              + a.groupLetter + ' has 4 teams; the <strong>4th-place team'
@@ -4619,10 +4682,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
              + ' the round-robin is played) will get a training game on the'
              + ' last day with a TBD opponent. You\'ll set the opponent'
              + ' manually after the schedule is generated.</li>';
-      }).join('');
+      });
+      var _compItems = _compPairs.map(function(a) {
+        var lA = a.groupLetters[0], lB = a.groupLetters[1];
+        return '<li><strong>' + _escForHtml(a.divName) + '</strong> — Groups '
+             + lA + ' and ' + lB + ' each have 4 teams; their <strong>4th-place'
+             + ' teams</strong> will play each other in a 13th Place compensation'
+             + ' game on the last day. Both opponents resolve from RR standings —'
+             + ' nothing to fill in manually.</li>';
+      });
       var _asymHtml = '<div>Asymmetric groups detected:</div>'
                     + '<ul style="margin:8px 0 10px 18px;padding:0;color:#fff;font-size:12px;line-height:1.7">'
-                    + _asymItems + '</ul>'
+                    + _asymItems.concat(_compItems).join('') + '</ul>'
                     + '<div style="color:#ffd494">Cancel to rebalance the groups in the Groups tab, or continue with this layout.</div>';
       appConfirm({
         title:       'Group sizes differ',
