@@ -6793,9 +6793,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var REST_SAME = 180, REST_CROSS = 270;
 
     // Collect every team's games on this day (RR + PO + other training games).
+    // Two passes: concrete team names go into dayGames; unresolved placeholders
+    // like "1st Group A" mark every team in the referenced group as PO-pending
+    // (their schedule isn't fixed yet, so rest/maxGPD math is speculative).
     var dayGames = {};  // team -> [{ time, court, loc }]
+    var poPendingGroups = {};  // group letter -> true
+    var placeholderRe = /^(\d+(?:st|nd|rd|th)) Group ([A-Z])$/;
     function add(team, time, court, loc) {
       if (!team || team === 'TBD') return;
+      if (placeholderRe.test(team)) {
+        var m = team.match(placeholderRe);
+        if (m) poPendingGroups[m[2]] = true;
+        return;
+      }
       if (!dayGames[team]) dayGames[team] = [];
       dayGames[team].push({ time: time, court: court, loc: loc });
     }
@@ -6826,8 +6836,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       add(otg.t2, otg.time, otg.court, otg.loc);
     });
 
+    // Map each team to its group letter so we can flag PO-pending teams.
+    var teamToGroupLetter = {};
+    (div.manualGroups || []).forEach(function(grp, gi) {
+      var letter = String.fromCharCode(65 + gi);
+      (grp || []).forEach(function(t) { teamToGroupLetter[t] = letter; });
+    });
+
     // Score each same-division team.
-    var candidates = [];  // { team, gap, isFree, restOK, atGPD, sameSlot }
+    var candidates = [];
     (div.teams || []).forEach(function(team) {
       if (team === tg.t1) return;
       var games = dayGames[team] || [];
@@ -6835,7 +6852,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var sameSlot = games.some(function(g) {
         return (g.time || '') === (tg.time || '') && (g.court || '') === (tg.court || '');
       });
-      var minGap = games.length === 0 ? Infinity : Infinity;
+      var minGap = Infinity;
       var restOK = true;
       games.forEach(function(g) {
         if (!g.time) return;
@@ -6845,26 +6862,26 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (ruleVenueRest && !sameV && gap < REST_CROSS) restOK = false;
         if (gap < minGap) minGap = gap;
       });
+      var poPending = !!poPendingGroups[teamToGroupLetter[team]];
       candidates.push({
         team: team,
         gap: minGap,
         isFree: games.length === 0,
         restOK: restOK,
         atGPD: atGPD,
-        sameSlot: sameSlot
+        sameSlot: sameSlot,
+        poPending: poPending
       });
     });
 
-    // Sort: viable first (descending gap, free-day = ∞ at top), then non-viable
-    // by reason. Within each bucket, alphabetical.
+    // Sort: viable first (descending gap, free-day = ∞ at top), then PO-pending,
+    // then non-viable. Within each bucket, alphabetical.
     candidates.sort(function(a, b) {
-      var aOK = a.restOK && !a.atGPD && !a.sameSlot;
-      var bOK = b.restOK && !b.atGPD && !b.sameSlot;
+      var aOK = a.restOK && !a.atGPD && !a.sameSlot && !a.poPending;
+      var bOK = b.restOK && !b.atGPD && !b.sameSlot && !b.poPending;
       if (aOK !== bOK) return aOK ? -1 : 1;
-      if (aOK) {
-        // both OK — higher gap first
-        if (a.gap !== b.gap) return b.gap - a.gap;
-      }
+      if (a.poPending !== b.poPending) return a.poPending ? 1 : -1;
+      if (aOK && a.gap !== b.gap) return b.gap - a.gap;
       return a.team.localeCompare(b.team);
     });
 
@@ -6884,6 +6901,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       } else if (c.atGPD) {
         reason = 'at daily game limit (' + maxGPD + ')';
         color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
+      } else if (c.poPending) {
+        // Their group has placeholder PO games on this day — actual schedule
+        // not known until RR scores are entered. Showable but flagged so the
+        // admin doesn't assume "free".
+        reason = 'PO games pending — set RR scores first';
+        color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
       } else if (!c.restOK) {
         reason = fmtGap(c.gap) + ' — below rest threshold';
         color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
