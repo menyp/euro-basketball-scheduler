@@ -6923,6 +6923,44 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return escHtml(t2);
   }
 
+  // Returns true if the named team has a mandatory rule blocking the given
+  // venue — either a teamVenueRules entry naming this team, or a
+  // zoneVenueRules entry matching this team's zone. High-priority rules are
+  // soft preferences, so they don't count as "blocked" here.
+  function isTeamBlockedFromVenue(divName, team, venueName) {
+    var lower = (venueName || '').toLowerCase();
+    if (!lower) return false;
+    // Per-team mandatory blocks.
+    for (var i = 0; i < (teamVenueRules || []).length; i++) {
+      var r = teamVenueRules[i];
+      if (!r || r.mode !== 'mandatory') continue;
+      var teamMatch = (r.teams || []).some(function(e) {
+        return e && e.div === divName && e.team === team;
+      });
+      if (!teamMatch) continue;
+      var venueMatch = (r.venues || []).some(function(v) {
+        return (v || '').toLowerCase() === lower;
+      });
+      if (venueMatch) return true;
+    }
+    // Zone mandatory blocks.
+    var tz = ((teamZones || []).find(function(e) {
+      return e && e.div === divName && e.team === team;
+    }) || {}).zone;
+    if (tz === 'white' || tz === 'black') {
+      for (var j = 0; j < (zoneVenueRules || []).length; j++) {
+        var zr = zoneVenueRules[j];
+        if (!zr || zr.mode !== 'mandatory') continue;
+        if ((zr.zone || '').toLowerCase() !== tz) continue;
+        var venueMatch2 = (zr.venues || []).some(function(v) {
+          return (v || '').toLowerCase() === lower;
+        });
+        if (venueMatch2) return true;
+      }
+    }
+    return false;
+  }
+
   // Generic opponent-picker. Computes viable same-division opponents for a
   // given (slot, host) and calls onPick(team) when the admin chooses one.
   //   opts = {
@@ -7022,19 +7060,35 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (gap < minGap) minGap = gap;
       });
       var poPending = !!poPendingGroups[teamToGroupLetter[team]];
+      var blocked = isTeamBlockedFromVenue(divName, team, loc);
       candidates.push({
         team: team, gap: minGap,
         isFree: games.length === 0,
-        restOK: restOK, atGPD: atGPD, sameSlot: sameSlot, poPending: poPending
+        restOK: restOK, atGPD: atGPD, sameSlot: sameSlot,
+        poPending: poPending, blocked: blocked
       });
     });
 
+    // Tier the candidates so the best choices float to the top and within
+    // each tier we sort by rest gap descending (more rest = better, even
+    // among teams that are below the threshold).
+    //   0 = viable (green / white) — rest OK, not at gpd, not blocked
+    //   1 = PO-pending (yellow)
+    //   2 = below rest threshold (yellow)
+    //   3 = at GPD / same slot / venue-blocked — disabled (red)
+    function _tier(c) {
+      if (c.sameSlot || c.atGPD || c.blocked) return 3;
+      if (c.poPending) return 1;
+      if (!c.restOK) return 2;
+      return 0;
+    }
     candidates.sort(function(a, b) {
-      var aOK = a.restOK && !a.atGPD && !a.sameSlot && !a.poPending;
-      var bOK = b.restOK && !b.atGPD && !b.sameSlot && !b.poPending;
-      if (aOK !== bOK) return aOK ? -1 : 1;
-      if (a.poPending !== b.poPending) return a.poPending ? 1 : -1;
-      if (aOK && a.gap !== b.gap) return b.gap - a.gap;
+      var ta = _tier(a), tb = _tier(b);
+      if (ta !== tb) return ta - tb;
+      // Larger gap first (Infinity = free day = best). Falls through to
+      // alphabetical for teams whose gaps are equal (notably the poPending
+      // tier where everyone has Infinity).
+      if (a.gap !== b.gap) return b.gap - a.gap;
       return a.team.localeCompare(b.team);
     });
 
@@ -7053,6 +7107,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
       } else if (c.atGPD) {
         reason = 'at daily game limit (' + maxGPD + ')';
+        color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
+      } else if (c.blocked) {
+        reason = 'blocked from ' + (loc || 'this venue');
         color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
       } else if (c.poPending) {
         reason = 'PO games pending — set RR scores first';
@@ -7110,19 +7167,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     document.getElementById('atgContext').innerHTML =
       'Day ' + (slot.dayIdx + 1) + ' &middot; ' + escHtml(slot.time)
       + ' &middot; ' + escHtml(slot.court) + ' (' + escHtml(slot.loc) + ')';
-    // Populate the tournament dropdown as <optgroup>s by division.
+    // Populate the tournament dropdown as a flat list with the division name
+    // inline on each option. <optgroup> labels render in a system colour
+    // that's invisible against the dark dropdown background in some browsers,
+    // so we prefix instead to keep the division readable everywhere.
     var tSel = document.getElementById('atgTournamentTeam');
     tSel.innerHTML = '<option value="">— select a team —</option>';
     divisions.forEach(function(d) {
-      var grp = document.createElement('optgroup');
-      grp.label = d.name;
       (d.teams || []).forEach(function(t) {
         var opt = document.createElement('option');
         opt.value = d.name + '\x00' + t;
-        opt.textContent = t;
-        grp.appendChild(opt);
+        opt.textContent = '[' + d.name + ']  ' + t;
+        tSel.appendChild(opt);
       });
-      tSel.appendChild(grp);
     });
     // Populate the division dropdown for the free-text tab.
     var dSel = document.getElementById('atgFreeTextDiv');
