@@ -495,6 +495,313 @@ def _place_required_training_games(assembled, ctx):
     return placed
 
 
+_COUNTRY_TAG_RE = re.compile(r'\s*\([A-Za-z]+\)\s*$')
+
+
+def _club_stem(team_name):
+    """Strip a trailing country tag like ' (USA)' so that 'ST. JOSEPHS
+    BASKETBALL CLUB (IRE)' and 'ST. JOSEPHS BASKETBALL CLUB (USA)' map to
+    the same club. Used by blank-rotation to spread blanks across orgs."""
+    return _COUNTRY_TAG_RE.sub('', team_name or '').strip()
+
+
+def _rotate_structural_blanks(assembled, blank_pairs, ctx):
+    """In a 3-team round-robin group over 2 RR days, exactly one team is
+    mathematically forced to have a blank day (C(3,2)=3 games can't be
+    split 1+1+1 across 2 days). The solver picks WHICH team gets blanked
+    fairly arbitrarily; this pass rotates the blank to a better-positioned
+    candidate when possible.
+
+    Scoring (higher = better blank choice):
+      +1 per free (slot, court) on the candidate's blank day in their
+         division-allowed courts (more = the auto-TBD picker has more
+         viable opponents)
+      +10 if the candidate's club isn't already blanked elsewhere in the
+         tournament (spreads blanks across orgs)
+      -5  if the candidate has a late-arrival rule on their blank day
+
+    Mutates ``assembled.sched`` in place. Only applies a swap if the best
+    feasible alternative beats the current blank's score by ``MIN_IMPROVEMENT``
+    AND a constraint-safe target slot exists on the destination day.
+    """
+    if not blank_pairs:
+        return
+    MIN_IMPROVEMENT = 3
+
+    sched = assembled.get('sched', {})
+    courts = ctx['courts']
+    day_slots = ctx['day_slots']
+    n_days = ctx['n_days']
+    max_gpd = ctx['max_gpd']
+    rule_rest = ctx['rule_rest']
+    rule_venue_rest = ctx['rule_venue_rest']
+    lunch_start = ctx.get('lunch_start', -1)
+    lunch_end = ctx.get('lunch_end', -1)
+    div_allowed_courts = ctx.get('div_allowed_courts', {})
+    team_blocked_courts = ctx.get('team_blocked_courts', {})
+    team_arrival_min = ctx.get('team_arrival_min', {})
+    divisions_cfg = ctx['divisions']
+
+    # Map team -> group letter, group -> teams.
+    team_to_letter = {}
+    group_teams = {}
+    for d_cfg in divisions_cfg:
+        dn = d_cfg.get('name')
+        mg = d_cfg.get('manualGroups', [])
+        if not mg:
+            continue
+        for idx, group in enumerate(mg):
+            letter = chr(ord('A') + idx)
+            group_teams[(dn, letter)] = list(group)
+            for t in group:
+                team_to_letter[(dn, t)] = letter
+
+    # Build sched index: occupied slots, team-day games, game locator.
+    occupied = set()
+    team_day_games = defaultdict(list)
+    game_at = {}  # (div, frozenset({t1,t2})) -> {'day','group_key','game_ref'}
+
+    def _rebuild_indices():
+        occupied.clear()
+        team_day_games.clear()
+        game_at.clear()
+        for d_blk in (sched.get('gameDays') or []):
+            d_idx = d_blk.get('dayIndex')
+            if d_idx is None:
+                continue
+            for divb in d_blk.get('divs', []):
+                dn = divb.get('name', '')
+                if not divb.get('groups'):
+                    continue
+                for gk, gv in divb['groups'].items():
+                    for g in (gv.get('games') or []):
+                        time = g.get('time', '')
+                        court = g.get('court', '')
+                        loc = g.get('loc', '')
+                        t1 = g.get('t1', '')
+                        t2 = g.get('t2', '')
+                        if not time or not court:
+                            continue
+                        occupied.add((d_idx, time, court))
+                        if t1:
+                            team_day_games[(dn, t1, d_idx)].append(
+                                {'time': time, 'court': court, 'loc': loc})
+                        if t2:
+                            team_day_games[(dn, t2, d_idx)].append(
+                                {'time': time, 'court': court, 'loc': loc})
+                        if t1 and t2:
+                            game_at[(dn, frozenset([t1, t2]))] = {
+                                'day': d_idx,
+                                'group_key': gk,
+                                'game_ref': g,
+                            }
+    _rebuild_indices()
+
+    # Group blanks by (div, letter).
+    blanks_by_group = defaultdict(list)
+    for bp in blank_pairs:
+        letter = team_to_letter.get((bp['divName'], bp['team']))
+        if letter is None:
+            continue
+        blanks_by_group[(bp['divName'], letter)].append(bp)
+
+    # Cross-tournament club blank counts. Updated as we apply swaps so later
+    # groups in the iteration see the latest state.
+    blanked_clubs = defaultdict(int)
+    for bp in blank_pairs:
+        blanked_clubs[_club_stem(bp['team'])] += 1
+
+    def score_blank(div, team, blank_day, is_current_blank=False,
+                    current_blank_club=None):
+        # Free-slot count
+        allowed = div_allowed_courts.get(div)
+        if allowed is None:
+            allowed = set(range(len(courts)))
+        blocked = team_blocked_courts.get((div, team), set())
+        eff_allowed = allowed - blocked
+        arr_min = team_arrival_min.get((div, team, blank_day), -1)
+        free_count = 0
+        for s_min in day_slots[blank_day]:
+            if lunch_start <= s_min < lunch_end:
+                continue
+            if arr_min > 0 and s_min < arr_min:
+                continue
+            for c_idx in eff_allowed:
+                court = courts[c_idx]
+                if (blank_day, _min_to_time(s_min), court['name']) in occupied:
+                    continue
+                if _is_blacked_out(ctx, c_idx, blank_day, s_min):
+                    continue
+                free_count += 1
+        # Club rotation: count blanks of this team's club EXCLUDING this team
+        # in the hypothetical post-swap state.
+        club = _club_stem(team)
+        other_blanks = blanked_clubs.get(club, 0)
+        if is_current_blank:
+            # This team is in the current count; subtract 1 to get "other".
+            other_blanks -= 1
+        elif current_blank_club is not None and current_blank_club == club:
+            # Post-swap the current_blank loses its blank, which was a hit
+            # against this same club. Net -1 for this club.
+            other_blanks -= 1
+        club_bonus = 10 if other_blanks <= 0 else 0
+        late_penalty = -5 if (div, team, blank_day) in team_arrival_min else 0
+        return free_count + club_bonus + late_penalty
+
+    def find_feasible_slot(div, t1, t2, dest_day):
+        allowed = div_allowed_courts.get(div)
+        if allowed is None:
+            allowed = set(range(len(courts)))
+        eff_allowed = (allowed
+                       - team_blocked_courts.get((div, t1), set())
+                       - team_blocked_courts.get((div, t2), set()))
+        if not eff_allowed:
+            return None
+        arr_t1 = team_arrival_min.get((div, t1, dest_day), -1)
+        arr_t2 = team_arrival_min.get((div, t2, dest_day), -1)
+        arr_min = max(arr_t1, arr_t2)
+        t1_games = team_day_games.get((div, t1, dest_day), [])
+        t2_games = team_day_games.get((div, t2, dest_day), [])
+        if len(t1_games) >= max_gpd or len(t2_games) >= max_gpd:
+            return None
+        for s_min in day_slots[dest_day]:
+            if lunch_start <= s_min < lunch_end:
+                continue
+            if arr_min > 0 and s_min < arr_min:
+                continue
+            for c_idx in sorted(eff_allowed):
+                court = courts[c_idx]
+                t_str = _min_to_time(s_min)
+                if (dest_day, t_str, court['name']) in occupied:
+                    continue
+                if _is_blacked_out(ctx, c_idx, dest_day, s_min):
+                    continue
+                slot_venue = court['venue']
+                ok = True
+                for other_games in (t1_games, t2_games):
+                    for g in other_games:
+                        if not g['time']:
+                            continue
+                        gap = abs(_time_to_min(g['time']) - s_min)
+                        same_v = (g['loc'] or '').lower() == slot_venue.lower()
+                        if rule_rest and same_v and gap < 180:
+                            ok = False
+                            break
+                        if rule_venue_rest and not same_v and gap < 270:
+                            ok = False
+                            break
+                    if not ok:
+                        break
+                if not ok:
+                    continue
+                return (t_str, c_idx, court['name'], slot_venue)
+        return None
+
+    # Process each rotatable group.
+    for (dn, letter), bps in list(blanks_by_group.items()):
+        teams = group_teams.get((dn, letter), [])
+        if len(teams) != 3 or len(bps) != 1:
+            continue
+        current_blank = bps[0]['team']
+        blank_day = bps[0]['day']
+        if current_blank not in teams:
+            continue
+        others = [t for t in teams if t != current_blank]
+        if len(others) != 2:
+            continue
+        u, v = others
+        g_tu = game_at.get((dn, frozenset([current_blank, u])))
+        g_tv = game_at.get((dn, frozenset([current_blank, v])))
+        g_uv = game_at.get((dn, frozenset([u, v])))
+        if not (g_tu and g_tv and g_uv):
+            continue
+        busy_day = g_tu['day']
+        if g_tv['day'] != busy_day or g_uv['day'] != blank_day:
+            continue  # solver state isn't the canonical T-T / U-V layout
+
+        current_score = score_blank(dn, current_blank, blank_day,
+                                     is_current_blank=True)
+        current_blank_club = _club_stem(current_blank)
+
+        # Two alternatives: blank U on busy_day (by moving T-U to blank_day),
+        # or blank V on busy_day (by moving T-V to blank_day).
+        candidates = []
+        for new_blank, move in [(u, g_tu), (v, g_tv)]:
+            slot = find_feasible_slot(dn, current_blank, new_blank, blank_day)
+            if slot is None:
+                continue
+            score = score_blank(dn, new_blank, busy_day,
+                                current_blank_club=current_blank_club)
+            candidates.append((score, new_blank, move, slot))
+        if not candidates:
+            continue
+        candidates.sort(key=lambda c: -c[0])
+        best_score, new_blank, move, slot = candidates[0]
+        if best_score < current_score + MIN_IMPROVEMENT:
+            continue
+
+        # Apply the swap: relocate `move`'s game from busy_day to blank_day.
+        new_time, new_court_idx, new_court_name, new_venue = slot
+        old_day = move['day']
+        gk = move['group_key']
+        g_ref = move['game_ref']
+
+        # Pop from old day's container.
+        moved = None
+        for divb in sched['gameDays'][old_day].get('divs', []):
+            if divb.get('name') != dn or not divb.get('groups'):
+                continue
+            grp = divb['groups'].get(gk)
+            if not grp:
+                continue
+            games = grp.get('games') or []
+            for i, g in enumerate(games):
+                if g is g_ref:
+                    moved = games.pop(i)
+                    break
+            if moved is not None:
+                break
+        if moved is None:
+            continue
+
+        # Update game fields to the new slot.
+        moved['time'] = new_time
+        moved['court'] = new_court_name
+        moved['loc'] = new_venue
+
+        # Push into new day's container, creating the div / group containers
+        # if missing.
+        new_day_blk = sched['gameDays'][blank_day]
+        target_divb = None
+        for divb in new_day_blk.get('divs', []):
+            if divb.get('name') == dn:
+                target_divb = divb
+                break
+        if target_divb is None:
+            # Build a minimal divb shell. Pick the colour from any other day's
+            # divb for visual consistency.
+            div_color = ''
+            for any_d in (sched.get('gameDays') or []):
+                for divb in any_d.get('divs', []):
+                    if divb.get('name') == dn:
+                        div_color = divb.get('color', '') or div_color
+                        break
+                if div_color:
+                    break
+            target_divb = {'name': dn, 'color': div_color, 'groups': {}}
+            new_day_blk.setdefault('divs', []).append(target_divb)
+        if not target_divb.get('groups'):
+            target_divb['groups'] = {}
+        if gk not in target_divb['groups']:
+            target_divb['groups'][gk] = {'group': gk, 'games': []}
+        target_divb['groups'][gk]['games'].append(moved)
+
+        # Update bookkeeping for downstream iterations.
+        blanked_clubs[_club_stem(current_blank)] -= 1
+        blanked_clubs[_club_stem(new_blank)] += 1
+        _rebuild_indices()  # cheap; tournaments are small
+
+
 def _apply_no_blank_day_check(assembled, ctx):
     """Run post-hoc no-blank-day detection on the assembled schedule.
 
@@ -512,6 +819,10 @@ def _apply_no_blank_day_check(assembled, ctx):
             sched = assembled.setdefault('sched', {})
             sched['trainingGames'] = required_games
         return assembled
+    blank_pairs = _detect_blank_days(assembled, ctx['divisions'], ctx['n_days'])
+    # Rotate structural blanks (3-team groups) to better-positioned teams
+    # BEFORE placing training games, so the resulting TBD lands cleanly.
+    _rotate_structural_blanks(assembled, blank_pairs, ctx)
     blank_pairs = _detect_blank_days(assembled, ctx['divisions'], ctx['n_days'])
     training_games, remaining = _place_training_games(assembled, blank_pairs, ctx)
     sched = assembled.setdefault('sched', {})
