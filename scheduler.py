@@ -172,6 +172,9 @@ def _place_training_games(assembled, blank_pairs, ctx):
     sched = assembled.get('sched', {})
     courts = ctx['courts']
     day_slots = ctx['day_slots']
+    div_allowed_courts = ctx.get('div_allowed_courts', {})
+    team_blocked_courts = ctx.get('team_blocked_courts', {})
+    team_arrival_min = ctx.get('team_arrival_min', {})
 
     # Build occupied set: {(day, time_str, court_name)} from already-placed
     # RR/PO games. Training games may not collide with these.
@@ -202,15 +205,38 @@ def _place_training_games(assembled, blank_pairs, ctx):
     # Iterate buckets in deterministic order for reproducibility.
     for (div_name, day) in sorted(buckets.keys()):
         teams_sorted = sorted(buckets[(div_name, day)])
+        # Pre-compute the effective allowed-court set for each team in this
+        # bucket so we can intersect at placement time. Honors:
+        # - div_allowed_courts (division mandatory venues)
+        # - team_blocked_courts (per-team venue blocks, including zone rules
+        #   lowered in by _build_context)
+        all_idx = set(range(len(courts)))
+        div_allowed = div_allowed_courts.get(div_name)
+        if div_allowed is None:
+            div_allowed = all_idx
         i = 0
         while i + 1 < len(teams_sorted):
             t1, t2 = teams_sorted[i], teams_sorted[i + 1]
             i += 2
+            t1_blocked = team_blocked_courts.get((div_name, t1), set())
+            t2_blocked = team_blocked_courts.get((div_name, t2), set())
+            eff_allowed = div_allowed - t1_blocked - t2_blocked
+            if not eff_allowed:
+                # No legal court for this pair on any day — drop to remaining.
+                remaining.append({'divName': div_name, 'team': t1, 'day': day})
+                remaining.append({'divName': div_name, 'team': t2, 'day': day})
+                continue
+            t1_arr = team_arrival_min.get((div_name, t1, day), -1)
+            t2_arr = team_arrival_min.get((div_name, t2, day), -1)
+            min_start = max(t1_arr, t2_arr)
 
             placed = False
             for s_min in day_slots[day]:
+                if min_start > 0 and s_min < min_start:
+                    continue
                 t_str = _min_to_time(s_min)
-                for c_idx, c in enumerate(courts):
+                for c_idx in sorted(eff_allowed):
+                    c = courts[c_idx]
                     if (day, t_str, c['name']) in occupied:
                         continue
                     if _is_blacked_out(ctx, c_idx, day, s_min):
@@ -430,6 +456,9 @@ def _place_required_training_games(assembled, ctx):
     courts = ctx['courts']
     day_slots = ctx['day_slots']
     n_days = ctx['n_days']
+    div_allowed_courts = ctx.get('div_allowed_courts', {})
+    team_blocked_courts = ctx.get('team_blocked_courts', {})
+    divisions_cfg = ctx.get('divisions', [])
 
     # Build occupied set (mirrors _place_training_games).
     occupied = set()
@@ -447,16 +476,52 @@ def _place_required_training_games(assembled, ctx):
                 for g in games:
                     occupied.add((d, g.get('time', ''), g.get('court', '')))
 
+    def _placeholder_group_teams(div_name, placeholder):
+        """If t1 is a placeholder like '4th Group X', return the list of
+        teams in that group so we can union-check their venue blocks. Empty
+        list when t1 is a concrete team name."""
+        m = re.match(r'^(?:\d+(?:st|nd|rd|th))\s+Group\s+([A-Z])$', placeholder or '')
+        if not m:
+            return []
+        idx = ord(m.group(1)) - ord('A')
+        for d_cfg in divisions_cfg:
+            if d_cfg.get('name') == div_name:
+                mg = d_cfg.get('manualGroups') or []
+                if 0 <= idx < len(mg):
+                    return list(mg[idx])
+                break
+        return []
+
     placed = []
     for req in required:
         day = n_days - 1 if req.get('day', 'last') == 'last' else int(req['day'])
         pref_venue = (req.get('preferredVenue') or '').lower()
+        div_name = req.get('divName', '')
 
-        # Score each court: 0 if its venue matches the preferred venue, 1 else.
-        # Within each tier, prefer courts with more free slots so we can land
-        # the game without crowding a busy venue.
+        # Allowed-court set: intersect division mandatory venues with the
+        # union of per-team blocks for whichever team will resolve into the
+        # t1 placeholder (e.g. one of Group X's teams). If ANY team in the
+        # group is blocked from a court, treat it as blocked here too — the
+        # 4th-place finisher might be that team and we can't tell upfront.
+        all_idx = set(range(len(courts)))
+        div_allowed = div_allowed_courts.get(div_name)
+        if div_allowed is None:
+            div_allowed = all_idx
+        group_teams = _placeholder_group_teams(div_name, req.get('t1'))
+        blocked_union = set()
+        for tm in group_teams:
+            blocked_union |= team_blocked_courts.get((div_name, tm), set())
+        eff_allowed = div_allowed - blocked_union
+        if not eff_allowed:
+            # Nothing legal — drop the request silently (rare; the admin
+            # will notice the missing training game and can resolve manually).
+            continue
+
+        # Rank candidate courts by preferred-venue match, then by free-slot
+        # count on the requested day so we land in a clean spot.
         free_per_court = []
-        for c_idx, c in enumerate(courts):
+        for c_idx in eff_allowed:
+            c = courts[c_idx]
             free = 0
             for s_min in day_slots[day]:
                 t_str = _min_to_time(s_min)
@@ -477,7 +542,7 @@ def _place_required_training_games(assembled, ctx):
                 occupied.add((day, t_str, c['name']))
                 placed.append({
                     'day':      day,
-                    'divName':  req['divName'],
+                    'divName':  div_name,
                     't1':       req['t1'],
                     't2':       req['t2'],
                     'time':     t_str,
