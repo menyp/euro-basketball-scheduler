@@ -672,6 +672,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     <div id="agPicker" style="max-height:260px;overflow-y:auto;margin-bottom:12px"></div>
     <div class="modal-buttons">
       <button class="modal-btn cancel" id="agCancel">Cancel</button>
+      <button class="modal-btn" id="agAddTraining" style="background:rgba(255,107,0,.15);color:#FFB070;border:1px solid rgba(255,107,0,.5)">+ Training Game</button>
       <button class="modal-btn confirm" id="agPlace" disabled>Place Game</button>
       <button class="modal-btn" id="agOverride" style="display:none;background:#c53030;color:#fff">&#9888; Override &amp; Place</button>
     </div>
@@ -709,6 +710,49 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     <div id="tbdPickerList" style="max-height:55vh;overflow-y:auto;margin-bottom:14px"></div>
     <div class="modal-buttons">
       <button class="modal-btn cancel" id="tbdPickerCancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manually add a training game to a free grid slot. Opens after the admin
+     clicks an empty cell in Edit Mode and chooses "Add training game".
+     Two tabs: pick a tournament team (host=t1) or enter a free-text team
+     with required division + optional shuttle zone. On submit, opens the
+     standard opponent picker for t2. -->
+<div id="addTrainingGameModal" class="modal-overlay">
+  <div class="modal-card" style="max-width:560px">
+    <h3 style="margin:0 0 4px;font-family:'Montserrat',sans-serif;font-weight:800;font-size:14px;color:#fff;text-transform:uppercase;letter-spacing:1px">+ Add Training Game</h3>
+    <div id="atgContext" style="font-size:11px;color:#94a3b8;margin-bottom:14px;line-height:1.5"></div>
+    <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,.08)">
+      <button class="atg-tab active" data-tab="tournament" type="button"
+              style="padding:8px 14px;background:transparent;color:#fff;border:none;border-bottom:2px solid var(--o);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">Tournament team</button>
+      <button class="atg-tab" data-tab="external" type="button"
+              style="padding:8px 14px;background:transparent;color:#94a3b8;border:none;border-bottom:2px solid transparent;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">External (free text)</button>
+    </div>
+    <div id="atgTabTournament" style="margin-bottom:14px">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">Pick the host team:</div>
+      <select id="atgTournamentTeam" style="width:100%;padding:8px 10px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;font-family:inherit;font-size:13px">
+        <option value="">— select a team —</option>
+      </select>
+    </div>
+    <div id="atgTabExternal" style="margin-bottom:14px;display:none">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">Team name (non-tournament):</div>
+      <input id="atgFreeTextName" type="text" placeholder="e.g. BARCELONA SC"
+             style="width:100%;padding:8px 10px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;font-family:inherit;font-size:13px;margin-bottom:10px">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">Division:</div>
+      <select id="atgFreeTextDiv" style="width:100%;padding:8px 10px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:6px;font-family:inherit;font-size:13px;margin-bottom:10px">
+        <option value="">— select a division —</option>
+      </select>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">Shuttle zone (optional):</div>
+      <div style="display:flex;gap:14px;font-size:13px;color:#fff">
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="atgZone" value="" checked> None</label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="atgZone" value="white"> White</label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="atgZone" value="black"> Black</label>
+      </div>
+    </div>
+    <div class="modal-buttons">
+      <button class="modal-btn cancel" id="atgCancel" type="button">Cancel</button>
+      <button class="modal-btn confirm" id="atgNext" type="button">Pick opponent →</button>
     </div>
   </div>
 </div>
@@ -4008,6 +4052,31 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // Grid cells carry the same data-* attributes as .gc cards, so the same
     // openMoveGameModal() call works for both views.
     if (_editMode) {
+      // Manual training game clicked in edit mode → offer delete instead of
+      // the move-modal. Auto-paired/required training games (no isManual)
+      // fall through to the move-modal path like before.
+      var trainingHost = e.target.closest('[data-manual-training-idx]');
+      if (trainingHost && !e.target.closest('button')) {
+        var idx = parseInt(trainingHost.getAttribute('data-manual-training-idx'), 10);
+        var tg = (sched.trainingGames || [])[idx];
+        if (tg) {
+          appConfirm({
+            title:   'Delete training game?',
+            message: '<strong>' + escHtml(tg.t1) + '</strong> vs <strong>' + escHtml(tg.t2)
+                   + '</strong> on Day ' + (tg.day + 1) + ' at ' + escHtml(tg.time)
+                   + ' (' + escHtml(tg.court) + ').',
+            okLabel:     'Delete',
+            cancelLabel: 'Keep',
+            danger:      true
+          }, function(ok) {
+            if (!ok) return;
+            sched.trainingGames.splice(idx, 1);
+            renderSched();
+            showToast('Training game deleted', '', 'success');
+          });
+        }
+        return;
+      }
       var gc = e.target.closest('.gc');
       if (gc && !e.target.closest('input') && !e.target.closest('button')) {
         openMoveGameModal(gc);
@@ -4145,6 +4214,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   });
   document.getElementById('agPlace').onclick = function() { placeManualGame(false); };
   document.getElementById('agOverride').onclick = function() { placeManualGame(true); };
+  // "+ Training Game" — alternate action on the same empty slot. Hands off
+  // to the t1 selector modal; the existing place-unscheduled flow stays put.
+  document.getElementById('agAddTraining').onclick = function() {
+    if (!_agPending) return;
+    document.getElementById('addGameModal').classList.remove('active');
+    openAddTrainingGameModal({
+      dayIdx: _agPending.dayIdx,
+      time:   _agPending.time,
+      court:  _agPending.court,
+      loc:    _agPending.loc
+    });
+  };
 
   // ── Move Game (Edit Mode) ──────────────────────────────
   function buildMgOccupied() {
@@ -6842,35 +6923,44 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return escHtml(t2);
   }
 
-  // Open the TBD-opponent picker for sched.trainingGames[tgIdx]. Computes
-  // viable same-division opponents from the current sched state, sorted by
-  // rest-gap descending (free-day teams first). Teams below the configured
-  // rest threshold are still shown, in red, at the bottom — so the admin
-  // can pick one if they accept the rest hit.
-  function openTbdPicker(tgIdx) {
-    var tg = (sched.trainingGames || [])[tgIdx];
-    if (!tg) return;
-    var div = divisions.find(function(d) { return d.name === tg.divName; });
+  // Generic opponent-picker. Computes viable same-division opponents for a
+  // given (slot, host) and calls onPick(team) when the admin chooses one.
+  //   opts = {
+  //     divName, day, time, court, loc,
+  //     hostTeam,              // team name to exclude from candidates ('' for none)
+  //     title,                 // modal title text
+  //     skipTrainingIdx,       // optional: index in sched.trainingGames to skip
+  //                            //   (when filling an existing training game's t2)
+  //   }
+  //   onPick(team) — called with the chosen tournament team name
+  //
+  // Used by both the existing TBD chip flow (openTbdPicker) and the manual
+  // "add training game" flow.
+  function runOpponentPicker(opts, onPick) {
+    var divName = opts.divName;
+    var div = divisions.find(function(d) { return d.name === divName; });
     if (!div) {
       showToast('Division not found', 'Could not load the team list for this division.', 'error');
       return;
     }
-    var slotMin = toM(tg.time || '00:00');
-    var slotVenue = (tg.loc || '').toLowerCase();
-    var slotKey = (tg.time || '') + '|' + (tg.court || '');
+    var day = opts.day;
+    var time = opts.time || '';
+    var court = opts.court || '';
+    var loc = opts.loc || '';
+    var hostTeam = opts.hostTeam || '';
+    var skipTrainingIdx = (typeof opts.skipTrainingIdx === 'number') ? opts.skipTrainingIdx : -1;
+    var slotMin = toM(time || '00:00');
+    var slotVenue = loc.toLowerCase();
     var maxGPD = parseInt(document.getElementById('maxGPD').value) || 2;
     var ruleRest = !!document.getElementById('ruleRest').checked;
     var ruleVenueRest = !!document.getElementById('ruleVenueRest').checked;
     var REST_SAME = 180, REST_CROSS = 270;
 
     // Collect every team's games on this day (RR + PO + other training games).
-    // Two passes: concrete team names go into dayGames; unresolved placeholders
-    // like "1st Group A" mark every team in the referenced group as PO-pending
-    // (their schedule isn't fixed yet, so rest/maxGPD math is speculative).
-    var dayGames = {};  // team -> [{ time, court, loc }]
-    var poPendingGroups = {};  // group letter -> true
+    var dayGames = {};
+    var poPendingGroups = {};
     var placeholderRe = /^(\d+(?:st|nd|rd|th)) Group ([A-Z])$/;
-    function add(team, time, court, loc) {
+    function add(team, gTime, gCourt, gLoc) {
       if (!team || team === 'TBD') return;
       if (placeholderRe.test(team)) {
         var m = team.match(placeholderRe);
@@ -6878,12 +6968,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         return;
       }
       if (!dayGames[team]) dayGames[team] = [];
-      dayGames[team].push({ time: time, court: court, loc: loc });
+      dayGames[team].push({ time: gTime, court: gCourt, loc: gLoc });
     }
-    var dayBlock = (sched.gameDays || [])[tg.day];
+    var dayBlock = (sched.gameDays || [])[day];
     if (dayBlock) {
       (dayBlock.divs || []).forEach(function(divBlk) {
-        if (divBlk.name !== tg.divName) return;
+        if (divBlk.name !== divName) return;
         if (divBlk.games) {
           divBlk.games.forEach(function(gm) {
             add(gm.t1, gm.time, gm.court, gm.loc);
@@ -6901,27 +6991,25 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
     }
     (sched.trainingGames || []).forEach(function(otg, i) {
-      if (i === tgIdx) return;  // skip the slot we're filling
-      if (otg.day !== tg.day || otg.divName !== tg.divName) return;
+      if (i === skipTrainingIdx) return;
+      if (otg.day !== day || otg.divName !== divName) return;
       add(otg.t1, otg.time, otg.court, otg.loc);
       add(otg.t2, otg.time, otg.court, otg.loc);
     });
 
-    // Map each team to its group letter so we can flag PO-pending teams.
     var teamToGroupLetter = {};
     (div.manualGroups || []).forEach(function(grp, gi) {
       var letter = String.fromCharCode(65 + gi);
       (grp || []).forEach(function(t) { teamToGroupLetter[t] = letter; });
     });
 
-    // Score each same-division team.
     var candidates = [];
     (div.teams || []).forEach(function(team) {
-      if (team === tg.t1) return;
+      if (team === hostTeam) return;
       var games = dayGames[team] || [];
       var atGPD = games.length >= maxGPD;
       var sameSlot = games.some(function(g) {
-        return (g.time || '') === (tg.time || '') && (g.court || '') === (tg.court || '');
+        return (g.time || '') === time && (g.court || '') === court;
       });
       var minGap = Infinity;
       var restOK = true;
@@ -6935,18 +7023,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
       var poPending = !!poPendingGroups[teamToGroupLetter[team]];
       candidates.push({
-        team: team,
-        gap: minGap,
+        team: team, gap: minGap,
         isFree: games.length === 0,
-        restOK: restOK,
-        atGPD: atGPD,
-        sameSlot: sameSlot,
-        poPending: poPending
+        restOK: restOK, atGPD: atGPD, sameSlot: sameSlot, poPending: poPending
       });
     });
 
-    // Sort: viable first (descending gap, free-day = ∞ at top), then PO-pending,
-    // then non-viable. Within each bucket, alphabetical.
     candidates.sort(function(a, b) {
       var aOK = a.restOK && !a.atGPD && !a.sameSlot && !a.poPending;
       var bOK = b.restOK && !b.atGPD && !b.sameSlot && !b.poPending;
@@ -6957,7 +7039,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     });
 
     function fmtGap(g) {
-      if (!isFinite(g)) return 'free on Day ' + (tg.day + 1);
+      if (!isFinite(g)) return 'free on Day ' + (day + 1);
       var h = Math.floor(g / 60), m = g % 60;
       return (h ? h + 'h ' : '') + (m ? m + 'm' : (h ? '' : '0m')) + ' rest gap';
     }
@@ -6973,16 +7055,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         reason = 'at daily game limit (' + maxGPD + ')';
         color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
       } else if (c.poPending) {
-        // Their group has placeholder PO games on this day — actual schedule
-        // not known until RR scores are entered. Showable but flagged so the
-        // admin doesn't assume "free".
         reason = 'PO games pending — set RR scores first';
         color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
       } else if (!c.restOK) {
         reason = fmtGap(c.gap) + ' — below rest threshold';
         color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
       } else if (c.isFree) {
-        reason = 'free on Day ' + (tg.day + 1);
+        reason = 'free on Day ' + (day + 1);
         color = '#86efac'; bg = 'rgba(16,185,129,.12)';
       } else {
         reason = fmtGap(c.gap);
@@ -7003,28 +7082,163 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       : '<div style="padding:14px;opacity:.65;font-style:italic;text-align:center">No same-division teams available.</div>';
 
     var modal = document.getElementById('tbdPickerModal');
-    document.getElementById('tbdPickerTitle').textContent =
-      'Set training opponent for ' + tg.t1;
+    document.getElementById('tbdPickerTitle').textContent = opts.title || 'Pick opponent';
     document.getElementById('tbdPickerSub').innerHTML =
-      'Day ' + (tg.day + 1) + ' &middot; ' + escHtml(tg.time) + ' &middot; '
-      + escHtml(tg.court) + ' (' + escHtml(tg.loc) + ') &middot; ' + escHtml(tg.divName)
+      'Day ' + (day + 1) + ' &middot; ' + escHtml(time) + ' &middot; '
+      + escHtml(court) + ' (' + escHtml(loc) + ') &middot; ' + escHtml(divName)
       + '<br><span style="opacity:.7">Free-day teams first; teams below the rest threshold are shown but flagged.</span>';
     document.getElementById('tbdPickerList').innerHTML = listHtml;
     modal.classList.add('active');
 
-    // Wire selection.
     var list = document.getElementById('tbdPickerList');
     list.querySelectorAll('.tbd-pick-row').forEach(function(btn) {
       btn.onclick = function() {
         if (btn.disabled) return;
-        var team = btn.dataset.team;
-        sched.trainingGames[tgIdx].t2 = team;
         modal.classList.remove('active');
-        renderSched();
-        showToast('Opponent set',
-          escHtml(tg.t1) + ' will play <strong>' + escHtml(team) + '</strong> as a training game on Day ' + (tg.day + 1) + '.',
-          'success');
+        onPick(btn.dataset.team);
       };
+    });
+  }
+
+  // Manual "Add Training Game" flow — opens the t1 modal pre-filled with the
+  // slot the admin clicked. After picking t1 (tournament team or free-text),
+  // runOpponentPicker fires for t2; on confirm we append a new training game
+  // and (if free-text + zone) a teamZones entry.
+  var _atgPending = null; // { dayIdx, time, court, loc }
+  function openAddTrainingGameModal(slot) {
+    _atgPending = slot;
+    document.getElementById('atgContext').innerHTML =
+      'Day ' + (slot.dayIdx + 1) + ' &middot; ' + escHtml(slot.time)
+      + ' &middot; ' + escHtml(slot.court) + ' (' + escHtml(slot.loc) + ')';
+    // Populate the tournament dropdown as <optgroup>s by division.
+    var tSel = document.getElementById('atgTournamentTeam');
+    tSel.innerHTML = '<option value="">— select a team —</option>';
+    divisions.forEach(function(d) {
+      var grp = document.createElement('optgroup');
+      grp.label = d.name;
+      (d.teams || []).forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = d.name + '\x00' + t;
+        opt.textContent = t;
+        grp.appendChild(opt);
+      });
+      tSel.appendChild(grp);
+    });
+    // Populate the division dropdown for the free-text tab.
+    var dSel = document.getElementById('atgFreeTextDiv');
+    dSel.innerHTML = '<option value="">— select a division —</option>';
+    divisions.forEach(function(d) {
+      var opt = document.createElement('option');
+      opt.value = d.name;
+      opt.textContent = d.name;
+      dSel.appendChild(opt);
+    });
+    document.getElementById('atgFreeTextName').value = '';
+    var noneRadio = document.querySelector('input[name=atgZone][value=""]');
+    if (noneRadio) noneRadio.checked = true;
+    _atgShowTab('tournament');
+    document.getElementById('addTrainingGameModal').classList.add('active');
+  }
+  function _atgShowTab(name) {
+    document.querySelectorAll('#addTrainingGameModal .atg-tab').forEach(function(btn) {
+      var active = btn.dataset.tab === name;
+      btn.classList.toggle('active', active);
+      btn.style.color = active ? '#fff' : '#94a3b8';
+      btn.style.borderBottomColor = active ? 'var(--o)' : 'transparent';
+      btn.style.fontWeight = active ? '700' : '600';
+    });
+    document.getElementById('atgTabTournament').style.display = name === 'tournament' ? '' : 'none';
+    document.getElementById('atgTabExternal').style.display = name === 'external' ? '' : 'none';
+  }
+  document.querySelectorAll('#addTrainingGameModal .atg-tab').forEach(function(btn) {
+    btn.onclick = function() { _atgShowTab(btn.dataset.tab); };
+  });
+  document.getElementById('atgCancel').onclick = function() {
+    document.getElementById('addTrainingGameModal').classList.remove('active');
+  };
+  document.getElementById('addTrainingGameModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+  document.getElementById('atgNext').onclick = function() {
+    var activeBtn = document.querySelector('#addTrainingGameModal .atg-tab.active');
+    var activeTab = activeBtn ? activeBtn.dataset.tab : 'tournament';
+    var t1 = '', divName = '', isFreeText = false, zone = '';
+    if (activeTab === 'tournament') {
+      var raw = document.getElementById('atgTournamentTeam').value;
+      if (!raw) {
+        showToast('Pick a team',
+          'Select a tournament team or switch to External.', 'warn');
+        return;
+      }
+      var sep = raw.indexOf('\x00');
+      divName = raw.substring(0, sep);
+      t1 = raw.substring(sep + 1);
+    } else {
+      t1 = (document.getElementById('atgFreeTextName').value || '').trim();
+      divName = document.getElementById('atgFreeTextDiv').value;
+      if (!t1)      { showToast('Team name required', 'Enter the external team’s name.', 'warn'); return; }
+      if (!divName) { showToast('Division required', 'Pick the division this team plays in.', 'warn'); return; }
+      var zr = document.querySelector('input[name=atgZone]:checked');
+      zone = zr ? zr.value : '';
+      isFreeText = true;
+    }
+    var slot = _atgPending;
+    if (!slot) return;
+    document.getElementById('addTrainingGameModal').classList.remove('active');
+    runOpponentPicker({
+      divName:  divName,
+      day:      slot.dayIdx,
+      time:     slot.time,
+      court:    slot.court,
+      loc:      slot.loc,
+      hostTeam: t1,
+      title:    'Pick opponent for ' + t1
+    }, function(t2) {
+      if (!sched.trainingGames) sched.trainingGames = [];
+      sched.trainingGames.push({
+        day:     slot.dayIdx,
+        time:    slot.time,
+        court:   slot.court,
+        loc:     slot.loc,
+        divName: divName,
+        t1:      t1,
+        t2:      t2,
+        isTraining: true,
+        isManual:   true
+      });
+      // Free-text host gets a teamZones entry only when the admin set a zone.
+      // Keeps the shuttle-balance + zone-venue rules in scope for this team.
+      if (isFreeText && zone && (zone === 'white' || zone === 'black')) {
+        if (!Array.isArray(teamZones)) teamZones = [];
+        teamZones.push({ div: divName, team: t1, zone: zone });
+      }
+      renderSched();
+      showToast('Training game added',
+        escHtml(t1) + ' vs <strong>' + escHtml(t2) + '</strong> on Day '
+        + (slot.dayIdx + 1) + '.', 'success');
+    });
+  };
+
+  // Thin wrapper around runOpponentPicker for the in-place TBD chip flow:
+  // overwrites the existing training game's t2 with the picked team.
+  function openTbdPicker(tgIdx) {
+    var tg = (sched.trainingGames || [])[tgIdx];
+    if (!tg) return;
+    runOpponentPicker({
+      divName:         tg.divName,
+      day:             tg.day,
+      time:            tg.time,
+      court:           tg.court,
+      loc:             tg.loc,
+      hostTeam:        tg.t1,
+      title:           'Set training opponent for ' + tg.t1,
+      skipTrainingIdx: tgIdx
+    }, function(team) {
+      sched.trainingGames[tgIdx].t2 = team;
+      renderSched();
+      showToast('Opponent set',
+        escHtml(tg.t1) + ' will play <strong>' + escHtml(team) + '</strong> as a training game on Day ' + (tg.day + 1) + '.',
+        'success');
     });
   }
 
@@ -7148,9 +7362,19 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var p = fmt(g.time).split(' ');
       // Training games: render distinct (no scores, "TRAINING" badge).
       if (item.isTraining) {
-        h += '<div class="gc" style="border-left-color:' + item.color
+        // Stamp the training-game index on manually-added rows so the edit-mode
+        // click handler offers a delete prompt (auto-paired rows aren't taggable
+        // for delete; the admin can edit the underlying blank-day rule instead).
+        var tgEntry = (sched.trainingGames || [])[item.tgIdx];
+        var manualAttr = (tgEntry && tgEntry.isManual)
+          ? ' data-manual-training-idx="' + item.tgIdx + '"'
+          : '';
+        var manualTip = (tgEntry && tgEntry.isManual)
+          ? 'Manual training game'
+          : 'Training game (placed to fill a blank day)';
+        h += '<div class="gc"' + manualAttr + ' style="border-left-color:' + item.color
           + ';opacity:.85;background:rgba(148,163,184,.08);font-style:italic"'
-          + ' title="Training game (placed to fill a blank day) - Venue: ' + (g.loc || 'unknown') + '">'
+          + ' title="' + manualTip + ' - Venue: ' + (g.loc || 'unknown') + '">'
           + '<div class="gt" style="opacity:.7">' + p[0] + '<br><span class="ga">' + p[1] + '</span></div>'
           + '<span class="rb" style="border-color:#94a3b8;color:#94a3b8;background:rgba(148,163,184,.12);white-space:nowrap;flex-shrink:0">TRAINING</span>'
           + '<div class="gi"><div class="gteams">' + g.t1 + '<span class="vs">VS</span>' + _renderTrainingT2(g.t2, item.tgIdx) + '</div>'
@@ -7327,7 +7551,17 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           // data-* attributes mirror the .gc card so openMoveGameModal works unchanged
           var quotaClass = gm.quotaViolation ? ' cg-quota-warn' : '';
           var trainingStyle = gm.isTraining ? ';background:rgba(148,163,184,.10);font-style:italic' : '';
-          rows += '<td class="cg-game-cell' + quotaClass + '" style="border-left:3px solid ' + gm.divColor + trainingStyle + '"'
+          // Tag manually-added training games so the edit-mode handler can
+          // route the click to the delete-confirm prompt.
+          var gmTg = (gm.isTraining && typeof gm.tgIdx === 'number')
+            ? (sched.trainingGames || [])[gm.tgIdx] : null;
+          var manualAttr = (gmTg && gmTg.isManual)
+            ? ' data-manual-training-idx="' + gm.tgIdx + '"' : '';
+          var trainingTip = (gmTg && gmTg.isManual)
+            ? 'Manual training game'
+            : 'Training game (placed to fill a blank day)';
+          rows += '<td class="cg-game-cell' + quotaClass + '"' + manualAttr
+            + ' style="border-left:3px solid ' + gm.divColor + trainingStyle + '"'
             + ' data-div="' + escH(gm.divName) + '"'
             + ' data-t1="' + escH(gm.t1) + '"'
             + ' data-t2="' + escH(gm.t2) + '"'
@@ -7335,7 +7569,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             + ' data-day="' + gm.dIdx + '"'
             + ' data-gi="' + gm.gi + '"'
             + ' data-gk="' + escH(gm.gk) + '"'
-            + (gm.isTraining ? ' title="Training game (placed to fill a blank day)"' : '') + '>'
+            + (gm.isTraining ? ' title="' + trainingTip + '"' : '') + '>'
             + '<div class="cg-cell-div" style="color:' + (gm.isTraining ? '#94a3b8' : gm.divColor) + '">' + escH(divShort)
             +   (gm.lbl ? ' <span class="cg-cell-label"' + (gm.isTraining ? ' style="color:#94a3b8;border-color:#94a3b8"' : '') + '>' + escH(gm.lbl) + '</span>' : '') + '</div>'
             + '<div class="cg-cell-teams">' + escH(gm.t1) + '<span class="cg-vs">vs</span>'
@@ -8089,6 +8323,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     });
     sectionMap.push({ row: rows.length, kind: 'colHeader' });
     rows.push(['Team', 'Zone', 'PAX']);
+    var placeholderRe = /^(?:\d+(?:st|nd|rd|th))\s+Group\s+[A-Z]$/;
     divisions.forEach(function(d) {
       var meta = _xlsxParseDivision(d.name);
       var genderLabel = meta.gender === 'FEMALE' ? '(girls)' : (meta.gender === 'MIX' ? '(mix)' : '(boys)');
@@ -8096,16 +8331,41 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       sectionMap.push({ row: rows.length, kind: 'div' });
       rows.push([headerCat]);
       var groups = (d.manualGroups && d.manualGroups.length) ? d.manualGroups : [d.teams || []];
+      var rosterSet = {};
       groups.forEach(function(grp, gi) {
         sectionMap.push({ row: rows.length, kind: 'group' });
         rows.push(['GROUP ' + String.fromCharCode(65 + gi)]);
         grp.forEach(function(team) {
+          rosterSet[team] = true;
           sectionMap.push({ row: rows.length, kind: 'team' });
           rows.push([team, zoneMap[d.name + '\x00' + team] || '', '']);
         });
         // Group RR count = n*(n-1)/2
         totalRR += grp.length * (grp.length - 1) / 2;
       });
+      // GROUP TRAINING — collect distinct free-text training-game teams for
+      // this division (t1 only; t2 is always a roster team). Skips
+      // placeholders ("4th Group X") and "TBD" so only real external teams
+      // appear. Suppressed when empty so symmetric divisions look unchanged.
+      var trainingTeams = [];
+      var seenTraining = {};
+      ((sched && sched.trainingGames) || []).forEach(function(tg) {
+        if (!tg || tg.divName !== d.name) return;
+        var t = (tg.t1 || '').trim();
+        if (!t || t === 'TBD' || placeholderRe.test(t)) return;
+        if (rosterSet[t]) return;
+        if (seenTraining[t]) return;
+        seenTraining[t] = true;
+        trainingTeams.push(t);
+      });
+      if (trainingTeams.length) {
+        sectionMap.push({ row: rows.length, kind: 'group' });
+        rows.push(['GROUP TRAINING']);
+        trainingTeams.forEach(function(t) {
+          sectionMap.push({ row: rows.length, kind: 'team' });
+          rows.push([t, zoneMap[d.name + '\x00' + t] || '', '']);
+        });
+      }
       rows.push([]); // blank separator
     });
     sectionMap.push({ row: rows.length, kind: 'total' });
