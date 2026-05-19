@@ -812,6 +812,39 @@ def _build_context(config):
         if dn and tn and zn in ('white', 'black'):
             team_zone[(dn, tn)] = zn
 
+    # ── Zone-level venue rules (Mandatory or High Priority, RR only) ────────
+    # Shape per rule: {zone: 'white'|'black', venues: [str], mode: 'mandatory'
+    # | 'high-priority'}. Lowered into the SAME team_blocked_courts /
+    # team_avoided_courts dicts populated above for per-team rules, so the
+    # solver + validator paths stay unchanged. Teams with no zone set are
+    # silently skipped. Main venue is stripped from the effective blocklist
+    # (matches teamVenueRules behaviour). Multiple rules — zone + team —
+    # union their blocked sets.
+    for rule in (config.get('zoneVenueRules') or []):
+        zone = (rule.get('zone') or '').strip().lower()
+        if zone not in ('white', 'black'):
+            continue
+        rule_venues = [v for v in (rule.get('venues') or []) if v]
+        if not rule_venues:
+            continue
+        rule_mode = rule.get('mode', 'high-priority')
+        venues_lower = {v.lower() for v in rule_venues}
+        venues_lower.discard(main_venue_lower)
+        if not venues_lower:
+            continue
+        court_set = {ci for ci, c in enumerate(courts)
+                     if c['venue'].lower() in venues_lower}
+        if not court_set:
+            continue
+        target = team_blocked_courts if rule_mode == 'mandatory' \
+                 else team_avoided_courts
+        for (dn, tn), tz in team_zone.items():
+            if tz != zone:
+                continue
+            key = (dn, tn)
+            prev = target.get(key)
+            target[key] = court_set if prev is None else (prev | court_set)
+
     # Per-venue exemption: if every team that can legally play at venue v
     # has the same zone (or all teams there are unset), the rule is vacuous
     # for v and we skip the penalty entirely. Pineda — where the existing

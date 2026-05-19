@@ -538,6 +538,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     </div>
 
     <div class="card" style="margin-top:14px">
+      <div class="stitle">Zone Venue Blocks <span style="font-weight:400;font-size:11px;opacity:0.7">(Round-Robin only)</span></div>
+      <p class="help" style="margin-bottom:10px">Block every team in a shuttle zone (<strong>White</strong> or <strong>Black</strong>) from one or more venues. Lighter than listing teams one-by-one in Team Venue Blocks. Applies to round-robin only; the main venue cannot be blocked.</p>
+      <div id="zoneVenueRulesList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="add-btn" id="addZoneVenueRuleBtn" style="margin-top:10px">+ Add Zone Block</button>
+    </div>
+
+    <div class="card" style="margin-top:14px">
       <div class="stitle">Team Late-Arrival Rules</div>
       <p class="help" style="margin-bottom:10px">For teams arriving late on a tournament day, block scheduling games before the arrival time. Applies to <strong>all games</strong> on that day (round-robin and playoffs).</p>
       <div id="teamAvailabilityList" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -1164,6 +1171,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     teamVenueRules.push({ teams: [], venues: [], mode: 'mandatory' });
     renderTeamVenueRules();
   });
+  document.getElementById('addZoneVenueRuleBtn').addEventListener('click', function () {
+    zoneVenueRules.push({ zone: 'white', venues: [], mode: 'mandatory' });
+    renderZoneVenueRules();
+  });
   document.getElementById('addTeamAvailabilityBtn').addEventListener('click', function () {
     teamAvailability.push({ teams: [], day: 0, notBefore: '16:00' });
     renderTeamAvailability();
@@ -1232,6 +1243,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // Intersects with division rules (both must allow). Mandatory rules
   // auto-include the main venue so the at-least-one-Blanes RR rule holds.
   var teamVenueRules = [];
+
+  // zoneVenueRules: per-shuttle-zone venue restriction for ROUND-ROBIN games
+  // only. Each entry: { zone: 'white'|'black', venues: [str], mode: 'mandatory'|'high-priority' }.
+  // Lowered server-side into the same team_blocked_courts structure as
+  // teamVenueRules, so the solver + validator paths are unchanged. Teams
+  // with no zone set are unaffected. The main venue is stripped from the
+  // effective blocklist (matches teamVenueRules behaviour).
+  var zoneVenueRules = [];
 
   // venueBlackouts: per-venue, per-day time restrictions.
   // Each entry: { venue: string, day: number (0-indexed), afterTime: string, beforeTime: string }
@@ -2529,6 +2548,91 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     });
     el.querySelectorAll('.vr-del').forEach(function(b) {
       b.onclick = function() { venueRules.splice(+this.dataset.idx, 1); renderVenueRules(); };
+    });
+  }
+
+  // ── Per-zone venue rule rendering (RR only) ──────────────
+  // Mirrors renderVenueRules but with a zone dropdown (White/Black) in place
+  // of the division dropdown, and venue checkboxes that block instead of
+  // require. Main venue is excluded from the venue picker so it can never be
+  // blocked. Backend lowers each rule into the per-team blocklist for every
+  // matching zoned team — see _build_context in scheduler.py.
+  function renderZoneVenueRules() {
+    var el = document.getElementById('zoneVenueRulesList');
+    if (!el) return;
+    el.innerHTML = '';
+    var mainVenueName = (document.getElementById('mainVenue').value || '').trim() || 'Blanes';
+    var mainVenueLower = mainVenueName.toLowerCase();
+    var siteNames = sites.map(function(s) { return s.name; }).filter(Boolean);
+    zoneVenueRules.forEach(function(rule, idx) {
+      // Zone dropdown (White / Black)
+      var zoneOpts =
+          '<option value="white"' + (rule.zone === 'white' ? ' selected' : '') + '>White</option>'
+        + '<option value="black"' + (rule.zone === 'black' ? ' selected' : '') + '>Black</option>';
+      // Venue checkboxes (built from sites[]; main venue disabled — blocking
+      // it would break the at-least-one-Blanes RR guarantee)
+      var venuesList = rule.venues || [];
+      var venueChecks = siteNames.length
+        ? siteNames.map(function(v) {
+            var esc = v.replace(/"/g,'&quot;');
+            var isMain = v.toLowerCase() === mainVenueLower;
+            var checked = !isMain && venuesList.indexOf(v) !== -1 ? ' checked' : '';
+            var disabled = isMain ? ' disabled' : '';
+            var label = isMain ? ' <span style="opacity:.55;font-size:11px">(main — not blockable)</span>' : '';
+            return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;cursor:' + (isMain ? 'not-allowed' : 'pointer') + (isMain ? ';opacity:0.55' : '') + '">'
+              + '<input type="checkbox" class="zvr-venue" data-idx="' + idx + '" data-venue="' + esc + '"' + checked + disabled + '>'
+              + v + label + '</label>';
+          }).join('')
+        : '<span style="opacity:0.6;font-size:12px">Add at least one venue above to pick from.</span>';
+      // Mode radios — same wording template as Team Venue Blocks
+      var modeRadios =
+          '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:16px;cursor:pointer">'
+        +   '<input type="radio" name="zvr-mode-' + idx + '" class="zvr-mode" data-idx="' + idx + '" value="mandatory"'
+        +     (rule.mode === 'mandatory' ? ' checked' : '') + '>'
+        +   '<span><strong>Mandatory</strong> <span style="opacity:0.7;font-size:12px">&mdash; WILL NOT play at these venues</span></span>'
+        + '</label>'
+        + '<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer">'
+        +   '<input type="radio" name="zvr-mode-' + idx + '" class="zvr-mode" data-idx="' + idx + '" value="high-priority"'
+        +     (rule.mode === 'high-priority' ? ' checked' : '') + '>'
+        +   '<span><strong>High Priority</strong> <span style="opacity:0.7;font-size:12px">&mdash; tries to avoid these venues</span></span>'
+        + '</label>';
+      // Card layout — same shell as renderVenueRules
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #334;border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,0.02)';
+      row.innerHTML =
+          '<div style="display:flex;align-items:center;gap:10px">'
+        +   '<span style="font-size:12px;opacity:0.75">Zone:</span>'
+        +   '<select class="zvr-zone" data-idx="' + idx + '" style="flex:1;min-width:140px">' + zoneOpts + '</select>'
+        +   '<button class="rm-btn zvr-del" data-idx="' + idx + '" title="Remove this rule">x</button>'
+        + '</div>'
+        + '<div style="font-size:12px;opacity:0.75">Block these venues:</div>'
+        + '<div style="display:flex;flex-wrap:wrap">' + venueChecks + '</div>'
+        + '<div style="font-size:12px;opacity:0.75">Rule type:</div>'
+        + '<div style="display:flex;flex-wrap:wrap">' + modeRadios + '</div>';
+      el.appendChild(row);
+    });
+    // Wire events
+    el.querySelectorAll('.zvr-zone').forEach(function(s) {
+      s.onchange = function() { zoneVenueRules[+this.dataset.idx].zone = this.value; };
+    });
+    el.querySelectorAll('.zvr-venue').forEach(function(cb) {
+      cb.onchange = function() {
+        var idx = +this.dataset.idx;
+        var v = this.dataset.venue;
+        var rule = zoneVenueRules[idx];
+        if (!Array.isArray(rule.venues)) rule.venues = [];
+        if (this.checked) {
+          if (rule.venues.indexOf(v) === -1) rule.venues.push(v);
+        } else {
+          rule.venues = rule.venues.filter(function(x) { return x !== v; });
+        }
+      };
+    });
+    el.querySelectorAll('.zvr-mode').forEach(function(rb) {
+      rb.onchange = function() { zoneVenueRules[+this.dataset.idx].mode = this.value; };
+    });
+    el.querySelectorAll('.zvr-del').forEach(function(b) {
+      b.onclick = function() { zoneVenueRules.splice(+this.dataset.idx, 1); renderZoneVenueRules(); };
     });
   }
 
@@ -4278,6 +4382,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       },
       venueRules: venueRules,
       teamVenueRules: teamVenueRules,
+      zoneVenueRules: zoneVenueRules,
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
       teamZones: teamZones,
@@ -8265,6 +8370,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       divisions: divisions,
       venueRules: venueRules,
       teamVenueRules: teamVenueRules,
+      zoneVenueRules: zoneVenueRules,
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
       teamZones: teamZones,
@@ -8533,6 +8639,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         venueRules       = data.venueRules       || [];
         migrateAllVenueRules();
         teamVenueRules   = Array.isArray(data.teamVenueRules) ? data.teamVenueRules : [];
+        zoneVenueRules   = Array.isArray(data.zoneVenueRules) ? data.zoneVenueRules : [];
         teamAvailability = Array.isArray(data.teamAvailability) ? data.teamAvailability : [];
         venueBlackouts   = data.venueBlackouts   || [];
         unscheduledGames = data.unscheduledGames || [];
@@ -8598,6 +8705,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         if (ftPick) setField('finalTimes', ftPick);
         renderVenueRules();
         renderTeamVenueRules();
+        renderZoneVenueRules();
         renderTeamAvailability();
         renderVenueBlackouts();
         renderSched();
@@ -8958,6 +9066,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     renderVenueRules();
     teamVenueRules = [];
     renderTeamVenueRules();
+    zoneVenueRules = [];
+    renderZoneVenueRules();
     teamAvailability = [];
     renderTeamAvailability();
     teamZones = [];
