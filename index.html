@@ -8001,9 +8001,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   }
 
   function _xlsxBuildGroupsSheetWithMap() {
-    // Sheet 1: division-groups-teams listing. Three columns per team row:
-    // Team | Zone | PAX. Zone is auto-filled from teamZones; PAX is left
-    // blank for manual entry (admins fill in headcount per team later).
+    // Sheet 1: division-groups-teams listing. Three columns:
+    //   Team | Zone | PAX
+    // Column headers appear ONCE at the top of the sheet; division and group
+    // banner rows below it use only column A. Zone is auto-filled from
+    // teamZones; PAX is left blank for the admin to fill in later.
     var rows = [];
     var sectionMap = [];
     var totalRR = 0;
@@ -8014,6 +8016,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         zoneMap[e.div + '\x00' + e.team] = e.zone === 'white' ? 'White' : 'Black';
       }
     });
+    sectionMap.push({ row: rows.length, kind: 'colHeader' });
+    rows.push(['Team', 'Zone', 'PAX']);
     divisions.forEach(function(d) {
       var meta = _xlsxParseDivision(d.name);
       var genderLabel = meta.gender === 'FEMALE' ? '(girls)' : (meta.gender === 'MIX' ? '(mix)' : '(boys)');
@@ -8024,8 +8028,6 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       groups.forEach(function(grp, gi) {
         sectionMap.push({ row: rows.length, kind: 'group' });
         rows.push(['GROUP ' + String.fromCharCode(65 + gi)]);
-        sectionMap.push({ row: rows.length, kind: 'colHeader' });
-        rows.push(['Team', 'Zone', 'PAX']);
         grp.forEach(function(team) {
           sectionMap.push({ row: rows.length, kind: 'team' });
           rows.push([team, zoneMap[d.name + '\x00' + team] || '', '']);
