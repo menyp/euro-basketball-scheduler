@@ -2439,7 +2439,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var dayLabel = 'Day ' + (x.dIdx + 1);
       var venue = g.loc || '?';
       var court = (g.court || '').replace(venue + ' ', '') || g.court || '?';
-      var groupLabel = g.lbl ? (g.lbl + (g.bracket ? ' / ' + g.bracket : '')) : (x.divName + ' RR');
+      // Use the same display naming as the app/Excel so the auditor sees
+      // "5-8 PLACEMENT" / "9-12 PLACEMENT" for the consolation qualifiers and
+      // "SEMI FINAL" only for the actual cup semifinal — never raw "SF 2 /
+      // Silver". Drop the bracket suffix when it would just repeat the label.
+      var stage = g.lbl ? _xlsxStageLabel(g) : '';
+      var groupLabel = g.lbl
+        ? (g.bracket && g.bracket !== stage ? stage + ' / ' + g.bracket : stage)
+        : (x.divName + ' RR');
       // Escape pipe characters so they don't break the markdown table
       function cell(v) { return String(v == null ? '' : v).replace(/\|/g, '\\|'); }
       rows.push('| ' + cell(dayLabel) + ' | ' + cell(g.time) + ' | ' + cell(venue) + ' | ' + cell(g.court) + ' | ' + cell(x.divName) + ' | ' + cell(groupLabel) + ' | ' + cell(g.t1 || '(TBD)') + ' | ' + cell(g.t2 || '(TBD)') + ' |');
