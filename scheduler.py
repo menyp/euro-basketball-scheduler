@@ -2838,6 +2838,21 @@ def _build_po_structure(divisions, groups):
                                  'bracket': '7th Place', 'groups': group_letters,
                                  't1': '4th Group A', 't2': '4th Group B'})
         elif n_groups == 4:
+            # Asymmetric layouts share the symmetric 12-team tiered structure
+            # (top 3 of every group earn a tier slot). Only a true 16-team
+            # division (all four groups of 4) uses paired Silver/Bronze +
+            # 13–16 placement. This mirrors the frontend getBracketGames so
+            # the two bracket builders stay in lockstep.
+            #   [3,3,3,3] 12-team  → tiered, no 13–16
+            #   [4,3,3,3] 13-team  → tiered, A4 gets a training game (no
+            #                         bracket entry)
+            #   [4,4,3,3] 14-team  → tiered + one 13th-place compensation game
+            #   [4,4,4,4] 16-team  → paired Silver/Bronze + 13–16
+            n4 = sum(1 for g in mg if len(g) == 4)
+            n3 = sum(1 for g in mg if len(g) == 3)
+            size4_letters = [chr(65 + i) for i, g in enumerate(mg) if len(g) == 4]
+            use_tiered = (max_grp_size <= 3) or (n4 == 1 and n3 == 3) or (n4 == 2 and n3 == 2)
+
             # Championship — full 4-game bracket (always for 4-group divisions).
             po_games.append({'divName': div_name, 'lbl': 'SF 1', 'type': 'SF',
                              'bracket': 'Championship (1st–4th)', 'groups': ['A', 'B'],
@@ -2851,28 +2866,12 @@ def _build_po_structure(divisions, groups):
             po_games.append({'divName': div_name, 'lbl': 'FINAL', 'type': 'Final',
                              'bracket': 'Championship (1st–4th)', 'groups': group_letters,
                              't1': '', 't2': ''})
-            if max_grp_size >= 3:
-                if max_grp_size >= 4:
-                    # 16-team divisions: Silver and Bronze are both 2 paired games.
-                    # Position numbers are nominal labels (the four runners-up never
-                    # all face each other) — see Scheduling Logic & Rules modal for
-                    # the earned-vs-nominal explanation. Pairing is by group letter
-                    # (AB / CD), matching the 13–16 placement convention below.
-                    po_games.append({'divName': div_name, 'lbl': '5th/6th', 'type': 'Medal',
-                                     'bracket': 'Silver (5th–8th)', 'groups': group_letters,
-                                     't1': '2nd Group A', 't2': '2nd Group B'})
-                    po_games.append({'divName': div_name, 'lbl': '7th/8th', 'type': 'Medal',
-                                     'bracket': 'Silver (5th–8th)', 'groups': group_letters,
-                                     't1': '2nd Group C', 't2': '2nd Group D'})
-                    po_games.append({'divName': div_name, 'lbl': '9th/10th', 'type': 'Medal',
-                                     'bracket': 'Bronze (9th–12th)', 'groups': group_letters,
-                                     't1': '3rd Group A', 't2': '3rd Group B'})
-                    po_games.append({'divName': div_name, 'lbl': '11th/12th', 'type': 'Medal',
-                                     'bracket': 'Bronze (9th–12th)', 'groups': group_letters,
-                                     't1': '3rd Group C', 't2': '3rd Group D'})
-                else:
-                    # 12-team divisions: Silver and Bronze are both full 4-game
-                    # brackets (earned placements via cross-group SFs).
+
+            if use_tiered:
+                if max_grp_size >= 3:
+                    # 12-team-style tiered Silver + Bronze (full 4-game brackets,
+                    # earned placements via cross-group SFs). Used for symmetric
+                    # 12-team AND asymmetric [4,3,3,3] / [4,4,3,3] divisions.
                     po_games.append({'divName': div_name, 'lbl': 'SF 1', 'type': 'SF',
                                      'bracket': 'Silver (5th–8th)', 'groups': ['A', 'B'],
                                      't1': '2nd Group A', 't2': '2nd Group B'})
@@ -2897,7 +2896,33 @@ def _build_po_structure(divisions, groups):
                     po_games.append({'divName': div_name, 'lbl': '11th/12th', 'type': 'Medal',
                                      'bracket': 'Bronze (9th–12th)', 'groups': group_letters,
                                      't1': '', 't2': ''})
-            if max_grp_size >= 4:
+                # [4,4,3,3] only: one compensation game between the two 4th-place
+                # teams of the oversized groups so both still reach 4 games.
+                # ([4,3,3,3]'s single A4 has no bracket entry — it gets the
+                # requiredTrainingGames training game instead.)
+                if n4 == 2 and len(size4_letters) == 2:
+                    po_games.append({'divName': div_name, 'lbl': '13th Place', 'type': 'Medal',
+                                     'bracket': '13th Place', 'groups': size4_letters,
+                                     't1': '4th Group ' + size4_letters[0],
+                                     't2': '4th Group ' + size4_letters[1]})
+            else:
+                # 16-team divisions: Silver and Bronze are both 2 paired games.
+                # Position numbers are nominal labels (the four runners-up never
+                # all face each other) — see Scheduling Logic & Rules modal for
+                # the earned-vs-nominal explanation. Pairing is by group letter
+                # (AB / CD), matching the 13–16 placement convention below.
+                po_games.append({'divName': div_name, 'lbl': '5th/6th', 'type': 'Medal',
+                                 'bracket': 'Silver (5th–8th)', 'groups': group_letters,
+                                 't1': '2nd Group A', 't2': '2nd Group B'})
+                po_games.append({'divName': div_name, 'lbl': '7th/8th', 'type': 'Medal',
+                                 'bracket': 'Silver (5th–8th)', 'groups': group_letters,
+                                 't1': '2nd Group C', 't2': '2nd Group D'})
+                po_games.append({'divName': div_name, 'lbl': '9th/10th', 'type': 'Medal',
+                                 'bracket': 'Bronze (9th–12th)', 'groups': group_letters,
+                                 't1': '3rd Group A', 't2': '3rd Group B'})
+                po_games.append({'divName': div_name, 'lbl': '11th/12th', 'type': 'Medal',
+                                 'bracket': 'Bronze (9th–12th)', 'groups': group_letters,
+                                 't1': '3rd Group C', 't2': '3rd Group D'})
                 # 13–16 placement (16-team only): 2 paired games, AB / CD pairing.
                 po_games.append({'divName': div_name, 'lbl': '13th/14th', 'type': 'Medal',
                                  'bracket': '13th–16th Place', 'groups': group_letters,
