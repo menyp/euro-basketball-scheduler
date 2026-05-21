@@ -1900,7 +1900,8 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     #   COUNT mode (no PAX): the original (whiteTeams - blackTeams)² per non-exempt
     #     venue+slot. Keeps behaviour unchanged for configs without PAX.
     # Pineda-style single-zone venues are auto-exempt at ctx-build time.
-    SHUTTLE_WEIGHT = 8
+    SHUTTLE_WEIGHT = 8         # COUNT mode: weight on (W-B)^2
+    SEAT_OVERFLOW_WEIGHT = 10  # SEAT mode: weight per passenger over one bus
     shuttle_terms = []
     team_zone_p1 = ctx['team_zone']
     team_pax_p1 = ctx.get('team_pax', {})
@@ -1938,6 +1939,10 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
             for s in range(len(day_slots[d])):
                 if use_pax:
                     # SEAT mode: per-zone passenger overflow above one bus.
+                    # LINEAR penalty (no squared product) — minimising total
+                    # seat-overflow already drives every bus to <=capacity, and
+                    # avoiding the multiplication keeps the model fast enough for
+                    # the cloud's solve-time budget.
                     wp_terms, bp_terms = [], []
                     for g in range(num_rr):
                         if wpax_of_g[g] == 0 and bpax_of_g[g] == 0:
@@ -1958,10 +1963,7 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                         # over = max(0, zonePAX - bus_seats): lower-bounded here,
                         # pinned tight by minimisation.
                         model.add(over >= sum(terms) - bus_seats)
-                        sq = model.new_int_var(0, cap_bound * cap_bound,
-                                               f'shuttle_oversq_{tag}_{venue}_{d}_{s}')
-                        model.add_multiplication_equality(sq, [over, over])
-                        shuttle_terms.append(SHUTTLE_WEIGHT * sq)
+                        shuttle_terms.append(SEAT_OVERFLOW_WEIGHT * over)
                 else:
                     # COUNT mode: white-vs-black team count diff, squared.
                     count_white_terms = []
