@@ -1873,7 +1873,12 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
     # imbalance between White and Black teams playing there: penalty = (W - B)².
     # Pineda-style venues whose reachable pool is single-zone are auto-exempted
     # at ctx-build time, so we just skip them here.
-    SHUTTLE_WEIGHT = 8  # Above BTB (4), well below rest-fairness's squared deficit.
+    # Prioritise White/Black balance per (venue, day, slot). Raised from 8 to 32
+    # so it clearly outranks the discretionary tier (venue-priority, BTB=4,
+    # tail=1) and flips the *discretionary* 3/1 slots to 2/2 — while staying well
+    # below rest-fairness (squared deficit, thousands) and placement/NBD, so it
+    # never forces an imbalance that would break rest or leave a game unplaced.
+    SHUTTLE_WEIGHT = 32
     shuttle_terms = []
     team_zone_p1 = ctx['team_zone']
     shuttle_exempt = ctx['shuttle_exempt_venues']
@@ -2553,7 +2558,7 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # Soft: shuttle-zone balance for PO (mirrors Phase 1, joint with already-
     # placed RR contributions at the same venue/slot — RR is fixed at this
     # point, so its share is a constant we fold into the diff expression).
-    SHUTTLE_WEIGHT_P2 = 8
+    SHUTTLE_WEIGHT_P2 = 32  # match Phase 1 (raised from 8) — prioritise zone balance
     team_zone_p2 = ctx['team_zone']
     shuttle_exempt_p2 = ctx['shuttle_exempt_venues']
     courts_by_venue_p2 = defaultdict(list)
