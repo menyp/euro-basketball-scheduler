@@ -1035,6 +1035,9 @@ def _build_context(config):
 
     n_days = int(sf.get('nDays', 3))
     max_gpd = int(sf.get('maxGPD', 2))
+    # Seats on one away-venue shuttle bus — the capacity the seat-balance term
+    # penalises overflow against. Configurable; defaults to the real fleet's 55.
+    bus_seats = int(sf.get('busSeats', 55))
     main_venue = sf.get('mainVenue', 'Blanes').strip()
     secondary_venue = (sf.get('secondaryVenue') or '').strip()
     rule_rest = sf.get('ruleRest', True)
@@ -1357,6 +1360,23 @@ def _build_context(config):
         if dn and tn and zn in ('white', 'black'):
             team_zone[(dn, tn)] = zn
 
+    # Per-team PAX (passenger count) — sibling to team_zone. Powers the
+    # seat-capacity shuttle penalty (balance bus SEATS, not just team count).
+    # Missing / non-positive entries are skipped: those teams are excluded from
+    # the seat term, exactly like unset zones are excluded from balance.
+    team_pax = {}            # (div, team) -> int passengers
+    for entry in (config.get('teamPax', []) or []):
+        if not isinstance(entry, dict):
+            continue
+        dn = (entry.get('div') or '').strip()
+        tn = (entry.get('team') or '').strip()
+        try:
+            px = int(entry.get('pax'))
+        except (TypeError, ValueError):
+            continue
+        if dn and tn and px > 0:
+            team_pax[(dn, tn)] = px
+
     # ── Zone-level venue rules (Mandatory or High Priority, RR only) ────────
     # Shape per rule: {zone: 'white'|'black', venues: [str], mode: 'mandatory'
     # | 'high-priority'}. Lowered into the SAME team_blocked_courts /
@@ -1460,7 +1480,8 @@ def _build_context(config):
         'rr_slot_mask': rr_slot_mask, 'finals_day': finals_day,
         'po_start_day': po_start_day, 'reserve': reserve,
         'div_priority': div_priority,
-        'team_zone': team_zone, 'shuttle_exempt_venues': shuttle_exempt_venues,
+        'team_zone': team_zone, 'team_pax': team_pax, 'bus_seats': bus_seats,
+        'shuttle_exempt_venues': shuttle_exempt_venues,
         'final_target': final_target, 'third_target': third_target,
         'venue_court_groups': venue_court_groups,
         'status_names': {cp_model.OPTIMAL: 'OPTIMAL', cp_model.FEASIBLE: 'FEASIBLE',
@@ -1869,62 +1890,102 @@ def _solve_phase1(ctx, forbidden_cells, time_limit, hints=None):
                     model.add(older_at[s] + older_at[s + 1] - 1 <= btb)
                     btb_terms.append(BTB_WEIGHT * btb)
 
-    # Soft: shuttle-zone balance. For each non-exempt (venue, day, slot), penalise
-    # imbalance between White and Black teams playing there: penalty = (W - B)².
-    # Pineda-style venues whose reachable pool is single-zone are auto-exempted
-    # at ctx-build time, so we just skip them here.
-    # Prioritise White/Black balance per (venue, day, slot). Raised from 8 to 32
-    # so it clearly outranks the discretionary tier (venue-priority, BTB=4,
-    # tail=1) and flips the *discretionary* 3/1 slots to 2/2 — while staying well
-    # below rest-fairness (squared deficit, thousands) and placement/NBD, so it
-    # never forces an imbalance that would break rest or leave a game unplaced.
-    SHUTTLE_WEIGHT = 32
+    # Soft: shuttle-zone balance. Two modes, chosen by whether per-team PAX was
+    # provided:
+    #   SEAT mode (team_pax present): penalise passenger load above one bus per
+    #     zone at each AWAY (non-main) venue+slot — max(0, zonePAX - BUS_SEATS)².
+    #     This balances real bus SEATS, so the solver won't put two big same-zone
+    #     teams (e.g. 38 + 30 = 68) on one 55-seat shuttle. Blanes (main venue)
+    #     is skipped: it has a multi-bus fleet, never the bottleneck.
+    #   COUNT mode (no PAX): the original (whiteTeams - blackTeams)² per non-exempt
+    #     venue+slot. Keeps behaviour unchanged for configs without PAX.
+    # Pineda-style single-zone venues are auto-exempt at ctx-build time.
+    SHUTTLE_WEIGHT = 8
     shuttle_terms = []
     team_zone_p1 = ctx['team_zone']
+    team_pax_p1 = ctx.get('team_pax', {})
+    bus_seats = ctx.get('bus_seats', 55)
     shuttle_exempt = ctx['shuttle_exempt_venues']
+    use_pax = bool(team_pax_p1)
+    main_venue_lc = ctx['main_venue'].lower()
     # Group courts by venue so we can sum across all courts of that venue.
     courts_by_venue = defaultdict(list)
     for ci, c in enumerate(courts):
         courts_by_venue[c['venue']].append(ci)
-    # Per-game zone constants: each game has two individually-zoned teams,
-    # so w_g / b_g range 0..2 (each team independently contributes 1 to its
-    # zone or 0 if unset).
+    # Per-game zone constants. Team counts (COUNT mode) and per-zone PAX (SEAT
+    # mode) — each game has two individually-zoned teams.
     w_of_g = [0] * num_rr
     b_of_g = [0] * num_rr
+    wpax_of_g = [0] * num_rr
+    bpax_of_g = [0] * num_rr
     for g, (div, _, a, b) in enumerate(rr_matchups):
         za = team_zone_p1.get((div, a))
         zb = team_zone_p1.get((div, b))
         w_of_g[g] = (1 if za == 'white' else 0) + (1 if zb == 'white' else 0)
         b_of_g[g] = (1 if za == 'black' else 0) + (1 if zb == 'black' else 0)
+        if za == 'white': wpax_of_g[g] += team_pax_p1.get((div, a), 0)
+        elif za == 'black': bpax_of_g[g] += team_pax_p1.get((div, a), 0)
+        if zb == 'white': wpax_of_g[g] += team_pax_p1.get((div, b), 0)
+        elif zb == 'black': bpax_of_g[g] += team_pax_p1.get((div, b), 0)
+    max_pax = max(team_pax_p1.values(), default=0)
     for venue, venue_courts in courts_by_venue.items():
         if venue in shuttle_exempt:
             continue
+        is_main = venue.lower().find(main_venue_lc) != -1
+        if use_pax and is_main:
+            continue  # main venue has a multi-bus fleet — not the seat bottleneck
         for d in range(n_days):
             for s in range(len(day_slots[d])):
-                # count_white / count_black across this (venue, d, s).
-                count_white_terms = []
-                count_black_terms = []
-                for g in range(num_rr):
-                    if w_of_g[g] == 0 and b_of_g[g] == 0:
-                        continue  # unset zone — doesn't contribute either way
-                    placed_here = sum(x[g, d, s, c] for c in venue_courts)
-                    if w_of_g[g]:
-                        count_white_terms.append(w_of_g[g] * placed_here)
-                    if b_of_g[g]:
-                        count_black_terms.append(b_of_g[g] * placed_here)
-                if not count_white_terms and not count_black_terms:
-                    continue
-                # diff = white - black, |diff|² added to objective.
-                max_teams = 2 * len(venue_courts)
-                diff_var = model.new_int_var(-max_teams, max_teams,
-                                              f'shuttle_diff_{venue}_{d}_{s}')
-                model.add(diff_var == (sum(count_white_terms) - sum(count_black_terms)))
-                abs_diff = model.new_int_var(0, max_teams, f'shuttle_abs_{venue}_{d}_{s}')
-                model.add_abs_equality(abs_diff, diff_var)
-                sq = model.new_int_var(0, max_teams * max_teams,
-                                        f'shuttle_sq_{venue}_{d}_{s}')
-                model.add_multiplication_equality(sq, [abs_diff, abs_diff])
-                shuttle_terms.append(SHUTTLE_WEIGHT * sq)
+                if use_pax:
+                    # SEAT mode: per-zone passenger overflow above one bus.
+                    wp_terms, bp_terms = [], []
+                    for g in range(num_rr):
+                        if wpax_of_g[g] == 0 and bpax_of_g[g] == 0:
+                            continue
+                        placed_here = sum(x[g, d, s, c] for c in venue_courts)
+                        if wpax_of_g[g]:
+                            wp_terms.append(wpax_of_g[g] * placed_here)
+                        if bpax_of_g[g]:
+                            bp_terms.append(bpax_of_g[g] * placed_here)
+                    if not wp_terms and not bp_terms:
+                        continue
+                    cap_bound = max(1, 2 * len(venue_courts) * max_pax)
+                    for tag, terms in (('w', wp_terms), ('b', bp_terms)):
+                        if not terms:
+                            continue
+                        over = model.new_int_var(0, cap_bound,
+                                                 f'shuttle_over_{tag}_{venue}_{d}_{s}')
+                        # over = max(0, zonePAX - bus_seats): lower-bounded here,
+                        # pinned tight by minimisation.
+                        model.add(over >= sum(terms) - bus_seats)
+                        sq = model.new_int_var(0, cap_bound * cap_bound,
+                                               f'shuttle_oversq_{tag}_{venue}_{d}_{s}')
+                        model.add_multiplication_equality(sq, [over, over])
+                        shuttle_terms.append(SHUTTLE_WEIGHT * sq)
+                else:
+                    # COUNT mode: white-vs-black team count diff, squared.
+                    count_white_terms = []
+                    count_black_terms = []
+                    for g in range(num_rr):
+                        if w_of_g[g] == 0 and b_of_g[g] == 0:
+                            continue
+                        placed_here = sum(x[g, d, s, c] for c in venue_courts)
+                        if w_of_g[g]:
+                            count_white_terms.append(w_of_g[g] * placed_here)
+                        if b_of_g[g]:
+                            count_black_terms.append(b_of_g[g] * placed_here)
+                    if not count_white_terms and not count_black_terms:
+                        continue
+                    max_teams = 2 * len(venue_courts)
+                    diff_var = model.new_int_var(-max_teams, max_teams,
+                                                  f'shuttle_diff_{venue}_{d}_{s}')
+                    model.add(diff_var == (sum(count_white_terms) - sum(count_black_terms)))
+                    abs_diff = model.new_int_var(0, max_teams, f'shuttle_abs_{venue}_{d}_{s}')
+                    model.add_abs_equality(abs_diff, diff_var)
+                    sq = model.new_int_var(0, max_teams * max_teams,
+                                            f'shuttle_sq_{venue}_{d}_{s}')
+                    model.add_multiplication_equality(sq, [abs_diff, abs_diff])
+                    shuttle_terms.append(SHUTTLE_WEIGHT * sq)
 
     # Combine venue-preference penalties with No-Blank-Day slack penalties,
     # the rest-fairness term, the early-slot preference, the back-to-back
@@ -2558,7 +2619,10 @@ def _solve_phase2(ctx, rr_result, rr_occupied, time_limit, po_excluded_cells=Non
     # Soft: shuttle-zone balance for PO (mirrors Phase 1, joint with already-
     # placed RR contributions at the same venue/slot — RR is fixed at this
     # point, so its share is a constant we fold into the diff expression).
-    SHUTTLE_WEIGHT_P2 = 32  # match Phase 1 (raised from 8) — prioritise zone balance
+    # PO games carry placeholder seeds (real teams unknown at solve time), so
+    # they contribute 0 here and this term is effectively inert — kept for the
+    # rare resolved-seed case. Count-based; PAX balance lives in Phase 1 (RR).
+    SHUTTLE_WEIGHT_P2 = 8
     team_zone_p2 = ctx['team_zone']
     shuttle_exempt_p2 = ctx['shuttle_exempt_venues']
     courts_by_venue_p2 = defaultdict(list)

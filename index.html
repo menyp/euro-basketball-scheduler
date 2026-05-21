@@ -51,6 +51,10 @@ textarea{resize:vertical;min-height:160px;line-height:1.7;font-size:13px}
 .zone-btn:hover{background:rgba(255,255,255,.14);color:#e2e8f0}
 .zone-btn.sel{background:var(--o);color:#fff;border-color:var(--o)}
 .zone-unset{color:#f59e0b;font-size:14px;line-height:1;margin-left:2px}
+.pax-in{width:42px;background:rgba(255,255,255,.08);color:#e2e8f0;border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:2px 4px;font-size:11px;font-weight:700;text-align:center;line-height:1.4;margin-left:2px;-moz-appearance:textfield}
+.pax-in::-webkit-outer-spin-button,.pax-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.pax-in::placeholder{color:#f59e0b;opacity:.8;font-weight:700}
+.pax-in:focus{outline:none;border-color:var(--o)}
 .div-teams{padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px}
 .team-tag{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:4px 10px;font-size:12px;font-family:'Montserrat',sans-serif;font-weight:600;display:flex;align-items:center;gap:6px}
 .team-tag .trm{color:var(--g);cursor:pointer;font-size:13px;opacity:.6}
@@ -360,6 +364,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       <button class="parse-btn" id="parseBtn">Parse Teams from List</button>
       <div id="divSummary"></div>
       <div class="div-list" id="divList"></div>
+      <details class="pax-bulk" style="margin-top:14px">
+        <summary style="cursor:pointer;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:1px">Bulk-set PAX (optional)</summary>
+        <p class="paste-hint" style="margin-top:8px">Paste from your PAX sheet: division headers (e.g. <code>U12 (mix)</code>, <code>U14 BOYS</code>) followed by <code>Team Name, 32</code> rows (comma or tab between name and number). <code>GROUP</code>/<code>TOTAL</code> lines are ignored. Matched by division + team name; review unmatched lines reported after applying.</p>
+        <textarea id="paxPasteBox" rows="6" style="width:100%;box-sizing:border-box;background:#0c1424;color:#e2e8f0;border:1px solid var(--b);border-radius:6px;padding:10px;font-family:monospace;font-size:12px" placeholder="U12 (mix)&#10;GLOUCESTER SAXONS (ENG), 32&#10;ST. JOSEPHS BASKETBALL CLUB (IRE), 38&#10;U14 BOYS&#10;CORK 1 (IRE), 30"></textarea>
+        <button class="parse-btn" id="paxApplyBtn">Apply PAX</button>
+      </details>
     </div>
 
     <div class="card">
@@ -1062,6 +1072,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         _zoneMap[e.div + '\x00' + e.team] = e.zone;
       }
     });
+    // Per-team PAX lookup (sibling to zones), keyed the same way.
+    var _paxMap = {};
+    (teamPax || []).forEach(function(e) {
+      if (e && e.div && e.team && e.pax > 0) {
+        _paxMap[e.div + '\x00' + e.team] = e.pax;
+      }
+    });
     list.innerHTML = divisions.map(function (d, di) {
       return '<div class="div-card">'
         + '<div class="div-header"><div class="div-dot" style="background:' + d.color + '"></div>'
@@ -1071,10 +1088,12 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         + '<div class="div-teams">'
         + d.teams.map(function (t, ti) {
             var z = _zoneMap[d.name + '\x00' + t] || '';
+            var px = _paxMap[d.name + '\x00' + t] || '';
             return '<div class="team-tag">' + t
               + '<button class="zone-btn' + (z === 'white' ? ' sel' : '') + '" data-zdi="' + di + '" data-zti="' + ti + '" data-zone="white" title="Set shuttle zone: White">W</button>'
               + '<button class="zone-btn' + (z === 'black' ? ' sel' : '') + '" data-zdi="' + di + '" data-zti="' + ti + '" data-zone="black" title="Set shuttle zone: Black">B</button>'
               + (z ? '' : '<span class="zone-unset" title="Shuttle zone not set">●</span>')
+              + '<input type="number" class="pax-in" min="0" max="199" data-pdi="' + di + '" data-pti="' + ti + '" value="' + px + '" placeholder="PAX" title="Passengers on this team\'s shuttle (for seat balance)">'
               + '<span class="trm" data-rdi="' + di + '" data-rti="' + ti + '">x</span></div>';
           }).join('')
         + '</div></div>';
@@ -1118,6 +1137,108 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       }
       renderDivisions();
     }
+  });
+
+  // Per-team PAX number input. Listen on 'input' (not click) and DON'T
+  // re-render — re-rendering mid-type would drop focus. The DOM already shows
+  // the typed value; we only sync it into teamPax (upsert / remove on empty).
+  document.getElementById('divList').addEventListener('input', function (e) {
+    var el = e.target;
+    if (!el.classList.contains('pax-in') || el.dataset.pdi === undefined) return;
+    var pdi = parseInt(el.dataset.pdi);
+    var pti = parseInt(el.dataset.pti);
+    var dn = divisions[pdi] && divisions[pdi].name;
+    var tn = divisions[pdi] && divisions[pdi].teams[pti];
+    if (!dn || !tn) return;
+    var pax = parseInt(el.value, 10);
+    var idx = teamPax.findIndex(function (x) { return x.div === dn && x.team === tn; });
+    if (!isNaN(pax) && pax > 0) {
+      if (idx >= 0) teamPax[idx].pax = pax;
+      else teamPax.push({ div: dn, team: tn, pax: pax });
+    } else if (idx >= 0) {
+      teamPax.splice(idx, 1); // empty / 0 → unset
+    }
+  });
+
+  // Bulk-set PAX. Parses the grouped sheet format: division-header lines
+  // (e.g. "U12 (mix)", "U14 BOYS") set the current division; "Team, 32" /
+  // "Team<tab>32" rows set that team's PAX within the current division. Names
+  // match case-insensitively, tolerant of the country tag. Division-aware so
+  // multi-division clubs (different PAX per age group) map correctly.
+  function _normDivKey(s) {
+    var d = (s || '').toUpperCase().replace(/[-_]/g, ' ');
+    if (d.indexOf('U12') !== -1) return 'U12';
+    var ages = ['14', '16', '18'];
+    for (var i = 0; i < ages.length; i++) {
+      var a = ages[i];
+      if (d.indexOf('U' + a) !== -1) {
+        if (d.indexOf('GIRL') !== -1 || d.trim().slice(-1) === 'G') return 'U' + a + 'G';
+        if (d.indexOf('BOY') !== -1 || d.trim().slice(-1) === 'B') return 'U' + a + 'B';
+      }
+    }
+    return '';
+  }
+  function _normName(s) {
+    return (s || '').replace(/\(.*?\)/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  }
+  document.getElementById('paxApplyBtn').addEventListener('click', function () {
+    var raw = (document.getElementById('paxPasteBox').value || '');
+    if (!raw.trim()) { showToast('Nothing to apply', 'Paste PAX rows first.', 'warn'); return; }
+    // Map each division to a normalized-key and a normalized team-name lookup.
+    var divByKey = {};                 // normDivKey -> division object
+    var nameMaps = [];                 // per division: { normName -> realTeam }
+    divisions.forEach(function (d) {
+      var k = _normDivKey(d.name);
+      if (k && !(k in divByKey)) divByKey[k] = d;
+      var m = {};
+      (d.teams || []).forEach(function (t) { m[_normName(t)] = t; });
+      nameMaps.push(m);
+    });
+    function _setPax(divObj, realTeam, pax) {
+      var idx = teamPax.findIndex(function (x) { return x.div === divObj.name && x.team === realTeam; });
+      if (idx >= 0) teamPax[idx].pax = pax;
+      else teamPax.push({ div: divObj.name, team: realTeam, pax: pax });
+    }
+    var curDiv = null, set = 0, unmatched = [];
+    raw.split('\n').forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var up = line.toUpperCase();
+      if (up.indexOf('GROUP ') === 0 || up.indexOf('TOTAL') === 0 || up.indexOf('MISSING') !== -1) return;
+      // A team row needs a comma or tab separating the name from the number.
+      var m = line.match(/^(.+?)[,\t]\s*.*?(\d{1,3})/);
+      if (!m) {
+        // No name/number separator → treat as a division header.
+        var dk = _normDivKey(line);
+        if (dk && divByKey[dk]) { curDiv = divByKey[dk]; }
+        else { unmatched.push(line); }
+        return;
+      }
+      var nm = _normName(m[1]);
+      var pax = parseInt(m[2], 10);
+      if (!nm || !(pax > 0)) { unmatched.push(line); return; }
+      // Resolve the team: prefer the current division; else a unique match anywhere.
+      var target = null;
+      if (curDiv) {
+        var di = divisions.indexOf(curDiv);
+        if (di >= 0 && nameMaps[di][nm]) target = { div: curDiv, team: nameMaps[di][nm] };
+      }
+      if (!target) {
+        var hits = [];
+        divisions.forEach(function (d, i) { if (nameMaps[i][nm]) hits.push({ div: d, team: nameMaps[i][nm] }); });
+        if (hits.length === 1) target = hits[0];
+      }
+      if (target) { _setPax(target.div, target.team, pax); set++; }
+      else unmatched.push(line);
+    });
+    renderDivisions();
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    var msg = '<strong>' + set + '</strong> team(s) updated.';
+    if (unmatched.length) {
+      msg += ' <span style="color:#ffd494">' + unmatched.length + ' line(s) not matched'
+           + (unmatched.length <= 5 ? ': ' + unmatched.map(esc).join('; ') : ' (check division headers / team names).') + '</span>';
+    }
+    showToast('PAX applied', msg, unmatched.length ? 'warn' : 'success');
   });
 
   // ── Sites ──────────────────────────────────────────────
@@ -1322,6 +1443,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // by the solver's shuttle-balance soft rule.
   // Each entry: { div, team, zone: 'white' | 'black' }
   var teamZones = [];
+
+  // teamPax: per-team passenger count (people on the team's shuttle). Sibling
+  // to teamZones — lets the solver balance actual bus SEATS per (venue, slot),
+  // not just the number of teams. Empty/unset = excluded (solver falls back to
+  // count-based balance for that team).
+  // Each entry: { div, team, pax: <int> }
+  var teamPax = [];
 
   // ── Per-day operating hours ────────────────────────────
   // Returns [{start:'09:00', end:'19:00'}, ...] for each tournament day.
@@ -4550,6 +4678,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
       teamZones: teamZones,
+      teamPax: teamPax,
       // For each asymmetric [4,3,3,3] division, request a training game on
       // the last day for the 4th-place team in the oversized group with a
       // TBD opponent. t1 carries a placeholder string ('4th Group X') that
@@ -4587,6 +4716,21 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       (d.teams || []).forEach(function(t) {
         if (!_zoneSet[d.name + '\x00' + t]) {
           _unsetTeams.push({ div: d.name, team: t });
+        }
+      });
+    });
+    // Same enumeration for PAX — teams with no positive passenger count.
+    var _paxSet = {};
+    (teamPax || []).forEach(function(e) {
+      if (e && e.div && e.team && e.pax > 0) {
+        _paxSet[e.div + '\x00' + e.team] = true;
+      }
+    });
+    var _unsetPax = [];
+    divisions.forEach(function(d) {
+      (d.teams || []).forEach(function(t) {
+        if (!_paxSet[d.name + '\x00' + t]) {
+          _unsetPax.push({ div: d.name, team: t });
         }
       });
     });
@@ -4741,22 +4885,33 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // Chained pre-solve confirms: asymmetric groups first, then unset zones,
     // then proceed. Each Cancel preserves all setup state (no DOM mutation).
     function _runZonesCheck() {
-      if (!_unsetTeams.length) { _proceed(); return; }
-      var _items = _unsetTeams.slice(0, 8).map(function(e) {
-        return '<li>' + _escForHtml(e.team) + '  <span style="color:#8892a4">[' + _escForHtml(e.div) + ']</span></li>';
-      }).join('');
-      var _more = _unsetTeams.length > 8
-        ? '<li style="opacity:.7;list-style:none">… +' + (_unsetTeams.length - 8) + ' more</li>'
-        : '';
-      var _html = '<div><strong>' + _unsetTeams.length + ' team(s)</strong> have no shuttle zone:</div>'
-                + '<ul style="margin:8px 0 10px 18px;padding:0;color:#fff;font-size:12px;line-height:1.7">'
-                + _items + _more + '</ul>'
-                + '<div style="color:#ffd494">These teams will be <strong>excluded</strong> from the shuttle balance rule.</div>';
+      if (!_unsetTeams.length && !_unsetPax.length) { _proceed(); return; }
+      function _listHtml(arr) {
+        var items = arr.slice(0, 8).map(function(e) {
+          return '<li>' + _escForHtml(e.team) + '  <span style="color:#8892a4">[' + _escForHtml(e.div) + ']</span></li>';
+        }).join('');
+        var more = arr.length > 8
+          ? '<li style="opacity:.7;list-style:none">… +' + (arr.length - 8) + ' more</li>'
+          : '';
+        return '<ul style="margin:8px 0 10px 18px;padding:0;color:#fff;font-size:12px;line-height:1.7">' + items + more + '</ul>';
+      }
+      var _html = '';
+      if (_unsetTeams.length) {
+        _html += '<div><strong>' + _unsetTeams.length + ' team(s)</strong> have no shuttle zone:</div>'
+               + _listHtml(_unsetTeams)
+               + '<div style="color:#ffd494">These teams are <strong>excluded</strong> from the shuttle balance rule.</div>';
+      }
+      if (_unsetPax.length) {
+        if (_unsetTeams.length) _html += '<div style="height:10px"></div>';
+        _html += '<div><strong>' + _unsetPax.length + ' team(s)</strong> have no PAX set:</div>'
+               + _listHtml(_unsetPax)
+               + '<div style="color:#ffd494">Shuttle balance for these falls back to team-count, not seats.</div>';
+      }
       appConfirm({
-        title:       'Shuttle zones not set',
+        title:       'Shuttle data incomplete',
         message:     _html,
         okLabel:     'Generate anyway',
-        cancelLabel: 'Go back and set zones'
+        cancelLabel: 'Go back and complete'
       }, function(ok) { if (ok) _proceed(); });
     }
 
@@ -9041,6 +9196,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       venueBlackouts: venueBlackouts,
       teamAvailability: teamAvailability,
       teamZones: teamZones,
+      teamPax: teamPax,
       unscheduledGames: unscheduledGames,
       sites: sites,
       setupFields: {
@@ -9291,6 +9447,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             }
           });
         }
+        // Restore per-team PAX (sibling to teamZones) before renderDivisions.
+        teamPax          = Array.isArray(data.teamPax) ? data.teamPax : [];
         // Repopulate the Teams and Divisions textarea + division cards from
         // the loaded divisions[]. Without this, the textarea keeps stale
         // sample/default data even though divisions[] is correct.
