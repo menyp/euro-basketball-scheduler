@@ -7882,20 +7882,32 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var sections = '';
 
       if (nbdTraining.length > 0) {
+        // Short "why" for each training game so the admin can tell a 4-game-minimum
+        // filler (asymmetric group: the 4th seed of a group of 4 has no playoff slot)
+        // apart from an ordinary blank-day fill.
+        var _trainingReason = function (tg) {
+          if (/^\d+\w*\s+Group\s+[A-Z]$/.test(tg.t1 || '')) {
+            return '4-game minimum — 4th seed of a group of 4 (no playoff slot)';
+          }
+          if (tg.t2 === 'TBD') return 'fills a blank day — pick the opponent';
+          return 'fills a blank day';
+        };
         var trainRows = nbdTraining.slice().sort(function(a,b){
           return (a.day - b.day) || a.divName.localeCompare(b.divName) || a.time.localeCompare(b.time);
         }).map(function(tg) {
-          return '<li style="margin-bottom:4px">'
+          return '<li style="margin-bottom:6px">'
             + '<strong>' + escHtml(tg.t1) + '</strong> vs <strong>' + escHtml(tg.t2) + '</strong>'
             + ' <span style="opacity:.65;font-size:11px">(' + escHtml(tg.divName) + ')</span>'
             + ' &mdash; <span style="color:#a3e635">Day ' + ((tg.day || 0) + 1) + ' '
-            + escHtml(tg.time) + ' &middot; ' + escHtml(tg.court) + '</span></li>';
+            + escHtml(tg.time) + ' &middot; ' + escHtml(tg.court) + '</span>'
+            + '<div style="opacity:.6;font-size:11px;margin-top:1px">' + escHtml(_trainingReason(tg)) + '</div>'
+            + '</li>';
         }).join('');
         sections += '<div style="margin-bottom:' + (nbdWarn.length > 0 ? '14px' : '0') + '">'
           + '<div style="font-family:Montserrat,sans-serif;font-weight:800;font-size:10px;'
           + 'text-transform:uppercase;letter-spacing:1.5px;color:#a3e635;margin-bottom:8px">'
           + '✓ ' + nbdTraining.length + ' training game'
-          + (nbdTraining.length === 1 ? '' : 's') + ' placed to fill blank days</div>'
+          + (nbdTraining.length === 1 ? '' : 's') + ' placed</div>'
           + '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.6;'
           + 'font-family:Montserrat,sans-serif;color:#e2e8f0">' + trainRows + '</ul>'
           + '</div>';
