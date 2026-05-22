@@ -1,0 +1,37 @@
+name: CI
+
+# Runs the Python test suite on every push and PR so a regression in the
+# CP-SAT backend (scheduler.py / validator.py / app.py) is caught before it can
+# reach the Hugging Face deploy. The fast suite runs everywhere; the slow
+# CP-SAT + happy-path API tests run on pull requests (and on main).
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Fast unit tests
+        run: pytest -m "not slow"
+
+      - name: Slow CP-SAT + API tests
+        # Run on PRs and on pushes to main; skip on day-to-day feature pushes.
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+        run: pytest -m slow
