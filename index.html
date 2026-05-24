@@ -8659,8 +8659,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     // Sheet 1: division-groups-teams listing. Three columns:
     //   Team | Zone | PAX
     // Column headers appear ONCE at the top of the sheet; division and group
-    // banner rows below it use only column A. Zone is auto-filled from
-    // teamZones; PAX is left blank for the admin to fill in later.
+    // banner rows below it use only column A. Zone and PAX are both auto-filled
+    // from the setup (teamZones / teamPax) so the export round-trips the data.
     var rows = [];
     var sectionMap = [];
     var totalRR = 0;
@@ -8671,6 +8671,17 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         zoneMap[e.div + '\x00' + e.team] = e.zone === 'white' ? 'White' : 'Black';
       }
     });
+    // (div, team) → PAX lookup, sibling to zoneMap, for the PAX cell.
+    var paxMap = {};
+    (teamPax || []).forEach(function(e) {
+      if (e && e.div && e.team && e.pax != null && e.pax !== '') {
+        paxMap[e.div + '\x00' + e.team] = e.pax;
+      }
+    });
+    function paxCell(div, team) {
+      var p = paxMap[div + '\x00' + team];
+      return (p == null) ? '' : p;
+    }
     sectionMap.push({ row: rows.length, kind: 'colHeader' });
     rows.push(['Team', 'Zone', 'PAX']);
     var placeholderRe = /^(?:\d+(?:st|nd|rd|th))\s+Group\s+[A-Z]$/;
@@ -8688,7 +8699,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         grp.forEach(function(team) {
           rosterSet[team] = true;
           sectionMap.push({ row: rows.length, kind: 'team' });
-          rows.push([team, zoneMap[d.name + '\x00' + team] || '', '']);
+          rows.push([team, zoneMap[d.name + '\x00' + team] || '', paxCell(d.name, team)]);
         });
         // Group RR count = n*(n-1)/2
         totalRR += grp.length * (grp.length - 1) / 2;
@@ -8713,7 +8724,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         rows.push(['GROUP TRAINING']);
         trainingTeams.forEach(function(t) {
           sectionMap.push({ row: rows.length, kind: 'team' });
-          rows.push([t, zoneMap[d.name + '\x00' + t] || '', '']);
+          rows.push([t, zoneMap[d.name + '\x00' + t] || '', paxCell(d.name, t)]);
         });
       }
       rows.push([]); // blank separator
