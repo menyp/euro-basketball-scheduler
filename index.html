@@ -7396,8 +7396,8 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         reason = 'PO games pending — set RR scores first';
         color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
       } else if (!c.restOK) {
-        reason = fmtGap(c.gap) + ' — below rest threshold';
-        color = '#fcd34d'; bg = 'rgba(245,158,11,.12)';
+        reason = fmtGap(c.gap) + ' — breaks rest rule';
+        color = '#fca5a5'; bg = 'rgba(239,68,68,.12)'; disabled = ' disabled';
       } else if (c.isFree) {
         reason = 'free on Day ' + (day + 1);
         color = '#86efac'; bg = 'rgba(16,185,129,.12)';
@@ -7424,7 +7424,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     document.getElementById('tbdPickerSub').innerHTML =
       'Day ' + (day + 1) + ' &middot; ' + escHtml(time) + ' &middot; '
       + escHtml(court) + ' (' + escHtml(loc) + ') &middot; ' + escHtml(divName)
-      + '<br><span style="opacity:.7">Free-day teams first; teams below the rest threshold are shown but flagged.</span>';
+      + '<br><span style="opacity:.7">Free-day teams first; teams that would break the rest rule are disabled.</span>';
     document.getElementById('tbdPickerList').innerHTML = listHtml;
     modal.classList.add('active');
 
