@@ -517,42 +517,63 @@ def _place_required_training_games(assembled, ctx):
             # will notice the missing training game and can resolve manually).
             continue
 
-        # Rank candidate courts by preferred-venue match, then by free-slot
-        # count on the requested day so we land in a clean spot.
-        free_per_court = []
-        for c_idx in eff_allowed:
-            c = courts[c_idx]
-            free = 0
-            for s_min in day_slots[day]:
-                t_str = _min_to_time(s_min)
-                if (day, t_str, c['name']) in occupied: continue
-                if _is_blacked_out(ctx, c_idx, day, s_min): continue
-                free += 1
-            if free > 0:
-                tier = 0 if c['venue'].lower() == pref_venue else 1
-                free_per_court.append((tier, -free, c_idx, c))
+        # Choose a court + slot. Required training games must NOT land on the
+        # final slot of the last day — that's the Finals / closing-ceremony
+        # slot. The catch on the last day is that every court except Pineda is
+        # packed with placement games, so the only free non-Pineda slots are at
+        # that final time; and Pineda is normally excluded here because a
+        # placeholder group (e.g. "4th Group D") may contain a white-zone team
+        # and white is barred from Pineda. So we try, in order:
+        #   1) conservative allowed set, avoiding the final slot;
+        #   2) division venues with per-team/zone blocks relaxed, still avoiding
+        #      it (host is a placeholder + opponent is TBD, so a zone-only block
+        #      shouldn't pin the game onto the Finals slot);
+        #   3) conservative set, any slot — last resort so we never drop it.
+        is_last_day = (day == n_days - 1)
+        last_slot = day_slots[day][-1] if day_slots[day] else None
 
-        free_per_court.sort()
-        slot_placed = False
-        for _, _, c_idx, c in free_per_court:
-            for s_min in day_slots[day]:
-                t_str = _min_to_time(s_min)
-                if (day, t_str, c['name']) in occupied: continue
-                if _is_blacked_out(ctx, c_idx, day, s_min): continue
-                occupied.add((day, t_str, c['name']))
-                placed.append({
-                    'day':      day,
-                    'divName':  div_name,
-                    't1':       req['t1'],
-                    't2':       req['t2'],
-                    'time':     t_str,
-                    'court':    c['name'],
-                    'loc':      c['venue'],
-                    'isTraining': True,
-                })
-                slot_placed = True
-                break
-            if slot_placed: break
+        def _pick(allowed_set, avoid_last):
+            def _skip(s_min):
+                return avoid_last and is_last_day and s_min == last_slot
+            ranked = []
+            for c_idx in allowed_set:
+                c = courts[c_idx]
+                free = 0
+                for s_min in day_slots[day]:
+                    if _skip(s_min): continue
+                    t_str = _min_to_time(s_min)
+                    if (day, t_str, c['name']) in occupied: continue
+                    if _is_blacked_out(ctx, c_idx, day, s_min): continue
+                    free += 1
+                if free > 0:
+                    tier = 0 if c['venue'].lower() == pref_venue else 1
+                    ranked.append((tier, -free, c_idx, c))
+            ranked.sort()
+            for _, _, c_idx, c in ranked:
+                for s_min in day_slots[day]:
+                    if _skip(s_min): continue
+                    t_str = _min_to_time(s_min)
+                    if (day, t_str, c['name']) in occupied: continue
+                    if _is_blacked_out(ctx, c_idx, day, s_min): continue
+                    return (c_idx, c, t_str)
+            return None
+
+        pick = (_pick(eff_allowed, True)
+                or _pick(div_allowed, True)
+                or _pick(eff_allowed, False))
+        if pick:
+            c_idx, c, t_str = pick
+            occupied.add((day, t_str, c['name']))
+            placed.append({
+                'day':      day,
+                'divName':  div_name,
+                't1':       req['t1'],
+                't2':       req['t2'],
+                'time':     t_str,
+                'court':    c['name'],
+                'loc':      c['venue'],
+                'isTraining': True,
+            })
         # If absolutely no slot is free on the requested day (unlikely), the
         # request is silently dropped — the admin will see no training game
         # for that team and can resolve manually.
