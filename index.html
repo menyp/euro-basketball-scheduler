@@ -9359,18 +9359,32 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var outLead = (shuttleConfig.defaults && shuttleConfig.defaults.outLeadMin) || 60;
     var retExtend = (shuttleConfig.defaults && shuttleConfig.defaults.retLastSlotExtendMin) || 90;
     var daySlots = (sched.daySlots || []).map(function(slots) { return slots.slice(); });
+    // Lunch-aware dep adjustments — anchored to the actual lunch window in the
+    // setup so they stay correct if lunch times are changed.
+    //   - OUT dep that lands exactly on lunch START gets pushed 10 min into
+    //     lunch (so buses don't depart right as everyone is sitting down).
+    //   - RET dep that lands exactly on lunch END gets pulled back to lunch
+    //     start (so teams head home before lunch instead of waiting it out).
+    var _lS = document.getElementById('lS'),  _lE = document.getElementById('lE');
+    var lunchStart = (_lS && _lS.value) || '13:30';
+    var lunchEnd   = (_lE && _lE.value) || '14:30';
+    var POST_LUNCH_OUT_BUFFER = 10;
     function _outDep(ev) {
       var key = 'OUT|' + ev.day + '|' + ev.gameTime + '|' + ev.venue;
       if (shuttleConfig.slotOverrides[key]) return shuttleConfig.slotOverrides[key];
-      return toT(toM(ev.gameTime) - outLead);
+      var dep = toT(toM(ev.gameTime) - outLead);
+      if (dep === lunchStart) dep = toT(toM(lunchStart) + POST_LUNCH_OUT_BUFFER);
+      return dep;
     }
     function _retDep(ev) {
       var key = 'RET|' + ev.day + '|' + ev.gameTime + '|' + ev.venue;
       if (shuttleConfig.slotOverrides[key]) return shuttleConfig.slotOverrides[key];
       var slots = daySlots[ev.day] || [];
       var idx = slots.indexOf(ev.gameTime);
-      if (idx >= 0 && idx + 1 < slots.length) return slots[idx + 1];
-      return toT(toM(ev.gameTime) + retExtend);
+      var dep = (idx >= 0 && idx + 1 < slots.length) ? slots[idx + 1]
+                                                     : toT(toM(ev.gameTime) + retExtend);
+      if (dep === lunchEnd) dep = lunchStart;
+      return dep;
     }
 
     function _bucketize(events, direction, depFn) {
@@ -9423,48 +9437,121 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     };
   }
 
+  // Styling palette extracted from the design reference
+  // ("EYBC-2026-Shuttle-Risk-Register before.xlsx"). Kept in one place so
+  // tweaks propagate to all four risk sheets + the Teams Reference sheet.
+  var _SHUTTLE_COLORS = {
+    titleFill:  '1F2F5E',  titleFont: 'FFFFFF',
+    headerFill: '1E3A5F',  headerFont: 'FFFFFF',
+    depFill:    'E3F2FD',  depFont:   '0D47A1',
+    bodyFont:   '1F2733',  subFont:   '4A4F59',
+    deltaFont:  '1B5E20',
+    buckets: {
+      GREEN:  { fill: 'E8F5E9', risk: '1B5E20' },
+      YELLOW: { fill: 'FFF8E1', risk: '7D5A00' },
+      RED:    { fill: 'FDECEA', risk: 'C0392B' },
+      NA:     { fill: 'FFFFFF', risk: '4A4F59' }
+    },
+    teamsRowFill: 'EEF2FB'
+  };
+  // Build a styled cell { v, s } object for an SheetJS aoa_to_sheet row.
+  function _scell(value, fillHex, fontHex, opts) {
+    var s = {};
+    if (fillHex) s.fill = { patternType: 'solid', fgColor: { rgb: fillHex } };
+    if (fontHex || opts) {
+      s.font = {};
+      if (fontHex) s.font.color = { rgb: fontHex };
+      if (opts && opts.bold) s.font.bold = true;
+      if (opts && opts.sz)   s.font.sz   = opts.sz;
+      if (opts && opts.name) s.font.name = opts.name;
+    }
+    if (opts && opts.align) s.alignment = { vertical: 'center', horizontal: opts.align, wrapText: !!opts.wrap };
+    else if (opts && opts.wrap) s.alignment = { vertical: 'center', wrapText: true };
+    return { v: value == null ? '' : value, s: s };
+  }
+
   // Build a zone-sheet's AOA rows for the Excel export.
+  // Cell objects ({ v, s }) carry inline styling — picked up by xlsx-js-style.
   function _xlsxShuttleSheetRows(buckets, title) {
+    var C = _SHUTTLE_COLORS;
     var rows = [];
-    rows.push([title]);
+    // Row 1 (title) — single styled cell in col A; col B–N filled w/ same style
+    // so the merged-cell background reads correctly even if the merge is dropped.
+    var titleRow = [_scell(title, C.titleFill, C.titleFont, { bold: true, sz: 11, align: 'left', wrap: true })];
+    while (titleRow.length < 14) titleRow.push(_scell('', C.titleFill, C.titleFont, { sz: 11 }));
+    rows.push(titleRow);
     rows.push([]);
-    rows.push(['Day', 'Shuttle Dep', 'Game Time', 'Venue', 'Zone', 'Bus',
-               'Seats', 'People', 'Load %', 'Delta', 'Risk',
-               'Team on bus', 'Division', 'Pax']);
+    // Row 3 — header
+    var headers = ['Day','Shuttle Dep','Game Time','Venue','Zone','Bus',
+                   'Seats','People','Load %','Delta','Risk',
+                   'Team on bus','Division','Pax'];
+    rows.push(headers.map(function(h, i) {
+      var isDep = (i === 1);
+      return _scell(h,
+        isDep ? C.depFill   : C.headerFill,
+        isDep ? C.depFont   : C.headerFont,
+        { bold: true, sz: 9, align: 'left' });
+    }));
+    // Buckets
     buckets.forEach(function(b) {
-      var loadStr = b.loadPct == null ? '' : (b.loadPct + '%');
+      var palette = C.buckets[b.risk] || C.buckets.NA;
+      var fill = palette.fill;
+      var loadStr  = b.loadPct == null ? '' : (b.loadPct + '%');
       var deltaStr = b.delta > 0 ? '*' + b.delta : (b.delta < 0 ? String(b.delta) : '0');
-      var riskStr = b.risk === 'RED'    ? '🔴 RED'
-                  : b.risk === 'YELLOW' ? '🟡 YELLOW'
-                  : b.risk === 'GREEN'  ? '🟢 GREEN'
-                  : '— n/a';
+      var riskStr  = b.risk === 'RED'    ? '🔴 RED'
+                   : b.risk === 'YELLOW' ? '🟡 YELLOW'
+                   : b.risk === 'GREEN'  ? '🟢 GREEN'
+                   : '— n/a';
       var zoneLabel = b.zone === 'white' ? 'White' : 'Black';
-      var dayLabel = 'Day ' + (b.day + 1);
-      if (!b.teams.length) {
-        rows.push([dayLabel, b.depTime, b.gameTime, b.venue, zoneLabel, b.busLabel,
-                   b.seats, b.people, loadStr, deltaStr, riskStr, '', '', '']);
-      } else {
-        b.teams.forEach(function(t, i) {
-          if (i === 0) {
-            rows.push([dayLabel, b.depTime, b.gameTime, b.venue, zoneLabel, b.busLabel,
-                       b.seats, b.people, loadStr, deltaStr, riskStr,
-                       t.team, t.division, t.pax]);
-          } else {
-            rows.push(['', '', '', '', '', '', '', '', '', '', '', t.team, t.division, t.pax]);
-          }
-        });
+      var dayLabel  = 'Day ' + (b.day + 1);
+      function headerRow(t) {
+        return [
+          _scell(dayLabel,    fill, C.bodyFont,  { sz: 9 }),
+          _scell(b.depTime,   fill, C.depFont,   { sz: 9, bold: true }),
+          _scell(b.gameTime,  fill, C.bodyFont,  { sz: 9 }),
+          _scell(b.venue,     fill, C.bodyFont,  { sz: 9 }),
+          _scell(zoneLabel,   fill, C.bodyFont,  { sz: 9 }),
+          _scell(b.busLabel,  fill, C.bodyFont,  { sz: 9 }),
+          _scell(b.seats,     fill, C.bodyFont,  { sz: 9, align: 'right' }),
+          _scell(b.people,    fill, C.bodyFont,  { sz: 9, align: 'right' }),
+          _scell(loadStr,     fill, C.bodyFont,  { sz: 9, align: 'right' }),
+          _scell(deltaStr,    fill, C.deltaFont, { sz: 9, bold: true, align: 'right' }),
+          _scell(riskStr,     fill, palette.risk,{ sz: 9, bold: true }),
+          _scell(t ? t.team : '',     fill, C.bodyFont, { sz: 9 }),
+          _scell(t ? t.division : '', fill, C.bodyFont, { sz: 9 }),
+          _scell(t ? t.pax : '',      fill, C.bodyFont, { sz: 9, align: 'right' })
+        ];
       }
-      rows.push([]); // blank separator
+      function subRow(t) {
+        // First 11 cells: same fill, blank; last 3: team / div / pax with smaller gray font.
+        var r = [];
+        for (var i = 0; i < 11; i++) r.push(_scell('', fill));
+        r.push(_scell(t.team,     fill, C.subFont, { sz: 8.5 }));
+        r.push(_scell(t.division, fill, C.subFont, { sz: 8.5 }));
+        r.push(_scell(t.pax,      fill, C.subFont, { sz: 8.5, align: 'right' }));
+        return r;
+      }
+      if (!b.teams.length) {
+        rows.push(headerRow(null));
+      } else {
+        rows.push(headerRow(b.teams[0]));
+        for (var i = 1; i < b.teams.length; i++) rows.push(subRow(b.teams[i]));
+      }
+      rows.push([]); // blank separator between buckets
     });
     return rows;
   }
 
-  // Teams Reference sheet — every zoned team with division + pax.
+  // Teams Reference sheet — every zoned team with division + pax. Styled to
+  // match the reference workbook (navy header, soft blue row fill).
   function _xlsxShuttleTeamsRefRows() {
+    var C = _SHUTTLE_COLORS;
     var rows = [];
-    rows.push(['EYBC Shuttle  ·  Teams by Zone & Division']);
+    rows.push([_scell('EYBC Shuttle  ·  Teams by Zone & Division', null, C.bodyFont, { bold: true, sz: 12 })]);
     rows.push([]);
-    rows.push(['Zone', 'Division', 'Team Name', 'Pax']);
+    rows.push(['Zone','Division','Team Name','Pax'].map(function(h) {
+      return _scell(h, C.headerFill, C.headerFont, { bold: true, sz: 9, align: 'left' });
+    }));
     var paxMap = {};
     (teamPax || []).forEach(function(e) {
       if (e && e.div && e.team) paxMap[e.div + '\x00' + e.team] = e.pax || 0;
@@ -9484,7 +9571,14 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           || a.div.localeCompare(b.div)
           || a.team.localeCompare(b.team);
     });
-    entries.forEach(function(e) { rows.push([e.zone, e.div, e.team, e.pax]); });
+    entries.forEach(function(e) {
+      rows.push([
+        _scell(e.zone, C.teamsRowFill, C.bodyFont, { sz: 9 }),
+        _scell(e.div,  C.teamsRowFill, C.bodyFont, { sz: 9 }),
+        _scell(e.team, C.teamsRowFill, C.bodyFont, { sz: 9 }),
+        _scell(e.pax,  C.teamsRowFill, C.bodyFont, { sz: 9, align: 'right' })
+      ]);
+    });
     return rows;
   }
 
@@ -9520,6 +9614,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         { wch: 7 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 14 },
         { wch: 30 }, { wch: 13 }, { wch: 6 }
       ];
+      // Merge the title row (A1:N1) and give it a taller row height.
+      ws['!merges'] = (ws['!merges'] || []).concat([{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }]);
+      ws['!rows']   = (ws['!rows']   || []);
+      ws['!rows'][0] = { hpt: 32 };
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
     }
     _add('white', 'OUT', 'White Zone',         'WHITE');
@@ -9528,6 +9626,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     _add('black', 'RET', 'Black Return Zone',  'BLACK RETURN');
     var teamsWs = XLSX.utils.aoa_to_sheet(_xlsxShuttleTeamsRefRows());
     teamsWs['!cols'] = [{ wch: 7 }, { wch: 14 }, { wch: 32 }, { wch: 6 }];
+    teamsWs['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
     XLSX.utils.book_append_sheet(wb, teamsWs, 'Teams Reference');
     XLSX.writeFile(wb, 'EYBC-Shuttle-Risk-Register.xlsx');
   }
