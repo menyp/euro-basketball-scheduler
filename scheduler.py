@@ -28,6 +28,18 @@ import re
 MAX_ITERATIONS = 4
 UNPLACED_WEIGHT = 1_000_000  # dominates any soft-preference penalty
 
+# Global court numbering used by the Basketball Complex signage:
+# Blanes 1-6, Palafolls 7-8, Tordera 9-10, Pineda 11. Applied per-venue
+# (case-insensitive). Unrecognised venues fall back to "<Venue> Court N".
+GLOBAL_COURT_START = {'blanes': 1, 'palafolls': 7, 'tordera': 9, 'pineda': 11}
+
+
+def _global_court_name(venue, idx):
+    start = GLOBAL_COURT_START.get((venue or '').lower())
+    if start is not None:
+        return f'Court {start + idx}'
+    return f'{venue} Court {idx + 1}'
+
 
 # ── Live progress state (read by /api/progress for UI banner) ────────────────
 _progress_state = {
@@ -1103,8 +1115,7 @@ def _build_context(config):
         n = int(site.get('numCourts', 1))
         name = site.get('name', 'Unnamed')
         for i in range(n):
-            court_name = f"{name} Court {i+1}" if n > 1 else name
-            courts.append({'name': court_name, 'venue': name})
+            courts.append({'name': _global_court_name(name, i), 'venue': name})
     num_courts = len(courts)
     main_venue_lower = main_venue.lower()
     blanes_courts = [i for i, c in enumerate(courts)

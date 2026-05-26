@@ -1364,14 +1364,65 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var t = sites.reduce(function (s, x) { return s + (parseInt(x.numCourts) || 1); }, 0);
     document.getElementById('totalBadge').innerHTML = 'Total courts: <strong>' + t + '</strong>';
   }
+  // Global court numbering used by the Basketball Complex signage:
+  // Blanes 1-6, Palafolls 7-8, Tordera 9-10, Pineda 11. Applied per-venue
+  // (case-insensitive). For venues not in this list, falls back to the legacy
+  // "<Venue> Court N" style so non-EYBC configs keep working.
+  var GLOBAL_COURT_START = { blanes: 1, palafolls: 7, tordera: 9, pineda: 11 };
+  function globalCourtName(venue, idx) {
+    var start = GLOBAL_COURT_START[(venue || '').toLowerCase()];
+    if (typeof start === 'number') return 'Court ' + (start + idx);
+    return (venue || 'Unnamed') + ' Court ' + (idx + 1);
+  }
   function getCourts() {
     var all = [];
     sites.forEach(function (s) {
       var n = parseInt(s.numCourts) || 1, name = s.name || 'Unnamed Venue';
       for (var i = 0; i < n; i++)
-        all.push({ court: n > 1 ? name + ' Court ' + (i + 1) : name, loc: name });
+        all.push({ court: globalCourtName(name, i), loc: name });
     });
     return all;
+  }
+
+  // Rewrites an old-style court name ("Blanes Court 1", "Pineda",
+  // "Tordera Court 2") into the new global one ("Court 1", "Court 11",
+  // "Court 10") using the venue (loc) as the anchor. Idempotent: already-new
+  // names ("Court 7") and unrecognised venues pass through untouched.
+  function _migrateCourtName(loc, oldCourt) {
+    if (!oldCourt) return oldCourt;
+    if (/^Court\s+\d+$/i.test(oldCourt)) return oldCourt; // already migrated
+    var m = oldCourt.match(/^(.+?)\s+Court\s+(\d+)\s*$/i);
+    var venue = loc || (m ? m[1] : oldCourt);
+    var idx = m ? Math.max(0, parseInt(m[2], 10) - 1) : 0;
+    // Only remap when the venue is one of the global-numbering venues —
+    // otherwise leave the legacy name alone.
+    if (typeof GLOBAL_COURT_START[(venue || '').toLowerCase()] !== 'number') return oldCourt;
+    return globalCourtName(venue, idx);
+  }
+
+  // Rewrites every court reference inside a sched object in place — the courts
+  // list, every RR/PO game across gameDays + bracketDays, and every training
+  // game. Used by loadSnapshot to migrate legacy exports on import.
+  function _migrateSchedCourts(s) {
+    if (!s) return;
+    (s.courts || []).forEach(function(c) {
+      c.court = _migrateCourtName(c.loc, c.court);
+    });
+    function fixGame(g) { if (g && g.court) g.court = _migrateCourtName(g.loc, g.court); }
+    (s.gameDays || []).forEach(function(d) {
+      (d.divs || []).forEach(function(dv) {
+        if (dv.games) dv.games.forEach(fixGame);
+        if (dv.groups) Object.keys(dv.groups).forEach(function(gk) {
+          (dv.groups[gk].games || []).forEach(fixGame);
+        });
+      });
+    });
+    (s.bracketDays || []).forEach(function(d) {
+      (d.divs || []).forEach(function(dv) {
+        if (dv.games) dv.games.forEach(fixGame);
+      });
+    });
+    (s.trainingGames || []).forEach(fixGame);
   }
 
   // ── Rule toggles ───────────────────────────────────────
@@ -9570,6 +9621,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // "Validate Edited Excel" flow. (Body kept at its original indentation to
   // keep the diff small; functionally it is a top-level function.)
   function loadSnapshot(data) {
+        // Migrate court names from the legacy venue-relative format
+        // ("Blanes Court 1", "Pineda", "Tordera Court 2") to the global signage
+        // numbering ("Court 1", "Court 11", "Court 10") so older exports load
+        // cleanly into the new naming.
+        if (data && data.sched) _migrateSchedCourts(data.sched);
         sched            = data.sched;
         divisions        = data.divisions        || divisions;
         // Restore teamZones BEFORE the first renderDivisions() call below —

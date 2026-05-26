@@ -18,8 +18,8 @@ def test_court_naming_and_indices():
     )
     ctx = _build_context(cfg)
     names = [c["name"] for c in ctx["courts"]]
-    # Multi-court venue gets numbered names; single-court venue keeps its name.
-    assert names == ["Blanes Court 1", "Blanes Court 2", "Palafolls"]
+    # Global Basketball-Complex numbering: Blanes 1-6, Palafolls 7-8.
+    assert names == ["Court 1", "Court 2", "Court 7"]
     assert ctx["blanes_courts"] == [0, 1]
     assert ctx["num_courts"] == 3
 
