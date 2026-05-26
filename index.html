@@ -9331,29 +9331,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       add(tg.divName, tg.t2, tg.day, tg.time, tg.loc);
     });
 
-    // Group each team's day-games by venue blocks (consecutive games at same
-    // venue). One OUT per block (first game's time); one RET per block (after
-    // the last game). Standing at the same venue between games = no
-    // intermediate bus trip.
-    var byTD = {};
-    apps.forEach(function(a) {
-      var k = a.division + '\x00' + a.team + '|' + a.day;
-      (byTD[k] = byTD[k] || []).push(a);
-    });
+    // Per-game bus accounting: every game needs a bus to bring the team in
+    // (OUT) and a bus to take them home (RET). We do NOT assume teams stay
+    // at the venue between games — a long gap means they go home and come
+    // back, and the risk register has to plan capacity for that.
     var outEvents = [], retEvents = [];
-    Object.keys(byTD).forEach(function(k) {
-      var gs = byTD[k].sort(function(a, b) { return toM(a.time) - toM(b.time); });
-      var i = 0;
-      while (i < gs.length) {
-        var start = gs[i], j = i;
-        while (j + 1 < gs.length && gs[j + 1].venue === start.venue) j++;
-        var end = gs[j];
-        outEvents.push({ team: start.team, division: start.division, zone: start.zone,
-                          pax: start.pax, day: start.day, gameTime: start.time, venue: start.venue });
-        retEvents.push({ team: end.team, division: end.division, zone: end.zone,
-                          pax: end.pax, day: end.day, gameTime: end.time, venue: end.venue });
-        i = j + 1;
-      }
+    apps.forEach(function(a) {
+      outEvents.push({ team: a.team, division: a.division, zone: a.zone,
+                        pax: a.pax, day: a.day, gameTime: a.time, venue: a.venue });
+      retEvents.push({ team: a.team, division: a.division, zone: a.zone,
+                        pax: a.pax, day: a.day, gameTime: a.time, venue: a.venue });
     });
 
     var outLead = (shuttleConfig.defaults && shuttleConfig.defaults.outLeadMin) || 60;
