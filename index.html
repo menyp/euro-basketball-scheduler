@@ -556,7 +556,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
 
     <div class="card" style="margin-top:14px">
       <div class="stitle">Shuttle Dispatcher <span style="font-weight:400;font-size:11px;opacity:0.7">(fleet &amp; dep timing)</span></div>
-      <p class="help" style="margin-bottom:10px">Configure the shuttle fleet that ferries teams between hotels and venues. Each cell lists the bus numbers assigned to that zone &amp; venue (e.g. <code>8-11</code> or <code>8, 9, 10, 11</code>). The Shuttle Risk Register (Schedule tab → <em>Export Shuttle Report</em>) sums each game's team PAX, compares to the bus seats, and flags 🔴/🟡/🟢 per slot.</p>
+      <p class="help" style="margin-bottom:10px">Configure the shuttle fleet that ferries teams between hotels and venues. Each cell lists the bus numbers assigned to that zone &amp; venue (e.g. <code>8-11</code> or <code>8, 9, 10, 11</code>). The Shuttle Load Planner (Schedule tab → <em>Export Shuttle Load Planner</em>) sums each game's team PAX, compares to the bus seats, and flags 🔴/🟡/🟢 per slot.</p>
       <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-size:12px;color:#cbd5e0">
         <label style="display:flex;align-items:center;gap:6px">
           <span style="color:var(--g)">Bus capacity</span>
@@ -8522,7 +8522,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       + '<button id="auditExportBtn" class="btn" style="background:#8B5CF6;color:#fff;padding:9px 18px;font-weight:700">&#128203; Export for AI Review</button>'
       + '<button id="exportCSVBtn" class="btn" style="background:var(--o);color:#fff;padding:9px 18px;font-weight:700">&#8681; Export CSV</button>'
       + '<button id="exportXLSXBtn" class="btn" style="background:#107C41;color:#fff;padding:9px 18px;font-weight:700">&#128202; Export Excel</button>'
-      + '<button id="exportShuttleBtn" class="btn" style="background:#dc2626;color:#fff;padding:9px 18px;font-weight:700">&#128652; Export Shuttle Report</button>'
+      + '<button id="exportShuttleBtn" class="btn" style="background:#dc2626;color:#fff;padding:9px 18px;font-weight:700">&#128652; Export Shuttle Load Planner</button>'
       + '<button id="printGridBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128438; Court Grid</button>'
       + '<button id="printDivBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128203; By Division</button>'
       + '<button id="jsonExportBtn" class="btn" style="background:#1e3a5f;color:#fff;padding:9px 18px;font-weight:700;border:1px solid rgba(255,255,255,.2)">&#128190; Save JSON</button>'
@@ -9569,13 +9569,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     return rows;
   }
 
-  // Main export: 5-sheet Shuttle Risk Register matching the existing format.
+  // Main export: 5-sheet Shuttle Load Planner matching the existing format.
   function exportShuttleReportToXLSX() {
     if (!sched || !sched.gameDays || !sched.gameDays.length) {
       showToast('No schedule yet', 'Generate a schedule first.', 'error'); return;
     }
     var report = _shuttleBuildReport();
-    if (!report) { showToast('Shuttle report', 'Could not build the report.', 'error'); return; }
+    if (!report) { showToast('Shuttle Load Planner', 'Could not build the planner.', 'error'); return; }
     var wb = XLSX.utils.book_new();
     function _title(zoneLabel, direction) {
       var s = direction === 'OUT' ? report.summary.out : report.summary.ret;
@@ -9615,7 +9615,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     teamsWs['!cols'] = [{ wch: 7 }, { wch: 14 }, { wch: 32 }, { wch: 6 }];
     teamsWs['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
     XLSX.utils.book_append_sheet(wb, teamsWs, 'Teams Reference');
-    XLSX.writeFile(wb, 'EYBC-Shuttle-Risk-Register.xlsx');
+    XLSX.writeFile(wb, 'EYBC-Shuttle-Load-Planner.xlsx');
   }
 
   // ── Print helpers ─────────────────────────────────────
