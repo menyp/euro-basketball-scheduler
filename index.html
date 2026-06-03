@@ -559,9 +559,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       <p class="help" style="margin-bottom:10px">Configure the shuttle fleet that ferries teams between hotels and venues. Each cell lists the bus numbers assigned to that zone &amp; venue (e.g. <code>8-11</code> or <code>8, 9, 10, 11</code>). The Shuttle Load Planner (Schedule tab → <em>Export Shuttle Load Planner</em>) sums each game's team PAX, compares to the bus seats, and flags 🔴/🟡/🟢 per slot.</p>
       <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-size:12px;color:#cbd5e0">
         <label style="display:flex;align-items:center;gap:6px">
-          <span style="color:var(--g)">Bus capacity</span>
+          <span style="color:var(--g)">Default capacity</span>
           <input type="number" id="busCapacity" min="1" max="200" step="1" value="55" style="width:60px;padding:3px 6px;font-size:13px">
-          <span style="opacity:.7">seats</span>
+          <span style="opacity:.7">seats / bus</span>
         </label>
         <label style="display:flex;align-items:center;gap:6px">
           <span style="color:var(--g)">Outbound dep</span>
@@ -577,6 +577,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         </label>
       </div>
       <div id="shuttleFleetMatrix"></div>
+      <div style="margin-top:14px">
+        <div style="font-weight:700;font-size:11px;color:var(--g);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:6px">Bus Capacity <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.75">(per bus, per day — leave blank to use default)</span></div>
+        <div id="shuttleCapacityMatrix"></div>
+      </div>
     </div>
 
     <div class="card" style="margin-top:14px">
@@ -1537,6 +1541,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // slotOverrides keys: "OUT|<day>|<HH:MM>|<Venue>" / "RET|..."  → "HH:MM".
   var shuttleConfig = {
     busCapacity: 55,
+    // Per-day per-bus seat overrides: busCapacities[dayIdx][busNumber] = seats.
+    // Empty / missing cells fall back to busCapacity (the default).
+    busCapacities: {},
     fleet: {
       white: { Blanes: [8, 9, 10, 11], Palafolls: [12], Tordera: [13], Pineda: [] },
       black: { Blanes: [1, 2, 3, 4],   Palafolls: [5],  Tordera: [6],  Pineda: [7] }
@@ -3136,6 +3143,95 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         row.querySelectorAll('.sf-cell').forEach(function(i) { sum += _parseBusList(i.value).length; });
         var tot = row.querySelector('.sf-total');
         if (tot) tot.textContent = sum;
+        renderShuttleCapacityMatrix(); // bus list changed -> refresh rows
+      });
+    });
+    renderShuttleCapacityMatrix();
+  }
+
+  // Per-day per-bus capacity table. Rows = every bus number listed anywhere
+  // in the fleet matrix; columns = tournament days. Empty cell = use default
+  // (shuttleConfig.busCapacity). Total row sums each day's seat count.
+  function renderShuttleCapacityMatrix() {
+    var el = document.getElementById('shuttleCapacityMatrix');
+    if (!el) return;
+    var nDaysEl = document.getElementById('nDays');
+    var nDays = parseInt(nDaysEl && nDaysEl.value, 10) || 3;
+    // Collect all bus numbers from the fleet (sorted unique, with zone+venue tag for the label).
+    var busInfo = {}; // busNum -> { zone, venue }
+    ['white', 'black'].forEach(function(z) {
+      var perZone = shuttleConfig.fleet[z] || {};
+      Object.keys(perZone).forEach(function(v) {
+        (perZone[v] || []).forEach(function(n) {
+          if (typeof n === 'number' && !busInfo[n]) busInfo[n] = { zone: z, venue: v };
+        });
+      });
+    });
+    var buses = Object.keys(busInfo).map(Number).sort(function(a, b) { return a - b; });
+    if (!buses.length) {
+      el.innerHTML = '<div style="opacity:.65;font-style:italic;padding:6px;font-size:12px">No buses assigned yet — fill the fleet matrix above first.</div>';
+      return;
+    }
+    var def = parseInt(shuttleConfig.busCapacity, 10) || 55;
+    var rowStyle = 'padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px';
+    var thStyle  = 'padding:6px 8px;text-align:right;color:var(--g);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;border-bottom:1px solid var(--b)';
+    var html = '<table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,.02);border:1px solid var(--b);border-radius:6px;overflow:hidden">'
+      + '<thead><tr style="background:rgba(255,255,255,.04)">'
+      + '<th style="' + thStyle + ';text-align:left">Bus</th>'
+      + '<th style="' + thStyle + ';text-align:left;opacity:.85">Zone / Venue</th>';
+    for (var d = 0; d < nDays; d++) {
+      html += '<th style="' + thStyle + '">Day ' + (d + 1) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+    buses.forEach(function(busNum) {
+      var info = busInfo[busNum];
+      var label = (info.zone === 'white' ? 'White' : 'Black') + ' / ' + (info.venue || '');
+      html += '<tr><td style="' + rowStyle + ';font-weight:700;color:#fff">' + busNum + '</td>'
+            + '<td style="' + rowStyle + ';opacity:.75">' + escHtml(label) + '</td>';
+      for (var d = 0; d < nDays; d++) {
+        var perDay = shuttleConfig.busCapacities[d] || {};
+        var val = (busNum in perDay) ? perDay[busNum] : '';
+        html += '<td style="' + rowStyle + ';text-align:right">'
+              + '<input type="number" class="sc-cell" data-day="' + d + '" data-bus="' + busNum + '" '
+              + 'min="1" max="200" step="1" placeholder="' + def + '" '
+              + 'value="' + (val === '' ? '' : val) + '" '
+              + 'style="width:60px;padding:3px 6px;font-size:12px;background:rgba(0,0,0,.2);border:1px solid var(--b);border-radius:4px;color:#fff;text-align:right;box-sizing:border-box">'
+              + '</td>';
+      }
+      html += '</tr>';
+    });
+    // Total row
+    var totalCellBase = rowStyle + ';text-align:right;color:#FF6B00;font-weight:800';
+    html += '<tr style="background:rgba(255,255,255,.03)"><td style="' + rowStyle + ';font-weight:700;color:#e2e8f0">Total</td><td style="' + rowStyle + '"></td>';
+    for (var d2 = 0; d2 < nDays; d2++) {
+      html += '<td class="sc-total" data-day="' + d2 + '" style="' + totalCellBase + '">0</td>';
+    }
+    html += '</tr></tbody></table>';
+    el.innerHTML = html;
+    // Recompute totals
+    function recomputeTotal(day) {
+      var sum = 0;
+      buses.forEach(function(busNum) {
+        var input = el.querySelector('.sc-cell[data-day="' + day + '"][data-bus="' + busNum + '"]');
+        var v = input && parseInt(input.value, 10);
+        sum += (Number.isFinite(v) && v > 0) ? v : def;
+      });
+      var tot = el.querySelector('.sc-total[data-day="' + day + '"]');
+      if (tot) tot.textContent = sum;
+    }
+    for (var d3 = 0; d3 < nDays; d3++) recomputeTotal(d3);
+    el.querySelectorAll('.sc-cell').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var day = parseInt(this.dataset.day, 10);
+        var bus = parseInt(this.dataset.bus, 10);
+        var v = parseInt(this.value, 10);
+        if (!shuttleConfig.busCapacities[day]) shuttleConfig.busCapacities[day] = {};
+        if (Number.isFinite(v) && v > 0) {
+          shuttleConfig.busCapacities[day][bus] = v;
+        } else {
+          delete shuttleConfig.busCapacities[day][bus];
+        }
+        recomputeTotal(day);
       });
     });
   }
@@ -3156,7 +3252,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var ret = document.getElementById('retLastSlotExtendMin');
     if (cap) cap.addEventListener('input', function() {
       var v = parseInt(this.value, 10);
-      if (Number.isFinite(v) && v > 0) shuttleConfig.busCapacity = v;
+      if (Number.isFinite(v) && v > 0) {
+        shuttleConfig.busCapacity = v;
+        renderShuttleCapacityMatrix(); // placeholders + totals depend on the default
+      }
     });
     if (out) out.addEventListener('input', function() {
       var v = parseInt(this.value, 10);
@@ -9390,7 +9489,13 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     function _enrich(b) {
       var fleet = ((shuttleConfig.fleet || {})[b.zone] || {})[b.venue] || [];
       var buses = _parseBusList(fleet);
-      var seats = buses.length * (shuttleConfig.busCapacity || 55);
+      // Sum each bus's capacity for THIS bucket's day. Empty cell -> default.
+      var defCap = parseInt(shuttleConfig.busCapacity, 10) || 55;
+      var perDay = (shuttleConfig.busCapacities || {})[b.day] || {};
+      var seats = buses.reduce(function(sum, busNum) {
+        var v = perDay[busNum];
+        return sum + ((Number.isFinite(v) && v > 0) ? v : defCap);
+      }, 0);
       var people = b.teams.reduce(function(s, t) { return s + (t.pax || 0); }, 0);
       var loadPct = seats > 0 ? Math.round(people / seats * 100) : null;
       var risk = (seats === 0) ? 'NA'
@@ -9583,7 +9688,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                   + ' YELLOW   🟢 ' + s.GREEN + ' OK';
       return 'EYBC 2026  ·  ' + zoneLabel + ' ZONE  ·  '
            + (direction === 'OUT' ? 'Outbound  (Hotels → Venue)' : 'Return  (Venue → Hotels)')
-           + '  |  ' + (shuttleConfig.busCapacity || 55) + ' seats / bus'
+           + '  |  Default ' + (shuttleConfig.busCapacity || 55) + ' seats / bus'
            + '  |  Shuttle Dep = '
            + (direction === 'OUT' ? (shuttleConfig.defaults.outLeadMin || 60) + ' min before game start'
                                   : 'next slot start  (last slot of day = game start + '
@@ -10184,6 +10289,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         // Restore shuttleConfig if present (otherwise keep current defaults).
         if (data.shuttleConfig && typeof data.shuttleConfig === 'object') {
           if (typeof data.shuttleConfig.busCapacity === 'number') shuttleConfig.busCapacity = data.shuttleConfig.busCapacity;
+          if (data.shuttleConfig.busCapacities && typeof data.shuttleConfig.busCapacities === 'object') {
+            shuttleConfig.busCapacities = data.shuttleConfig.busCapacities;
+          }
           if (data.shuttleConfig.fleet && typeof data.shuttleConfig.fleet === 'object') shuttleConfig.fleet = data.shuttleConfig.fleet;
           if (data.shuttleConfig.defaults && typeof data.shuttleConfig.defaults === 'object') {
             shuttleConfig.defaults.outLeadMin = data.shuttleConfig.defaults.outLeadMin || shuttleConfig.defaults.outLeadMin;
@@ -11111,7 +11219,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   });
 
   // Re-render day-hours grid whenever the number of days changes.
-  document.getElementById('nDays').addEventListener('change', renderDayHours);
+  document.getElementById('nDays').addEventListener('change', function() {
+    renderDayHours();
+    renderShuttleCapacityMatrix(); // columns track tournament-day count
+  });
   // Lunch window changes affect which time slots exist on finals day.
   document.getElementById('lS').addEventListener('change', renderFinalsDropdown);
   document.getElementById('lE').addEventListener('change', renderFinalsDropdown);
