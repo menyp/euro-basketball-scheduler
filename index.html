@@ -9486,6 +9486,35 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     var outBuckets = _bucketize(outEvents, 'OUT', _outDep);
     var retBuckets = _bucketize(retEvents, 'RET', _retDep);
 
+    // Add a row for every (day, slot, venue, zone) where the fleet has buses
+    // but no team uses them. The dispatcher then sees an empty GREEN slot with
+    // the free-seat count, so they can reassign that bus elsewhere.
+    function _fillIdleSlots(buckets, direction, depFn) {
+      var existing = {};
+      buckets.forEach(function(b) {
+        existing[b.day + '|' + b.gameTime + '|' + b.venue + '|' + b.zone] = true;
+      });
+      (daySlots || []).forEach(function(slots, day) {
+        (slots || []).forEach(function(slot) {
+          ['white', 'black'].forEach(function(zone) {
+            var cells = (shuttleConfig.fleet && shuttleConfig.fleet[zone]) || {};
+            Object.keys(cells).forEach(function(venue) {
+              var buses = cells[venue] || [];
+              if (!buses.length) return;
+              var key = day + '|' + slot + '|' + venue + '|' + zone;
+              if (existing[key]) return;
+              buckets.push({ direction: direction, day: day, gameTime: slot,
+                              venue: venue, zone: zone,
+                              depTime: depFn({ day: day, gameTime: slot, venue: venue }),
+                              teams: [] });
+            });
+          });
+        });
+      });
+    }
+    _fillIdleSlots(outBuckets, 'OUT', _outDep);
+    _fillIdleSlots(retBuckets, 'RET', _retDep);
+
     function _enrich(b) {
       var fleet = ((shuttleConfig.fleet || {})[b.zone] || {})[b.venue] || [];
       var buses = _parseBusList(fleet);
