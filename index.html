@@ -9412,8 +9412,21 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                   pax: paxOf[div + '\x00' + team] || 0,
                   day: day, time: time, venue: venue });
     }
+    // Skip days that are purely playoff (no real-team RR games). Playoff team
+    // identities aren't known until pool play finishes, so the shuttle planner
+    // has no visibility — show only days with at least one RR group.
+    var plannerDays = {};
+    (sched.gameDays || []).forEach(function(d) {
+      var hasRR = (d.divs || []).some(function(dv) {
+        return Object.keys(dv.groups || {}).some(function(gk) {
+          return !/Playoffs/i.test(gk);
+        });
+      });
+      if (hasRR) plannerDays[d.dayIndex] = true;
+    });
     (sched.gameDays || []).forEach(function(d) {
       var di = d.dayIndex;
+      if (!plannerDays[di]) return;
       (d.divs || []).forEach(function(dv) {
         function each(games) {
           (games || []).forEach(function(g) {
@@ -9426,6 +9439,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
     });
     (sched.trainingGames || []).forEach(function(tg) {
+      if (!plannerDays[tg.day]) return;
       add(tg.divName, tg.t1, tg.day, tg.time, tg.loc);
       add(tg.divName, tg.t2, tg.day, tg.time, tg.loc);
     });
@@ -9495,6 +9509,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
         existing[b.day + '|' + b.gameTime + '|' + b.venue + '|' + b.zone] = true;
       });
       (daySlots || []).forEach(function(slots, day) {
+        if (!plannerDays[day]) return;
         (slots || []).forEach(function(slot) {
           ['white', 'black'].forEach(function(zone) {
             var cells = (shuttleConfig.fleet && shuttleConfig.fleet[zone]) || {};
@@ -9569,6 +9584,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     deltaFont:  '1B5E20',
     buckets: {
       GREEN:  { fill: 'E8F5E9', risk: '1B5E20' },
+      // IDLE = bus exists but nobody rides it. Brighter, more saturated mint so
+      // the dispatcher's eye catches it as reassignable capacity.
+      IDLE:   { fill: 'A5D6A7', risk: '1B5E20' },
       YELLOW: { fill: 'FFF8E1', risk: '7D5A00' },
       RED:    { fill: 'FDECEA', risk: 'C0392B' },
       NA:     { fill: 'FFFFFF', risk: '4A4F59' }
@@ -9615,7 +9633,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     }));
     // Buckets
     buckets.forEach(function(b) {
-      var palette = C.buckets[b.risk] || C.buckets.NA;
+      // Idle bus: bus exists but no team rides it. Use the brighter IDLE fill
+      // so the dispatcher spots reassignable capacity at a glance.
+      var isIdle = b.risk === 'GREEN' && b.people === 0 && b.seats > 0;
+      var palette = isIdle ? C.buckets.IDLE : (C.buckets[b.risk] || C.buckets.NA);
       var fill = palette.fill;
       var loadStr  = b.loadPct == null ? '' : (b.loadPct + '%');
       var deltaStr = b.delta > 0 ? '*' + b.delta : (b.delta < 0 ? String(b.delta) : '0');
