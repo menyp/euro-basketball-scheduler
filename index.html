@@ -9424,6 +9424,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       });
       if (hasRR) plannerDays[d.dayIndex] = true;
     });
+    // Track every (day, slot, venue) with ANY scheduled game, even when
+    // t1/t2 are still placeholder bracket-position labels. The idle-slot
+    // filler uses this so it does not mark a venue 'idle' just because the
+    // playoff teams aren't known yet — a real bus run still has to happen.
+    var scheduledAt = {};
+    function noteScheduled(day, time, venue) {
+      if (day == null || !time || !venue) return;
+      scheduledAt[day + '|' + time + '|' + venue] = true;
+    }
     (sched.gameDays || []).forEach(function(d) {
       var di = d.dayIndex;
       if (!plannerDays[di]) return;
@@ -9432,6 +9441,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           (games || []).forEach(function(g) {
             add(dv.name, g.t1, di, g.time, g.loc);
             add(dv.name, g.t2, di, g.time, g.loc);
+            noteScheduled(di, g.time, g.loc);
           });
         }
         if (dv.groups) Object.keys(dv.groups).forEach(function(gk) { each(dv.groups[gk].games); });
@@ -9442,6 +9452,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       if (!plannerDays[tg.day]) return;
       add(tg.divName, tg.t1, tg.day, tg.time, tg.loc);
       add(tg.divName, tg.t2, tg.day, tg.time, tg.loc);
+      noteScheduled(tg.day, tg.time, tg.loc);
     });
 
     // Per-game bus accounting: every game needs a bus to bring the team in
@@ -9518,6 +9529,10 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
               if (!buses.length) return;
               var key = day + '|' + slot + '|' + venue + '|' + zone;
               if (existing[key]) return;
+              // Skip if a game is scheduled at this venue/slot — the teams
+              // aren't known yet (placeholder bracket positions) but the bus
+              // will still run, so 'idle' would mislead the dispatcher.
+              if (scheduledAt[day + '|' + slot + '|' + venue]) return;
               buckets.push({ direction: direction, day: day, gameTime: slot,
                               venue: venue, zone: zone,
                               depTime: depFn({ day: day, gameTime: slot, venue: venue }),
