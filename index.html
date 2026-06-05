@@ -9433,6 +9433,20 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       if (day == null || !time || !venue) return;
       scheduledAt[day + '|' + time + '|' + venue] = true;
     }
+    // Collect pending-playoff games (placeholder t1/t2 like "1st Group A").
+    // Surfaced as YELLOW 'PO TBD' rows so the dispatcher knows which divisions
+    // are due to play that slot/venue and keeps the bus on standby.
+    var pendingByLocSlot = {};
+    function notePending(day, g, divName) {
+      if (!g || !g.t1 || !g.t2 || !g.loc || !g.time) return;
+      if (isReal(g.t1) && isReal(g.t2)) return;
+      var key = day + '|' + g.time + '|' + g.loc;
+      var label = (g.bracket ? String(g.bracket).replace(/\s+/g,' ').trim() : '');
+      if (g.lbl) label = (label ? label + ' — ' : '') + g.lbl;
+      (pendingByLocSlot[key] = pendingByLocSlot[key] || []).push({
+        div: divName, label: label, t1: g.t1, t2: g.t2
+      });
+    }
     (sched.gameDays || []).forEach(function(d) {
       var di = d.dayIndex;
       if (!plannerDays[di]) return;
@@ -9442,6 +9456,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
             add(dv.name, g.t1, di, g.time, g.loc);
             add(dv.name, g.t2, di, g.time, g.loc);
             noteScheduled(di, g.time, g.loc);
+            notePending(di, g, dv.name);
           });
         }
         if (dv.groups) Object.keys(dv.groups).forEach(function(gk) { each(dv.groups[gk].games); });
@@ -9545,6 +9560,35 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     _fillIdleSlots(outBuckets, 'OUT', _outDep);
     _fillIdleSlots(retBuckets, 'RET', _retDep);
 
+    // Pending playoff buckets — for every (day, slot, venue) with placeholder
+    // games, emit a PO TBD row in BOTH zone sheets (Option A). Either bus
+    // could end up serving these once the bracket seeds, so both stay on
+    // standby. Each game's div + bracket label + placeholder pair is listed
+    // as its own team-row inside the bucket.
+    function _appendPendingPO(buckets, direction, depFn) {
+      Object.keys(pendingByLocSlot).forEach(function(k) {
+        var parts = k.split('|');
+        var day = parseInt(parts[0], 10), time = parts[1], venue = parts[2];
+        var games = pendingByLocSlot[k];
+        ['white', 'black'].forEach(function(zone) {
+          var cells = (shuttleConfig.fleet && shuttleConfig.fleet[zone]) || {};
+          var buses = cells[venue] || [];
+          if (!buses.length) return;
+          var teams = games.map(function(g) {
+            return { team: g.t1 + ' vs ' + g.t2,
+                     division: g.div + (g.label ? ' — ' + g.label : ''),
+                     pax: '' };
+          });
+          buckets.push({ direction: direction, day: day, gameTime: time,
+                          venue: venue, zone: zone,
+                          depTime: depFn({ day: day, gameTime: time, venue: venue }),
+                          teams: teams, isPendingPO: true });
+        });
+      });
+    }
+    _appendPendingPO(outBuckets, 'OUT', _outDep);
+    _appendPendingPO(retBuckets, 'RET', _retDep);
+
     function _enrich(b) {
       var fleet = ((shuttleConfig.fleet || {})[b.zone] || {})[b.venue] || [];
       var buses = _parseBusList(fleet);
@@ -9561,6 +9605,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
                : loadPct > 100 ? 'RED'
                : loadPct > 75  ? 'YELLOW'
                : 'GREEN';
+      // Pending-playoff buckets carry placeholder games; override the auto
+      // risk so they render as 'PO TBD' (info, not load).
+      if (b.isPendingPO) risk = 'PO_TBD';
       b.buses = buses; b.busLabel = _formatBusLabel(buses);
       b.seats = seats; b.people = people; b.loadPct = loadPct;
       b.delta = seats - people; b.risk = risk;
@@ -9603,6 +9650,9 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       // the dispatcher's eye catches it as reassignable capacity.
       IDLE:   { fill: 'A5D6A7', risk: '1B5E20' },
       YELLOW: { fill: 'FFF8E1', risk: '7D5A00' },
+      // PO_TBD = playoff with placeholder teams. More saturated amber than the
+      // regular YELLOW so it reads as 'pending info' rather than 'high load'.
+      PO_TBD: { fill: 'FFE082', risk: '6D4C00' },
       RED:    { fill: 'FDECEA', risk: 'C0392B' },
       NA:     { fill: 'FFFFFF', risk: '4A4F59' }
     },
@@ -9653,10 +9703,15 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var isIdle = b.risk === 'GREEN' && b.people === 0 && b.seats > 0;
       var palette = isIdle ? C.buckets.IDLE : (C.buckets[b.risk] || C.buckets.NA);
       var fill = palette.fill;
-      var loadStr  = b.loadPct == null ? '' : (b.loadPct + '%');
-      var deltaStr = b.delta > 0 ? '*' + b.delta : (b.delta < 0 ? String(b.delta) : '0');
+      // Pending playoff rows: pax unknown until seeding, so keep the number
+      // columns blank — the PO TBD label conveys the state.
+      var isPending = b.risk === 'PO_TBD';
+      var loadStr  = isPending ? '' : (b.loadPct == null ? '' : (b.loadPct + '%'));
+      var deltaStr = isPending ? '' : (b.delta > 0 ? '*' + b.delta : (b.delta < 0 ? String(b.delta) : '0'));
+      var peopleStr = isPending ? '' : b.people;
       var riskStr  = b.risk === 'RED'    ? '🔴 RED'
                    : b.risk === 'YELLOW' ? '🟡 YELLOW'
+                   : b.risk === 'PO_TBD' ? '🟡 PO TBD'
                    : b.risk === 'GREEN'  ? '🟢 GREEN'
                    : '— n/a';
       var zoneLabel = b.zone === 'white' ? 'White' : 'Black';
@@ -9670,7 +9725,7 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
           _scell(zoneLabel,   fill, C.bodyFont,  { sz: 9 }),
           _scell(b.busLabel,  fill, C.bodyFont,  { sz: 9 }),
           _scell(b.seats,     fill, C.bodyFont,  { sz: 9, align: 'right' }),
-          _scell(b.people,    fill, C.bodyFont,  { sz: 9, align: 'right' }),
+          _scell(peopleStr,   fill, C.bodyFont,  { sz: 9, align: 'right' }),
           _scell(loadStr,     fill, C.bodyFont,  { sz: 9, align: 'right' }),
           _scell(deltaStr,    fill, C.deltaFont, { sz: 9, bold: true, align: 'right' }),
           _scell(riskStr,     fill, palette.risk,{ sz: 9, bold: true }),
