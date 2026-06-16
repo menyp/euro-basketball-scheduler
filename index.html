@@ -10600,14 +10600,18 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
       var ws = wb.Sheets[sn];
       if (!ws) return;
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      // Header sanity: row index 2 should be the 13-column header.
+      // Header sanity: only the first 10 columns (Time .. Visiting Team) are
+      // read for the rebuild. Anything past column J can be a free-form staff
+      // assignment block (Referees split into ARBITRO 1/2, Volunteers split
+      // into RESPONSABLE/ANOTADOR/CRONO, etc.) — those are accepted as-is.
       var hdr = rows[2] || [];
-      var hdrOk = _XLSX_DAY_HEADER.every(function(h, i) {
+      var hdrOk = _XLSX_DAY_HEADER.slice(0, 10).every(function(h, i) {
         return String(hdr[i] == null ? '' : hdr[i]).trim().toLowerCase() === h.toLowerCase();
       });
       if (!hdrOk) {
         throw new Error('Sheet "' + sn + '" does not have the expected column layout. '
-          + 'Edit the file produced by "Export Excel" without changing or reordering columns.');
+          + 'The first 10 columns must be: ' + _XLSX_DAY_HEADER.slice(0, 10).join(' | ')
+          + '. Columns past J can be anything (free-form staff / notes).');
       }
       var targetDay = newSched.gameDays[dayIdx];
       if (!targetDay) return; // extra sheet beyond the schedule's days
