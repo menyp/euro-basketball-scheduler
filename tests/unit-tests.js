@@ -152,9 +152,9 @@ function checkChronologicalIntegrity(sched) {
 function checkFinalsSequencing(sched) {
   const violations = [];
   const byBracket = {}; // key → { sfs: [], finals: [] }
-  allGames(sched).forEach(function({ g, dIdx }) {
+  allGames(sched).forEach(function({ g, dIdx, divName }) {
     if (!g.lbl) return;
-    const key = g.bracket || 'Championship';
+    const key = divName + '|' + (g.bracket || 'Championship');
     if (!byBracket[key]) byBracket[key] = { sfs: [], finals: [] };
     if (/^SF/.test(g.lbl)) byBracket[key].sfs.push({ day: dIdx, timeM: toM(g.time) });
     if (g.lbl === 'FINAL') byBracket[key].finals.push({ day: dIdx, timeM: toM(g.time) });
@@ -511,6 +511,306 @@ async function runIntegrationTests() {
   dom.window.close();
 }
 
+// ── SHUTTLE LOAD PLANNER TESTS ────────────────────────────────────────────────
+// Exercises the report builder behind the Load Planner UI / Excel export.
+// All tests stage a deterministic shuttle config + minimal sched via test
+// hooks (no UI click-driving), then assert on the returned bucket structure.
+async function runShuttleTests() {
+  section('SHUTTLE 0 — Boot shuttle planner harness');
+
+  const dom = new JSDOM(html, {
+    runScripts: 'dangerously', pretendToBeVisual: true,
+    url: 'file://' + htmlPath.replace(/\\/g, '/'),
+    beforeParse(w) { w.alert = w.confirm = w.prompt = w.scrollTo = function(){}; w.console = {log:function(){},warn:function(){},error:function(){}}; }
+  });
+  await tick(120);
+  const fn = dom.window._testExports;
+  if (!fn || !fn.shuttleBuildReport) {
+    check('Shuttle test exports available', false, '_testExports.shuttleBuildReport missing');
+    dom.window.close();
+    return;
+  }
+
+  // Build a hand-rolled sched: 2 days, 2 venues, 2 zones, with one game on each
+  // venue/day. dayIndex matches array position. daySlots are HH:MM strings to
+  // match what the real generator emits.
+  const minimalSched = {
+    daySlots: [
+      ['09:00', '11:30', '13:30', '14:30', '17:00'],
+      ['09:00', '11:30', '13:30', '14:30', '17:00']
+    ],
+    gameDays: [
+      { dayIndex: 0, divs: [{
+          name: 'U14 BOYS',
+          groups: {
+            'U14 BOYS Group A': { games: [
+              { time: '11:30', loc: 'Blanes',   t1: 'WhiteHome',  t2: 'BlackHome',  court: 'C1' },
+              { time: '11:30', loc: 'Tordera',  t1: 'WhiteAway',  t2: 'BlackAway',  court: 'C1' }
+            ]}
+          }
+      }] },
+      { dayIndex: 1, divs: [{
+          name: 'U14 BOYS',
+          groups: {
+            'U14 BOYS Group A': { games: [
+              { time: '13:30', loc: 'Blanes',   t1: 'WhiteHome',  t2: 'BlackHome',  court: 'C1' },
+              { time: '14:30', loc: 'Blanes',   t1: 'BlackHome',  t2: 'WhiteHome',  court: 'C1' }
+            ]},
+            'U14 BOYS Playoffs': { games: [
+              { time: '17:00', loc: 'Blanes', t1: '1st Group A', t2: '2nd Group A',
+                court: 'C1', lbl: 'SF1', bracket: 'Championship' }
+            ]}
+          }
+      }] }
+    ],
+    bracketDays: []
+  };
+  const teamZones = [
+    { div: 'U14 BOYS', team: 'WhiteHome', zone: 'white' },
+    { div: 'U14 BOYS', team: 'WhiteAway', zone: 'white' },
+    { div: 'U14 BOYS', team: 'BlackHome', zone: 'black' },
+    { div: 'U14 BOYS', team: 'BlackAway', zone: 'black' }
+  ];
+  const teamPax = [
+    { div: 'U14 BOYS', team: 'WhiteHome', pax: 20 },
+    { div: 'U14 BOYS', team: 'WhiteAway', pax: 18 },
+    { div: 'U14 BOYS', team: 'BlackHome', pax: 22 },
+    { div: 'U14 BOYS', team: 'BlackAway', pax: 30 }
+  ];
+  const shuttleCfg = {
+    busCapacity: 55,
+    busCapacities: { 0: { 1: 70 }, 1: {} }, // day 0 bus 1 overridden to 70
+    fleet: {
+      white: { Blanes: [8, 9], Palafolls: [], Tordera: [12], Pineda: [] },
+      black: { Blanes: [1, 2], Palafolls: [], Tordera: [6],  Pineda: [] }
+    },
+    defaults: { outLeadMin: 60, retLastSlotExtendMin: 90 },
+    slotOverrides: {}
+  };
+  dom.window._setSched(minimalSched);
+  dom.window._setTeamZones(teamZones);
+  dom.window._setTeamPax(teamPax);
+  dom.window._setShuttleConfig(shuttleCfg);
+
+  // Make sure the lunch inputs exist (the report reads document #lS / #lE for
+  // lunch-aware dep adjustments). The default sample page sets these to 13:30/14:30.
+  const lS = dom.window.document.getElementById('lS');
+  const lE = dom.window.document.getElementById('lE');
+  if (lS) lS.value = '13:30';
+  if (lE) lE.value = '14:30';
+
+  const report = fn.shuttleBuildReport();
+  check('shuttleBuildReport returns {out, ret, summary}',
+    report && Array.isArray(report.out) && Array.isArray(report.ret) && report.summary,
+    report ? 'out=' + report.out.length + ' ret=' + report.ret.length : 'null');
+
+  // ── 1. OUT/RET symmetry: each (day, time, venue, zone) game-bucket has both ──
+  section('SHUTTLE 1 — Each game produces one OUT bucket and one RET bucket');
+  function findBucket(arr, day, time, venue, zone) {
+    return arr.find(function(b) {
+      return b.day === day && b.gameTime === time && b.venue === venue && b.zone === zone && !b.isPendingPO && b.teams.length > 0;
+    });
+  }
+  const out_d0_b_white = findBucket(report.out, 0, '11:30', 'Blanes', 'white');
+  const ret_d0_b_white = findBucket(report.ret, 0, '11:30', 'Blanes', 'white');
+  check('OUT bucket exists for D1 11:30 Blanes/white (game with WhiteHome)',
+    out_d0_b_white && out_d0_b_white.teams.length === 1 && out_d0_b_white.teams[0].team === 'WhiteHome',
+    out_d0_b_white ? out_d0_b_white.teams[0].team : 'missing');
+  check('RET bucket exists for D1 11:30 Blanes/white (matching OUT)',
+    ret_d0_b_white && ret_d0_b_white.teams.length === 1 && ret_d0_b_white.teams[0].team === 'WhiteHome',
+    ret_d0_b_white ? ret_d0_b_white.teams[0].team : 'missing');
+  const out_d0_t_black = findBucket(report.out, 0, '11:30', 'Tordera', 'black');
+  check('OUT bucket at Tordera/black has BlackAway only (not WhiteAway)',
+    out_d0_t_black && out_d0_t_black.teams.length === 1 && out_d0_t_black.teams[0].team === 'BlackAway',
+    out_d0_t_black ? JSON.stringify(out_d0_t_black.teams.map(function(x){return x.team;})) : 'missing');
+
+  // ── 2. Lunch-aware OUT: dep that lands on lunch start is pushed +10 min ──
+  section('SHUTTLE 2 — Lunch-aware OUT dep (dep == lunch start → +10 min)');
+  // D2 12:30 game would have OUT dep 11:30 — not on lunch start. Use the 14:30
+  // game instead: outLeadMin=60 → naive dep 13:30 (== lunch start), bumped to 13:40.
+  const out_d1_1430 = findBucket(report.out, 1, '14:30', 'Blanes', 'black');
+  check('OUT dep for D2 14:30 Blanes/black is pushed to 13:40 (lunch buffer)',
+    out_d1_1430 && out_d1_1430.depTime === '13:40',
+    out_d1_1430 ? out_d1_1430.depTime : 'bucket not found');
+
+  // ── 3. Lunch-aware RET: dep that lands on lunch end is pulled to lunch start ──
+  section('SHUTTLE 3 — Lunch-aware RET dep (dep == lunch end → pulled back)');
+  // D2 13:30 game: next slot in daySlots is 14:30 (lunch end), so dep gets
+  // pulled back to 13:30 (lunch start).
+  const ret_d1_1330 = findBucket(report.ret, 1, '13:30', 'Blanes', 'white');
+  check('RET dep for D2 13:30 Blanes/white is pulled back to 13:30 (lunch start)',
+    ret_d1_1330 && ret_d1_1330.depTime === '13:30',
+    ret_d1_1330 ? ret_d1_1330.depTime : 'bucket not found');
+
+  // ── 4. PO TBD rows: placeholder games surface in BOTH zone sheets ──
+  section('SHUTTLE 4 — Pending PO games surface as PO TBD rows in both zones');
+  const po_white = report.out.find(function(b) {
+    return b.day === 1 && b.gameTime === '17:00' && b.venue === 'Blanes' && b.zone === 'white' && b.isPendingPO;
+  });
+  const po_black = report.out.find(function(b) {
+    return b.day === 1 && b.gameTime === '17:00' && b.venue === 'Blanes' && b.zone === 'black' && b.isPendingPO;
+  });
+  check('PO TBD bucket exists in WHITE zone for D2 17:00',
+    !!po_white && po_white.risk === 'PO_TBD' && po_white.teams.length === 1, po_white ? 'risk=' + po_white.risk + ' teams=' + po_white.teams.length : 'missing');
+  check('PO TBD bucket exists in BLACK zone for D2 17:00',
+    !!po_black && po_black.risk === 'PO_TBD' && po_black.teams.length === 1, po_black ? 'risk=' + po_black.risk + ' teams=' + po_black.teams.length : 'missing');
+  check('PO TBD team row contains placeholder pair (e.g. "1st Group A vs 2nd Group A")',
+    po_white && /1st Group A vs 2nd Group A/.test(po_white.teams[0].team),
+    po_white ? po_white.teams[0].team : 'missing');
+
+  // ── 5. Idle slots only filled where no game is scheduled ──
+  section('SHUTTLE 5 — Idle bus rows skip slots with scheduled games');
+  // D1 11:30 Blanes/white HAS a game → must NOT have a separate idle bucket
+  const idle_blanes_d0_white = report.out.find(function(b) {
+    return b.day === 0 && b.gameTime === '11:30' && b.venue === 'Blanes' && b.zone === 'white' && b.teams.length === 0;
+  });
+  check('D1 11:30 Blanes/white (scheduled) has NO separate idle row',
+    !idle_blanes_d0_white, idle_blanes_d0_white ? 'unexpected idle row' : 'OK');
+  // D1 09:00 Blanes/white has no game → should have an idle row (fleet has buses 8,9)
+  const idle_blanes_d0_0900 = report.out.find(function(b) {
+    return b.day === 0 && b.gameTime === '09:00' && b.venue === 'Blanes' && b.zone === 'white' && b.teams.length === 0;
+  });
+  check('D1 09:00 Blanes/white (empty slot, has fleet) HAS an idle row',
+    !!idle_blanes_d0_0900, idle_blanes_d0_0900 ? 'OK seats=' + idle_blanes_d0_0900.seats : 'missing');
+  // Venue/zone with no fleet (Palafolls/white in our cfg) should never appear
+  const palafolls_white = report.out.find(function(b) {
+    return b.venue === 'Palafolls' && b.zone === 'white';
+  });
+  check('Venue/zone pair with 0 buses produces no row',
+    !palafolls_white, palafolls_white ? 'unexpected row at Palafolls/white' : 'OK');
+
+  // ── 6. Per-day per-bus capacity override is applied ──
+  section('SHUTTLE 6 — busCapacities[day][bus] overrides default seat count');
+  // D1 11:30 Blanes/black: fleet = [1, 2]. busCapacities[0][1] = 70, [0][2] = default 55.
+  // Expected seats = 70 + 55 = 125.
+  const cap_blanes_d0_black = findBucket(report.out, 0, '11:30', 'Blanes', 'black');
+  check('Day 0 Blanes/black uses override 70 + default 55 = 125 seats',
+    cap_blanes_d0_black && cap_blanes_d0_black.seats === 125,
+    cap_blanes_d0_black ? 'got ' + cap_blanes_d0_black.seats : 'missing');
+  // D2 11:30 (none on day 1) — use D2 13:30 Blanes/white: fleet = [8, 9], no overrides → 55 + 55 = 110.
+  const cap_blanes_d1_white = findBucket(report.ret, 1, '13:30', 'Blanes', 'white');
+  check('Day 1 Blanes/white uses default 55 × 2 = 110 (no overrides)',
+    cap_blanes_d1_white && cap_blanes_d1_white.seats === 110,
+    cap_blanes_d1_white ? 'got ' + cap_blanes_d1_white.seats : 'missing');
+
+  // ── 7. Risk classification matches load% thresholds ──
+  section('SHUTTLE 7 — Risk classification: GREEN ≤75, YELLOW >75, RED >100');
+  // The Tordera/black D1 11:30 OUT bucket: 1 team × 30 pax / 55 (one bus, default) = 55% → GREEN
+  const grn = findBucket(report.out, 0, '11:30', 'Tordera', 'black');
+  check('Low-load bucket (30/55 = 55%) is GREEN', grn && grn.risk === 'GREEN', grn ? grn.risk + ' load=' + grn.loadPct : 'missing');
+  // Force-stress: stage a single team with pax > seats to verify RED
+  dom.window._setSched({
+    daySlots: [['09:00', '11:30']],
+    gameDays: [{ dayIndex: 0, divs: [{ name: 'X', groups: { 'X Group A': { games: [
+      { time: '11:30', loc: 'Tordera', t1: 'OverloadedTeam', t2: 'OverloadedTeam2', court: 'C1' }
+    ]}}}]}],
+    bracketDays: []
+  });
+  dom.window._setTeamZones([
+    { div: 'X', team: 'OverloadedTeam', zone: 'white' },
+    { div: 'X', team: 'OverloadedTeam2', zone: 'white' }
+  ]);
+  dom.window._setTeamPax([
+    { div: 'X', team: 'OverloadedTeam', pax: 60 },
+    { div: 'X', team: 'OverloadedTeam2', pax: 0 } // pax=0 keeps the count realistic
+  ]);
+  const stressReport = fn.shuttleBuildReport();
+  const red = stressReport.out.find(function(b) {
+    return b.venue === 'Tordera' && b.zone === 'white' && b.teams.some(function(t){return t.team==='OverloadedTeam';});
+  });
+  check('Over-capacity bucket (60/55 = 109%) is RED', red && red.risk === 'RED', red ? red.risk + ' load=' + red.loadPct : 'missing');
+
+  // ── 8. NA when seats = 0 (no fleet for venue/zone) ──
+  section('SHUTTLE 8 — Zero seats means NA risk');
+  // Stage a game at Pineda/white where fleet has [] — but bucket only appears
+  // if pax > 0 (real-team appearance). The bucket should exist with seats=0/risk=NA.
+  dom.window._setSched({
+    daySlots: [['09:00', '11:30']],
+    gameDays: [{ dayIndex: 0, divs: [{ name: 'Y', groups: { 'Y Group A': { games: [
+      { time: '11:30', loc: 'Pineda', t1: 'PineWhite', t2: 'PineBlack', court: 'C1' }
+    ]}}}]}],
+    bracketDays: []
+  });
+  dom.window._setTeamZones([
+    { div: 'Y', team: 'PineWhite', zone: 'white' },
+    { div: 'Y', team: 'PineBlack', zone: 'black' }
+  ]);
+  dom.window._setTeamPax([
+    { div: 'Y', team: 'PineWhite', pax: 15 },
+    { div: 'Y', team: 'PineBlack', pax: 15 }
+  ]);
+  const naReport = fn.shuttleBuildReport();
+  const na = naReport.out.find(function(b) { return b.venue === 'Pineda' && b.zone === 'white' && b.teams.length > 0; });
+  check('Pineda/white with empty fleet → seats=0, risk=NA',
+    na && na.seats === 0 && na.risk === 'NA', na ? 'seats=' + na.seats + ' risk=' + na.risk : 'missing');
+
+  dom.window.close();
+}
+
+// ── SNAPSHOT / EXPORT TESTS ───────────────────────────────────────────────────
+async function runSnapshotTests() {
+  section('SNAPSHOT 0 — buildSnapshot exposes full state');
+
+  // Use the full real-app boot (default 8-division sample) so divisions/sched
+  // are populated and we can assert the snapshot shape against generated state.
+  const { window, document, dom } = await bootApp();
+  const fn = window._testExports;
+  if (!fn || !fn.buildSnapshot) {
+    check('buildSnapshot export available', false, '_testExports.buildSnapshot missing');
+    dom.window.close();
+    return;
+  }
+  const snap = fn.buildSnapshot();
+
+  // Required top-level keys
+  const requiredKeys = ['sched', 'divisions', 'venueRules', 'venueBlackouts',
+                        'teamAvailability', 'teamZones', 'teamPax',
+                        'shuttleConfig', 'sites', 'setupFields'];
+  const missing = requiredKeys.filter(function(k) { return !(k in snap); });
+  check('Snapshot has all required top-level keys',
+    missing.length === 0, missing.length ? 'missing: ' + missing.join(',') : 'OK');
+
+  check('sched.gameDays is a non-empty array',
+    Array.isArray(snap.sched.gameDays) && snap.sched.gameDays.length > 0,
+    'len=' + (snap.sched.gameDays || []).length);
+  check('divisions has the default sample divisions (≥ 5)',
+    Array.isArray(snap.divisions) && snap.divisions.length >= 5,
+    'len=' + (snap.divisions || []).length);
+
+  // setupFields captures things tests will need on re-import
+  check('setupFields.tName captured (non-empty string)',
+    typeof snap.setupFields.tName === 'string' && snap.setupFields.tName.length > 0,
+    'tName="' + snap.setupFields.tName + '"');
+  check('setupFields.dayHours is an array with one entry per day',
+    Array.isArray(snap.setupFields.dayHours)
+      && snap.setupFields.dayHours.length === snap.sched.gameDays.length,
+    'dayHours.length=' + (snap.setupFields.dayHours || []).length);
+  check('setupFields.mainVenue captured',
+    typeof snap.setupFields.mainVenue === 'string' && snap.setupFields.mainVenue.length > 0,
+    snap.setupFields.mainVenue);
+
+  // shuttleConfig defaults survive round-trip
+  check('shuttleConfig has fleet + defaults + busCapacities + busCapacity',
+    snap.shuttleConfig && snap.shuttleConfig.fleet && snap.shuttleConfig.defaults
+      && 'busCapacity' in snap.shuttleConfig
+      && typeof snap.shuttleConfig.busCapacities === 'object',
+    'keys=' + Object.keys(snap.shuttleConfig || {}).join(','));
+
+  section('SNAPSHOT 1 — XLSX day-header contract (first 10 columns validated)');
+  // The full header carries free-form staff columns past J; the validator only
+  // checks the first 10 (Time .. Visiting Team). The test enforces that
+  // contract so we know editors can't accidentally rename a checked column.
+  const hdr = fn.xlsxDayHeader();
+  check('xlsxDayHeader has at least 10 columns (extra past J are free-form)',
+    hdr.length >= 10, 'got ' + hdr.length);
+  check('Column 0 is "Time"', hdr[0] === 'Time', hdr[0]);
+  check('Column 6 is "Court"', /court/i.test(hdr[6]), hdr[6]);
+  check('Column 8 is "Local Team"', /local/i.test(hdr[8]), hdr[8]);
+  check('Column 9 is "Visiting Team"', /visit/i.test(hdr[9]), hdr[9]);
+
+  dom.window.close();
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 (async function main() {
   console.log('=======================================================');
@@ -519,6 +819,8 @@ async function runIntegrationTests() {
 
   try { await runUnitTests(); } catch (e) { console.error('Unit tests crashed:', e.message); failed++; }
   try { await runIntegrationTests(); } catch (e) { console.error('Integration tests crashed:', e.message, e.stack); failed++; }
+  try { await runShuttleTests(); } catch (e) { console.error('Shuttle tests crashed:', e.message, e.stack); failed++; }
+  try { await runSnapshotTests(); } catch (e) { console.error('Snapshot tests crashed:', e.message, e.stack); failed++; }
 
   console.log('\n═══════════════════════════════════════════════════════');
   console.log(' Results: ' + passed + ' passed, ' + failed + ' failed');

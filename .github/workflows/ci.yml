@@ -1,9 +1,10 @@
 name: CI
 
-# Runs the Python test suite on every push and PR so a regression in the
-# CP-SAT backend (scheduler.py / validator.py / app.py) is caught before it can
-# reach the Hugging Face deploy. The fast suite runs everywhere; the slow
-# CP-SAT + happy-path API tests run on pull requests (and on main).
+# Runs on every push and PR so regressions are caught before they reach the
+# Hugging Face deploy. Three suites run in parallel:
+#   * py-fast  — Python unit tests excluding @slow markers (every push)
+#   * py-slow  — CP-SAT + happy-path API tests (PRs and main only)
+#   * js       — jsdom-based smoke + unit tests for index.html (every push)
 
 on:
   push:
@@ -12,7 +13,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  py-fast:
+    name: Python — fast unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,10 +30,54 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Fast unit tests
-        run: pytest -m "not slow"
+      - name: Fast unit tests with coverage
+        run: pytest -m "not slow" --cov=. --cov-report=term-missing --cov-report=xml
 
-      - name: Slow CP-SAT + API tests
-        # Run on PRs and on pushes to main; skip on day-to-day feature pushes.
-        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fast
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  py-slow:
+    name: Python — slow CP-SAT + API tests
+    runs-on: ubuntu-latest
+    # Run on PRs and on pushes to main; skip on day-to-day feature pushes.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Slow tests
         run: pytest -m slow
+
+  js:
+    name: JS — index.html smoke + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+
+      - name: Install jsdom
+        working-directory: tests
+        run: npm ci --no-audit --no-fund
+
+      - name: Run unit + smoke tests against index.html
+        working-directory: tests
+        run: npm test

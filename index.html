@@ -824,6 +824,16 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
   // ── Test hook: allow automated tests to override sites before generation ──
   window._setSites = function(newSites) { sites = newSites.slice(); };
   window._setVenueBlackouts = function(b) { venueBlackouts = b.slice(); };
+  // Test hooks for shuttle planner inputs. Setters replace the entire array /
+  // object so tests can stage a deterministic config before calling
+  // _shuttleBuildReport via _testExports.
+  window._setTeamZones = function(arr) { teamZones = (arr || []).slice(); };
+  window._setTeamPax = function(arr) { teamPax = (arr || []).slice(); };
+  window._setShuttleConfig = function(cfg) {
+    if (!cfg) return;
+    Object.keys(cfg).forEach(function(k) { shuttleConfig[k] = cfg[k]; });
+  };
+  window._setSched = function(s) { sched = s; };
   // ── Test exports: pure utility functions for unit-test isolation ─────────────
   window._testExports = {
     optimalChunkSize: function(n) { return optimalChunkSize(n); },
@@ -834,7 +844,11 @@ U18 GIRLS: DUVBO IK (SWE), LNCA 2 (MEX), FALCONS (SWI), SANFELIUNEC (ESP), PHD H
     toM: function(t) { return toM(t); },
     toT: function(m) { return toT(m); },
     isRoundRobinComplete: function() { return isRoundRobinComplete(); },
-    computeStandings: function() { return computeStandings(); }
+    computeStandings: function() { return computeStandings(); },
+    shuttleBuildReport: function() { return _shuttleBuildReport(); },
+    buildSnapshot: function() { return buildSnapshot(); },
+    xlsxDayHeader: function() { return _XLSX_DAY_HEADER.slice(); },
+    getSched: function() { return sched; }
   };
   var sched = {};
   var scheduleWarnings = [];  // amber / soft warnings (club conflicts etc.)

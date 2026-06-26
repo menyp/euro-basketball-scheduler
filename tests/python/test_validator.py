@@ -60,6 +60,25 @@ def test_unknown_court_is_flagged():
     assert not chk["passed"]
 
 
+def test_game_during_lunch_is_flagged_as_lunch_violation():
+    # Lunch window in helpers.make_config defaults to 13:30-14:30. A game
+    # scheduled at 13:30 should be flagged as inside the lunch break (the
+    # message must mention "lunch" so the editor knows it's not just an
+    # arbitrary "invalid start time").
+    games = [game("D A1", "D A2", court="Court 1", time="13:30")]
+    chk = get_check(validate_schedule(CFG, games), "valid court")
+    assert not chk["passed"]
+    assert any("lunch" in v.lower() for v in chk["violations"]), chk["violations"]
+
+
+def test_game_at_lunch_start_minus_one_minute_passes_court_check():
+    # Lunch is [13:30, 14:30); 14:30 is back on a valid slot, so a game there
+    # is NOT a lunch violation.
+    games = [game("D A1", "D A2", court="Court 1", time="14:30")]
+    chk = get_check(validate_schedule(CFG, games), "valid court")
+    assert chk["passed"], chk["violations"]
+
+
 def test_max_games_per_day_is_caught():
     # maxGPD defaults to 2; give D A1 three games on day 0.
     games = [

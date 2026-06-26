@@ -124,6 +124,14 @@ euro-basketball-scheduler/
 
 ---
 
+## Contributing & testing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the testing methodology — Python
+(`pytest`) + JavaScript (jsdom-driven `index.html` smoke tests) — and the CI
+guardrails that gate every change.
+
+---
+
 ## License
 
 MIT — free to use and modify.

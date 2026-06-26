@@ -1,0 +1,20 @@
+[run]
+# Production modules only. Throwaway analysis scripts (_*.py, verify_*.py,
+# spike_*.py, audit_*.py, etc.) are excluded.
+source =
+    app.py
+    scheduler.py
+    validator.py
+branch = True
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+show_missing = True
+skip_covered = False
+precision = 1
+
+[xml]
+output = coverage.xml
